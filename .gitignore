@@ -1,0 +1,62 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+ENV/
+env/
+
+# Environment
+.env
+.env.local
+
+# Logs
+logs/*.log
+logs/*.log.*
+*.log
+
+# Data
+data/raw_inputs/*.csv
+data/processed_outputs/*
+data/checkpoints/*.json
+!data/raw_inputs/.gitkeep
+!data/processed_outputs/.gitkeep
+!data/checkpoints/.gitkeep
+
+# Temp
+temp/*
+!temp/.gitkeep
+
+# Chrome/Selenium
+*.crx
+chromedriver
+chromedriver.exe
+.chrome_profile*/
+
+# VNC
+.vnc/*.log
+.vnc/*.pid
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Backups
+*.bak
+*.backup
+
+# Claude
+.claude/
+
+# Temporary files
+=0.33

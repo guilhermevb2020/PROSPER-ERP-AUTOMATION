@@ -1,0 +1,33 @@
+# =============================================================================
+# PROSPER-ERP-AUTOMATION - Requirements
+# Python 3.12+ - Dependências para automações web (Nodriver + Selenium fallback)
+# =============================================================================
+
+# Environment & Config
+python-dotenv==1.1.0
+
+# Date & Time
+python-dateutil==2.9.0.post0
+pytz==2025.2
+
+# Web Automation (Nodriver) - CORE PRINCIPAL
+nodriver>=0.33
+
+# Web Automation (Selenium) - FALLBACK/LEGACY (pode remover depois)
+selenium==4.27.1
+undetected-chromedriver==3.5.5
+selenium-stealth==1.0.6
+webdriver-manager==4.0.2
+
+# CAPTCHA Solver (CapSolver)
+capsolver==1.0.0
+
+# HTTP Requests (caso precise fazer chamadas API auxiliares)
+requests==2.32.3
+urllib3==2.4.0
+
+# Data Processing (para reporting_utils)
+pandas==2.2.3
+
+# Utilities
+colorama==0.4.6
