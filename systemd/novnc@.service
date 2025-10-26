@@ -1,0 +1,39 @@
+[Unit]
+Description=noVNC Web Interface for Display :%i
+Documentation=https://github.com/novnc/noVNC
+After=x11vnc@%i.service
+Requires=x11vnc@%i.service
+BindsTo=x11vnc@%i.service
+
+[Service]
+Type=simple
+User=ubuntu
+Group=ubuntu
+WorkingDirectory=/home/ubuntu/noVNC
+Environment="DISPLAY=:%i"
+
+# Aguardar x11vnc estar pronto
+ExecStartPre=/bin/sleep 2
+
+# Iniciar noVNC (idêntico ao script)
+# Porta VNC Web: 6080 + (display_num - 1)
+# Porta x11vnc: 5900 + (display_num - 1)
+# Display :1 → Web 6080, x11vnc 5900
+# Display :2 → Web 6081, x11vnc 5901
+# etc...
+ExecStart=/home/ubuntu/PROSPER-ERP-AUTOMATION/systemd/start_novnc.sh %i
+
+# Parar processo
+ExecStop=/bin/bash -c 'WEB_PORT=$((6079 + %i)); pkill -f "novnc_proxy.*${WEB_PORT}" || pkill -f "websockify.*${WEB_PORT}" || true'
+
+# Reiniciar se falhar
+Restart=on-failure
+RestartSec=5
+
+# Logs
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=novnc-%i
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,37 @@
+[Unit]
+Description=Xvfb Virtual Display :%i
+Documentation=man:Xvfb(1)
+After=network.target
+
+[Service]
+Type=simple
+User=ubuntu
+Group=ubuntu
+Environment="DISPLAY=:%i"
+
+# Limpar locks antes de iniciar
+ExecStartPre=/bin/bash -c 'rm -f /tmp/.X%i-lock /tmp/.X11-unix/X%i 2>/dev/null || true'
+
+# Iniciar Xvfb (idêntico ao script)
+ExecStart=/usr/bin/Xvfb :%i -screen 0 1920x1080x24 -ac +extension GLX +render -noreset
+
+# Parar processo
+ExecStop=/bin/kill -TERM $MAINPID
+
+# Limpar locks após parar
+ExecStopPost=/bin/bash -c 'rm -f /tmp/.X%i-lock /tmp/.X11-unix/X%i 2>/dev/null || true'
+
+# Reiniciar se falhar
+Restart=on-failure
+RestartSec=5
+
+# Logs
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=xvfb-%i
+
+# Limites de recursos
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target

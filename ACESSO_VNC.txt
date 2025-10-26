@@ -1,0 +1,24 @@
+========================================
+  ACESSO VNC - PROSPER-ERP-AUTOMATION
+========================================
+
+🌐 ACESSO VIA NAVEGADOR (RECOMENDADO):
+   http://3.148.126.73:6080/vnc.html
+
+🔐 SENHA:
+   vetor2025
+
+📖 DOCUMENTAÇÃO COMPLETA:
+   docs/COMO_ACESSAR_VNC.md
+
+🚀 INICIAR AUTOMAÇÃO:
+   cd /home/ubuntu/PROSPER-ERP-AUTOMATION
+   ./run_processor.sh
+
+🛑 PARAR SERVIÇOS:
+   pkill Xvfb && pkill x11vnc && pkill -f novnc_proxy
+
+✅ REINICIAR TUDO:
+   ./start_automation.sh
+
+========================================

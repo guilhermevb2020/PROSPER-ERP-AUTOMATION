@@ -19,11 +19,12 @@ undetected-chromedriver==3.5.5
 selenium-stealth==1.0.6
 webdriver-manager==4.0.2
 
-# CAPTCHA Solver (CapSolver)
-capsolver==1.0.0
+# CAPTCHA Solver (CapSolver) - Usando HTTP direto ao invés da biblioteca quebrada
+# capsolver==1.0.0  # REMOVIDO - biblioteca quebrada, usando aiohttp direto
 
-# HTTP Requests (caso precise fazer chamadas API auxiliares)
-requests==2.32.3
+# HTTP Requests (async e sync)
+aiohttp==3.11.11  # Para API HTTP async do CapSolver
+requests==2.32.3  # Para requests síncronos auxiliares
 urllib3==2.4.0
 
 # Data Processing (para reporting_utils)
@@ -31,3 +32,6 @@ pandas==2.2.3
 
 # Utilities
 colorama==0.4.6
+
+# API Flask para controle remoto
+Flask==3.0.0

@@ -1,0 +1,56 @@
+========================================
+  SISTEMA DE NOTIFICAÇÕES - GUIA RÁPIDO
+========================================
+
+📧 EMAIL AUTOMÁTICO QUANDO AUTOMAÇÃO PARA
+
+Destinatário: guilherme@prosperinvest.com.br
+
+========================================
+QUANDO RECEBER EMAIL:
+========================================
+
+1. ACESSAR VNC (resolver problema):
+   http://3.148.126.73:6080/vnc.html
+   Senha: vetor2025
+
+2. CONTINUAR AUTOMAÇÃO (após resolver):
+   http://3.148.126.73:6092/resume
+
+========================================
+COMO FUNCIONA:
+========================================
+
+CAPTCHA não resolve (60s)
+    ↓
+Automação PAUSA
+    ↓
+Email ENVIADO
+    ↓
+Você recebe email com 2 botões:
+   - "Acessar VNC" (resolver)
+   - "Continuar Automação" (retomar)
+    ↓
+Clique "Continuar"
+    ↓
+Automação RETOMA
+
+========================================
+TESTE:
+========================================
+
+Testar email:
+  cd /home/ubuntu/PROSPER-ERP-AUTOMATION
+  source venv/bin/activate
+  python -c "from src.common.notification_utils import testar_envio_email; testar_envio_email()"
+
+Verificar API:
+  curl http://localhost:6092/health
+
+========================================
+DOCUMENTAÇÃO COMPLETA:
+========================================
+
+docs/SISTEMA_NOTIFICACOES.md
+
+========================================

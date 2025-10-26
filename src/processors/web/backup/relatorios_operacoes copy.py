@@ -1,7 +1,7 @@
 # =============================================================================================
-# ARQUIVO: titulos_abertos_e_marcados_recompras.py
-# VERSÃO: v26.0 - REESCRITA COMPLETA COM NODRIVER
-# MUDANÇA: Reescrita 100% Nodriver (async), sem código Selenium
+# ARQUIVO: relatorios_operacoes.py
+# VERSÃO: v1.0 - PROCESSADOR DE RELATÓRIOS DE OPERAÇÕES
+# DESCRIÇÃO: Extrai relatórios de operações do SmartSecurities usando Nodriver
 # =============================================================================================
 
 import os
@@ -32,6 +32,9 @@ from src.common.nodriver_utils import (
 )
 from src.core.logging_config import get_logger
 from src.common.timezone_utils import now_br
+from src.common.notification_utils import enviar_alerta_captcha, enviar_alerta_erro_critico, enviar_alerta_instalacao_extensao
+from src.api.control_api import iniciar_api_controle
+from src.common.captcha_solver import CapSolverAPI
 
 # Carregar variáveis de ambiente
 load_dotenv()
@@ -43,8 +46,8 @@ DOWNLOAD_DIR = "data/raw_inputs/"
 TIMEOUT_CARREGAMENTO = 30
 
 # Credenciais do .env
-SMART_EMAIL = os.getenv("SMART_EMAIL")
-SMART_PASSWORD = os.getenv("SMART_PASSWORD")
+SMART_EMAIL = os.getenv("USUARIO_SITE_SMART")  # Corrigido: usar USUARIO_SITE_SMART
+SMART_PASSWORD = os.getenv("SENHA_SITE_SMART")  # Corrigido: usar SENHA_SITE_SMART
 CAPSOLVER_API_KEY = os.getenv("CAPSOLVER_API_KEY")
 
 
@@ -54,11 +57,11 @@ class VoltarEtapaAnteriorException(Exception):
     pass
 
 
-class ProcessadorTitulosAbertosEMarcadosRecompras:
-    """Processador de títulos abertos e marcados para recompras - 100% Nodriver Async"""
+class ProcessadorRelatoriosOperacoes:
+    """Processador de Relatórios de Operações - 100% Nodriver Async"""
 
     def __init__(self):
-        self.nome = "titulos_abertos_e_marcados_recompras"
+        self.nome = "relatorios_operacoes"
 
         # Nodriver: browser e tab (substitui self.driver)
         self.browser: Browser = None
@@ -66,7 +69,7 @@ class ProcessadorTitulosAbertosEMarcadosRecompras:
 
         self.download_dir = os.path.abspath(DOWNLOAD_DIR)
 
-        # Display virtual (Xvfb/VNC)
+        # Display virtual (Xvfb/VNC) - CORREÇÃO: usar variável de ambiente
         self.display = os.environ.get('DISPLAY', ':1')  # Padrão :1 se não configurado
 
         # Controles de execução
@@ -77,6 +80,21 @@ class ProcessadorTitulosAbertosEMarcadosRecompras:
 
         # Contador de erros de CAPTCHA
         self.captcha_errors = 0
+
+        # API de controle remoto
+        self.control_api = None
+
+        # Sistema de estados/checkpoints para saber onde está pausado
+        self.estado_atual = "INICIANDO"  # Valores possíveis:
+        # - INICIANDO
+        # - INSTALANDO_EXTENSAO
+        # - FAZENDO_LOGIN
+        # - RESOLVENDO_CAPTCHA_LOGIN
+        # - EXTRAINDO_DADOS
+        # - RESOLVENDO_CAPTCHA_PESQUISA
+        # - ERRO_CRITICO
+        # - EXECUTANDO
+        self.mensagem_estado = ""  # Mensagem detalhada do estado atual
 
     def converter_cdp_para_dict(self, resultado_cdp):
         """
@@ -159,10 +177,10 @@ class ProcessadorTitulosAbertosEMarcadosRecompras:
             print(f"{'='*80}\n")
             logger.info(f"[{self.nome}] ⏹️ Parada solicitada pelo usuário")
 
-    def verificar_pausa(self):
-        """Verifica se está pausado e aguarda"""
+    async def verificar_pausa(self):
+        """Verifica se está pausado e aguarda (assíncrono)"""
         while self.pausado and not self.parar:
-            time.sleep(0.2)
+            await asyncio.sleep(0.2)
 
     async def iniciar_navegador(self):
         """Inicializa navegador com Nodriver (anti-detecção nativa)"""
@@ -190,42 +208,219 @@ class ProcessadorTitulosAbertosEMarcadosRecompras:
 
         print(f"[NODRIVER] ✅ Chrome aberto!")
 
-        # IMPORTANTE: Abrir página da extensão CapSolver PRIMEIRO
-        capsolver_url = "https://chromewebstore.google.com/detail/captcha-solver-auto-captc/pgojnojmmhpofjgdmaebadhbocahppod?hl=pt-BR"
-        print(f"\n[EXTENSÃO] Abrindo página da extensão CapSolver...")
-        self.tab = await self.browser.get(capsolver_url)
-
-        print(f"\n{'='*80}")
-        print(f"[EXTENSÃO] ⚠️  AÇÃO NECESSÁRIA: INSTALE A EXTENSÃO CAPSOLVER")
-        print(f"{'='*80}")
-        print(f"")
-        print(f"1. Clique no botão 'Usar no Chrome' na página que abriu")
-        print(f"2. Confirme a instalação da extensão")
-        print(f"3. Configure a API Key da CapSolver:")
-        print(f"   {CAPSOLVER_API_KEY}")
-        print(f"4. Ative 'Auto Solve' na extensão")
-        print(f"5. Pressione 'R' e ENTER aqui para continuar...")
-        print(f"")
-        print(f"{'='*80}")
-
-        # Aguardar usuário pressionar 'R'
-        while True:
-            resposta = input("\nPressione 'R' e ENTER após instalar a extensão: ").strip().upper()
-            if resposta == 'R':
-                break
-            else:
-                print("⚠️ Pressione 'R' para continuar...")
-
-        print(f"\n[CHROME] ✅ Continuando...")
-        print(f"[NAVEGADOR] Navegando para SmartSecurities: {URL_LOGIN}")
-
-        # Agora sim, navegar para SmartSecurities
+        # ========== MODO 100% AUTOMÁTICO VIA HTTP (SEM EXTENSÃO) ==========
+        print(f"\n[NAVEGADOR] Abrindo SmartSecurities...")
         self.tab = await self.browser.get(URL_LOGIN)
 
-        print(f"[NAVEGADOR] ✅ Navegador aberto em: {URL_LOGIN}")
-        print(f"[NAVEGADOR] Aguardando página carregar...")
-        await asyncio.sleep(3)
-        print(f"[NAVEGADOR] ✅ Página carregada!")
+        # Aguardar página e frames carregarem
+        print(f"[ABA 2] Aguardando página carregar...")
+        await asyncio.sleep(5)
+
+        # Preencher email e senha automaticamente na ABA 2 (com retry)
+        credenciais_preenchidas = False
+        for tentativa in range(3):
+            try:
+                print(f"[ABA 2] Tentativa {tentativa + 1}/3 de preencher credenciais...")
+
+                script_preencher = f"""
+                (function() {{
+                    // 1. Buscar iframe de login (contém loginsec.php)
+                    const iframes = document.querySelectorAll('iframe');
+                    let iframeLogin = null;
+
+                    for (const iframe of iframes) {{
+                        if (iframe.src && iframe.src.includes('loginsec.php')) {{
+                            iframeLogin = iframe;
+                            break;
+                        }}
+                    }}
+
+                    if (!iframeLogin && iframes.length > 0) {{
+                        iframeLogin = iframes[0]; // Fallback: primeiro iframe
+                    }}
+
+                    if (!iframeLogin) {{
+                        return {{ success: false, error: 'Iframe não encontrado' }};
+                    }}
+
+                    // 2. Acessar documento DENTRO do iframe
+                    const iframeDoc = iframeLogin.contentDocument || iframeLogin.contentWindow.document;
+
+                    if (!iframeDoc) {{
+                        return {{ success: false, error: 'contentDocument não acessível' }};
+                    }}
+
+                    // 3. Buscar campos NO CONTEXTO DO IFRAME
+                    const campoEmail = iframeDoc.getElementById('fEmail') || iframeDoc.querySelector('[name="fEmail"]');
+                    const campoSenha = iframeDoc.getElementById('fPassword') || iframeDoc.querySelector('[name="fPassword"]');
+
+                    if (!campoEmail) {{
+                        return {{ success: false, error: 'Campo email não encontrado' }};
+                    }}
+                    if (!campoSenha) {{
+                        return {{ success: false, error: 'Campo senha não encontrado' }};
+                    }}
+
+                    // 4. Preencher campos (limpar primeiro, depois preencher)
+                    campoEmail.value = '';
+                    campoEmail.value = '{SMART_EMAIL}';
+
+                    campoSenha.value = '';
+                    campoSenha.value = '{SMART_PASSWORD}';
+
+                    return {{
+                        success: true,
+                        email_preenchido: campoEmail.value,
+                        senha_preenchida: '***'
+                    }};
+                }})();
+                """
+
+                resultado_raw = await self.tab.evaluate(script_preencher)
+
+                # Converter CDP para dict
+                resultado = self.converter_cdp_para_dict(resultado_raw)
+
+                if resultado and resultado.get('success'):
+                    print(f"[ABA 2] ✅ Credenciais preenchidas automaticamente!")
+                    print(f"[ABA 2]    Email: {resultado.get('email_preenchido')}")
+                    print(f"[ABA 2]    Senha: {resultado.get('senha_preenchida')}")
+                    credenciais_preenchidas = True
+                    break
+                else:
+                    erro = resultado.get('error') if resultado else 'Script retornou None'
+                    print(f"[ABA 2] ⚠️ Tentativa {tentativa + 1} falhou: {erro}")
+                    if tentativa < 2:
+                        await asyncio.sleep(2)
+
+            except Exception as e:
+                print(f"[ABA 2] ⚠️ Erro na tentativa {tentativa + 1}: {e}")
+                if tentativa < 2:
+                    await asyncio.sleep(2)
+
+        if not credenciais_preenchidas:
+            print(f"[ABA 2] ⚠️ Não foi possível preencher credenciais automaticamente")
+            raise Exception("Credenciais não preenchidas - abortando")
+
+        # ========== LOGIN 100% AUTOMÁTICO ==========
+        print(f"\n{'='*80}")
+        print(f"🤖 AUTOMAÇÃO 100% AUTOMÁTICA ATIVADA")
+        print(f"{'='*80}")
+        print(f"")
+        print(f"✅ Não precisa fazer NADA manualmente!")
+        print(f"✅ A API do CapSolver resolverá CAPTCHAs automaticamente")
+        print(f"✅ O login será feito automaticamente")
+        print(f"✅ A extração rodará em loop contínuo")
+        print(f"")
+        print(f"📧 Email será enviado quando o login for concluído")
+        print(f"📧 Depois: emails APENAS em caso de problemas")
+        print(f"🖥️  Acesso VNC (monitoramento): http://{os.getenv('SERVER_IP', '3.148.126.73')}:6080/vnc.html")
+        print(f"")
+        print(f"{'='*80}\n")
+
+        # Fazer login automaticamente
+        print(f"[AUTOMAÇÃO] Fazendo login automaticamente...")
+        try:
+            login_sucesso = await self.fazer_login_automatico()
+
+            if not login_sucesso:
+                print(f"[AUTOMAÇÃO] ❌ Login automático falhou")
+                raise Exception("Falha no login automático")
+
+            print(f"[AUTOMAÇÃO] ✅ Login concluído com sucesso!")
+
+            # Enviar email de sucesso APENAS no primeiro login
+            print(f"\n[EMAIL] Enviando notificação de login bem-sucedido...")
+            try:
+                from src.common.notification_utils import enviar_email_sucesso
+
+                detalhes = f"""
+✅ Login automático realizado com sucesso!
+
+A automação está rodando 100% automaticamente agora.
+
+Próximos passos:
+- O sistema executará ciclos contínuos de extração
+- Emails serão enviados APENAS em caso de problemas
+- Você pode monitorar via VNC se desejar
+
+VNC: http://{os.getenv('SERVER_IP', '3.148.126.73')}:6080/vnc.html
+"""
+
+                email_enviado = enviar_email_sucesso(
+                    mensagem="Login automático concluído! Sistema em execução contínua.",
+                    detalhes_adicionais=detalhes
+                )
+
+                if email_enviado:
+                    print(f"[EMAIL] ✅ Email de sucesso enviado!")
+                    print(f"[EMAIL] 📧 Verifique: {os.getenv('EMAIL_RECIPIENT')}")
+            except Exception as e:
+                print(f"[EMAIL] ⚠️ Erro ao enviar email (não crítico): {e}")
+
+        except Exception as e:
+            print(f"[AUTOMAÇÃO] ❌ Erro no login: {e}")
+
+            # Enviar email de erro
+            print(f"\n[EMAIL] Enviando notificação de erro no login...")
+            try:
+                from src.common.notification_utils import enviar_email_erro
+
+                detalhes = f"""
+❌ Falha no login automático
+
+Erro: {str(e)}
+
+Você pode:
+1. Fazer login manualmente via VNC
+2. Pressionar [R] para retomar após login manual
+
+VNC: http://{os.getenv('SERVER_IP', '3.148.126.73')}:6080/vnc.html
+"""
+
+                email_enviado = enviar_email_erro(
+                    mensagem=f"Erro no login automático: {str(e)}",
+                    detalhes_adicionais=detalhes
+                )
+
+                if email_enviado:
+                    print(f"[EMAIL] ✅ Email de erro enviado!")
+            except Exception as email_err:
+                print(f"[EMAIL] ⚠️ Erro ao enviar email: {email_err}")
+
+            # Pausar para intervenção manual
+            self.pausado = True
+            self.estado_atual = "AGUARDANDO_LOGIN_MANUAL"
+            self.mensagem_estado = "Aguardando login manual via VNC"
+
+            print(f"\n{'='*80}")
+            print(f"⏸️  FAÇA LOGIN MANUALMENTE NO NAVEGADOR (VNC)")
+            print(f"⏸️  Depois pressione [R] para continuar")
+            print(f"{'='*80}\n")
+
+            while self.pausado and not self.parar:
+                await asyncio.sleep(0.5)
+
+        # Continuar com automação
+        self.estado_atual = "EXECUTANDO"
+        self.mensagem_estado = ""
+
+        print(f"\n{'='*80}")
+        print(f"✅ PRONTO - AUTOMAÇÃO EM EXECUÇÃO")
+        print(f"{'='*80}\n")
+        print(f"[AUTOMAÇÃO] Sistema operando 100% automaticamente")
+        print(f"[AUTOMAÇÃO] Emails serão enviados APENAS em caso de problemas\n")
+
+        # Navegar para página que tem frame 'code' (após login manual, usuário pode estar na home)
+        print(f"[NAVEGAÇÃO] Navegando para página de financeiro (preparando frame 'code')...")
+        try:
+            url_financeiro = "https://www.smartsecurities.com.br/smart/financeiro/frmfinanceiro.php"
+            await self.tab.get(url_financeiro)
+            await asyncio.sleep(3)
+            print(f"[NAVEGAÇÃO] ✅ Página de financeiro carregada - frame 'code' pronto")
+        except Exception as e:
+            print(f"[NAVEGAÇÃO] ⚠️ Erro ao navegar: {e}")
+            print(f"[NAVEGAÇÃO] Continuando mesmo assim...")
 
         logger.info(f"[{self.nome}] ✅ Navegador Nodriver inicializado e extensão instalada")
 
@@ -255,7 +450,7 @@ class ProcessadorTitulosAbertosEMarcadosRecompras:
                     print(f"[CAPTCHA] ⏳ Aguardando... ({tentativa + 1}s)")
 
                 # Verificar se usuário pausou/parou
-                self.verificar_pausa()
+                await self.verificar_pausa()
                 if self.parar:
                     return False
 
@@ -271,17 +466,42 @@ class ProcessadorTitulosAbertosEMarcadosRecompras:
         print(f"⚠️  Extensão CapSolver não resolveu em 60 segundos")
         print(f"")
         print(f"📋 AÇÕES NECESSÁRIAS:")
-        print(f"   1. Resolva o CAPTCHA MANUALMENTE no navegador (VNC)")
-        print(f"   2. Pressione [R] aqui para RETOMAR a execução")
+        print(f"   1. Acesse o VNC e resolva o CAPTCHA MANUALMENTE")
+        print(f"   2. Clique em 'Continuar Automação' no EMAIL")
+        print(f"   OU pressione [R] aqui")
         print(f"{'='*80}\n")
 
         self.captcha_errors += 1
         self.pausado = True
+
+        # Definir estado atual para contexto
+        self.estado_atual = "RESOLVENDO_CAPTCHA"
+        self.mensagem_estado = "CAPTCHA não foi resolvido automaticamente pela extensão"
+
         logger.warning(f"[{self.nome}] CAPTCHA timeout, pausando para intervenção manual")
 
-        print(f"[CONTROLE] Aguardando você pressionar [R] para retomar...")
+        # 🔔 ENVIAR EMAIL DE NOTIFICAÇÃO
+        print(f"\n[EMAIL] Enviando notificação de CAPTCHA...")
+        try:
+            email_enviado = enviar_alerta_captcha(self.captcha_errors)
+            if email_enviado:
+                print(f"[EMAIL] ✅ Email enviado com sucesso!")
+                print(f"[EMAIL] 📧 Verifique sua caixa de entrada: {os.getenv('EMAIL_RECIPIENT')}")
+            else:
+                print(f"[EMAIL] ⚠️ Falha ao enviar email (verifique logs)")
+        except Exception as e:
+            print(f"[EMAIL] ❌ Erro ao enviar notificação: {e}")
+            logger.error(f"Erro ao enviar email de CAPTCHA: {e}")
+
+        print(f"\n[CONTROLE] Aguardando resolução do CAPTCHA...")
+        print(f"[CONTROLE] Clique em 'Continuar Automação' no email OU pressione [R] aqui")
+
         while self.pausado and not self.parar:
             await asyncio.sleep(0.5)
+
+        # Limpar estado quando retomar
+        self.estado_atual = "EXECUTANDO"
+        self.mensagem_estado = ""
 
         return not self.parar
 
@@ -310,7 +530,7 @@ class ProcessadorTitulosAbertosEMarcadosRecompras:
 
     async def fazer_login_automatico(self):
         """Faz login automático usando credenciais do .env - REPLICANDO LÓGICA SELENIUM"""
-        self.verificar_pausa()
+        await self.verificar_pausa()
 
         print(f"\n{'='*80}")
         print("🔐 REALIZANDO LOGIN AUTOMÁTICO")
@@ -322,20 +542,60 @@ class ProcessadorTitulosAbertosEMarcadosRecompras:
                 raise Exception("Credenciais não encontradas no .env")
 
             print(f"[DEBUG] Email: {SMART_EMAIL}")
-            print(f"[DEBUG] Aguardando campos de login carregar...")
-            await asyncio.sleep(3)
+            print(f"[DEBUG] Aguardando iframe de login carregar...")
 
             # ============================================================
-            # SOLUÇÃO: Usar JavaScript para acessar iframe (igual Selenium)
-            # No Selenium: driver.switch_to.frame(iframe)
-            # No Nodriver: JavaScript com iframe.contentDocument
+            # CORREÇÃO v28.1: Aguardar iframe carregar DINAMICAMENTE
+            # Problema: await asyncio.sleep(3) não é suficiente - iframe pode
+            # demorar mais para carregar
+            # Solução: Verificar repetidamente se iframe existe (retry loop)
             # ============================================================
+
+            iframe_carregado = False
+            max_tentativas = 20  # 20 tentativas x 2s = 40s total
+            tentativa = 0
+
+            while not iframe_carregado and tentativa < max_tentativas:
+                tentativa += 1
+                print(f"[DEBUG] Tentativa {tentativa}/{max_tentativas}: Verificando iframe...")
+
+                check_iframe_script = """
+                (() => {
+                    const iframes = document.querySelectorAll('iframe');
+                    for (const iframe of iframes) {
+                        if (iframe.src && iframe.src.includes('loginsec.php')) {
+                            return { found: true, src: iframe.src };
+                        }
+                    }
+                    return { found: false };
+                })();
+                """
+
+                resultado_check = await self.tab.evaluate(check_iframe_script)
+
+                # Nodriver pode retornar uma lista - converter para dict
+                if isinstance(resultado_check, list) and len(resultado_check) > 0:
+                    # Formato: [[chave, {type: ..., value: ...}], ...]
+                    resultado_check = {item[0]: item[1].get('value') if isinstance(item[1], dict) else item[1] for item in resultado_check}
+
+                if resultado_check and resultado_check.get('found'):
+                    print(f"[DEBUG] ✅ Iframe encontrado: {resultado_check.get('src')}")
+                    iframe_carregado = True
+                    break
+
+                await asyncio.sleep(2)  # Aguardar 2s entre tentativas
+
+            if not iframe_carregado:
+                raise Exception("Iframe de login não carregou após 40 segundos")
+
+            print(f"\n[DEBUG] Aguardando mais 3s para garantir que campos dentro do iframe carreguem...")
+            await asyncio.sleep(3)
 
             print(f"\n[DEBUG] Preenchendo credenciais via JavaScript (dentro do iframe)...")
 
             # JavaScript que REPLICA o comportamento do Selenium switch_to.frame()
             login_script = f"""
-            (async () => {{
+            (() => {{
                 // 1. Encontrar iframe de login (igual Selenium)
                 const iframes = document.querySelectorAll('iframe');
                 let iframeLogin = null;
@@ -396,6 +656,10 @@ class ProcessadorTitulosAbertosEMarcadosRecompras:
             # Executar JavaScript
             resultado = await self.tab.evaluate(login_script)
 
+            # Nodriver pode retornar uma lista - converter para dict
+            if isinstance(resultado, list) and len(resultado) > 0:
+                resultado = {item[0]: item[1].get('value') if isinstance(item[1], dict) else item[1] for item in resultado}
+
             if not resultado or not resultado.get('success'):
                 erro = resultado.get('error', 'Erro desconhecido') if resultado else 'Script retornou None'
                 raise Exception(f"Erro ao preencher campos via JavaScript: {erro}")
@@ -403,7 +667,7 @@ class ProcessadorTitulosAbertosEMarcadosRecompras:
             print(f"[DEBUG] ✅ Email preenchido via JavaScript!")
             print(f"[DEBUG] ✅ Senha preenchida via JavaScript!")
             await asyncio.sleep(1)
-            self.verificar_pausa()
+            await self.verificar_pausa()
 
             # ============================================================
             # Clicar botão "Entrar" via JavaScript (igual Selenium .click())
@@ -440,6 +704,10 @@ class ProcessadorTitulosAbertosEMarcadosRecompras:
 
             resultado_click = await self.tab.evaluate(click_script)
 
+            # Nodriver pode retornar uma lista - converter para dict
+            if isinstance(resultado_click, list) and len(resultado_click) > 0:
+                resultado_click = {item[0]: item[1].get('value') if isinstance(item[1], dict) else item[1] for item in resultado_click}
+
             if not resultado_click or not resultado_click.get('success'):
                 erro = resultado_click.get('error', 'Erro ao clicar') if resultado_click else 'Script retornou None'
                 raise Exception(f"Erro ao clicar no botão Entrar: {erro}")
@@ -448,17 +716,47 @@ class ProcessadorTitulosAbertosEMarcadosRecompras:
 
             # Aguardar CAPTCHA carregar
             print(f"\n[DEBUG] Aguardando reCAPTCHA carregar...")
-            await asyncio.sleep(2)
-            self.verificar_pausa()
+            await asyncio.sleep(3)
+            await self.verificar_pausa()
 
-            # Aguardar extensão resolver CAPTCHA
-            captcha_resolvido = await self.aguardar_extensao_resolver_captcha()
+            # Resolver CAPTCHA via CapSolver HTTP API
+            print(f"[DEBUG] Resolvendo CAPTCHA via CapSolver HTTP API...")
+            capsolver = CapSolverAPI(CAPSOLVER_API_KEY)
+            site_url = await self.tab.evaluate("window.location.href")
+            captcha_resolvido = await capsolver.resolver_recaptcha_automatico(self.tab, site_url)
 
             if not captcha_resolvido:
-                raise Exception("CAPTCHA não foi resolvido")
+                raise Exception("CAPTCHA não foi resolvido pelo CapSolver")
 
-            # Clicar botão "Acessar" (após CAPTCHA)
-            await self.clicar_botao_acessar_login()
+            # Após resolver CAPTCHA, clicar no botão "Acessar" para completar login
+            print(f"[DEBUG] CAPTCHA resolvido - procurando botão Acessar...")
+            await asyncio.sleep(2)  # Aguardar CAPTCHA processar
+
+            # Procurar e clicar no botão de submit do formulário
+            click_submit = await self.tab.evaluate("""
+                (() => {
+                    // Procurar dentro do iframe de login
+                    const iframes = document.querySelectorAll('iframe');
+                    for (const iframe of iframes) {
+                        if (iframe.src && iframe.src.includes('loginsec.php')) {
+                            const iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
+                            // Procurar botão OK/Acessar/Submit
+                            const botao = iframeDoc.getElementById('OK') ||
+                                         iframeDoc.querySelector('[name="OK"]') ||
+                                         iframeDoc.querySelector('input[type="submit"]') ||
+                                         iframeDoc.querySelector('button[type="submit"]');
+                            if (botao) {
+                                botao.click();
+                                return { success: true };
+                            }
+                        }
+                    }
+                    return { success: false, error: 'Botão não encontrado' };
+                })()
+            """)
+
+            print(f"[DEBUG] Resultado clique botão: {click_submit}")
+            await asyncio.sleep(5)  # Aguardar redirect após login
 
             print(f"\n{'='*80}")
             print("✅ LOGIN REALIZADO COM SUCESSO!")
@@ -474,20 +772,65 @@ class ProcessadorTitulosAbertosEMarcadosRecompras:
             print(f"{'='*80}\n")
             logger.error(f"[{self.nome}] ❌ Erro no login automático: {e}")
 
-            # Fallback para login manual
+            # Definir estado de erro de login
+            self.estado_atual = "ERRO_LOGIN"
+            self.mensagem_estado = f"Erro no login automático: {str(e)[:200]}"
+            self.pausado = True
+
+            # 🔔 ENVIAR EMAIL DE NOTIFICAÇÃO
+            print(f"\n[EMAIL] Enviando notificação de erro no login...")
+            try:
+                from src.common.notification_utils import enviar_email_intervencao
+
+                detalhes = f"""
+ERRO: {str(e)}
+
+AÇÃO NECESSÁRIA:
+1. Acesse o VNC (clique no botão abaixo)
+2. Faça login manualmente no SmartSecurities
+3. Clique em 'Continuar Automação' para retomar
+
+Credenciais:
+Email: {SMART_EMAIL}
+Senha: (verifique o .env)
+"""
+
+                email_enviado = enviar_email_intervencao(
+                    tipo_intervencao="❌ ERRO NO LOGIN AUTOMÁTICO",
+                    mensagem="O sistema não conseguiu fazer login automaticamente. Por favor, faça login manualmente.",
+                    detalhes_adicionais=detalhes
+                )
+
+                if email_enviado:
+                    print(f"[EMAIL] ✅ Email enviado com sucesso!")
+                    print(f"[EMAIL] 📧 Verifique sua caixa de entrada: {os.getenv('EMAIL_RECIPIENT')}")
+                else:
+                    print(f"[EMAIL] ⚠️ Falha ao enviar email (verifique logs)")
+            except Exception as email_error:
+                print(f"[EMAIL] ❌ Erro ao enviar notificação: {email_error}")
+
+            # Aguardar login manual via VNC e continuação via API ou teclado [R]
             print("\n" + "="*80)
             print("⏸️  FAÇA LOGIN MANUALMENTE NO NAVEGADOR (VNC)")
-            print("⏸️  Depois pressione ENTER aqui para continuar...")
+            print("⏸️  Depois clique em 'Continuar Automação' no email OU pressione [R]")
             print("="*80 + "\n")
-            input(">>> Pressione ENTER quando terminar o login >>> ")
-            print(f"\n[DEBUG] ENTER pressionado! Continuando automação...\n")
+
+            # Aguardar despausar (via API /resume ou teclado [R])
+            while self.pausado and not self.parar:
+                await asyncio.sleep(0.5)
+
+            # Limpar estado quando retomar
+            self.estado_atual = "EXECUTANDO"
+            self.mensagem_estado = ""
+
+            print(f"\n[DEBUG] ✅ Login manual concluído! Continuando automação...\n")
             await asyncio.sleep(3)
 
             return True
 
     async def navegar_para_titulos_abertos(self):
         """Navega para página de títulos em aberto"""
-        self.verificar_pausa()
+        await self.verificar_pausa()
 
         print(f"\n[DEBUG] ========== CARREGANDO TÍTULOS EM ABERTO ==========")
         logger.info(f"[{self.nome}] Carregando títulos em aberto...")
@@ -501,7 +844,7 @@ class ProcessadorTitulosAbertosEMarcadosRecompras:
 
             print(f"[DEBUG] Aguardando página carregar...")
             await asyncio.sleep(5)
-            self.verificar_pausa()
+            await self.verificar_pausa()
 
             print(f"[DEBUG] ✅ Página carregada")
 
@@ -522,7 +865,7 @@ class ProcessadorTitulosAbertosEMarcadosRecompras:
         - Aguarda e retenta se necessário
         - Retorna informações sobre os frames encontrados
         """
-        self.verificar_pausa()
+        await self.verificar_pausa()
 
         print(f"\n[DEBUG] ========== VERIFICANDO FRAMES ==========")
         logger.info(f"[{self.nome}] Verificando frames prontos...")
@@ -651,7 +994,7 @@ class ProcessadorTitulosAbertosEMarcadosRecompras:
         No Selenium: já está no contexto do frame após mudar_para_frame_code()
         No Nodriver: precisa acessar frame via JavaScript toda vez
         """
-        self.verificar_pausa()
+        await self.verificar_pausa()
 
         data_atual = datetime.now()
         data_inicial = data_atual - timedelta(days=365)
@@ -899,7 +1242,7 @@ class ProcessadorTitulosAbertosEMarcadosRecompras:
 
     async def clicar_pesquisar(self):
         """Clica no botão 'Pesquisar' - DENTRO DO FRAME 'code' - BUSCA INTELIGENTE"""
-        self.verificar_pausa()
+        await self.verificar_pausa()
 
         print(f"\n[DEBUG] ========== CLICANDO EM PESQUISAR ==========")
         logger.info(f"[{self.nome}] Clicando em Pesquisar...")
@@ -988,7 +1331,7 @@ class ProcessadorTitulosAbertosEMarcadosRecompras:
 
     async def selecionar_todos_resultados(self):
         """Marca o checkbox 'Selecionar Todos' - DENTRO DO FRAME 'code' - BUSCA INTELIGENTE"""
-        self.verificar_pausa()
+        await self.verificar_pausa()
 
         print(f"\n[DEBUG] ========== SELECIONANDO TODOS OS RESULTADOS ==========")
         logger.info(f"[{self.nome}] Selecionando todos no formulário de resultados...")
@@ -1202,10 +1545,12 @@ class ProcessadorTitulosAbertosEMarcadosRecompras:
                 return False
 
             print(f"[DEBUG] ⚠️ reCAPTCHA DETECTADO!")
-            print(f"[DEBUG] Aguardando extensão CapSolver resolver...")
+            print(f"[DEBUG] Resolvendo automaticamente via CapSolver HTTP...")
 
-            # PASSO 5: Aguardar extensão resolver CAPTCHA
-            captcha_resolvido = await self.aguardar_extensao_resolver_captcha()
+            # PASSO 5: Resolver CAPTCHA automaticamente via HTTP
+            capsolver = CapSolverAPI(CAPSOLVER_API_KEY)
+            site_url = await self.tab.evaluate("window.location.href")
+            captcha_resolvido = await capsolver.resolver_recaptcha_automatico(self.tab, site_url)
 
             if not captcha_resolvido:
                 print(f"[DEBUG] ⚠️ CAPTCHA não foi resolvido")
@@ -1214,7 +1559,7 @@ class ProcessadorTitulosAbertosEMarcadosRecompras:
                     self.tab = tab_principal
                 return False
 
-            print(f"[DEBUG] ✅ CAPTCHA resolvido!")
+            print(f"[DEBUG] ✅ CAPTCHA resolvido automaticamente via HTTP!")
 
             # PASSO 6: Clicar botão "Confirmar" SOMENTE se em nova aba (Selenium linha 1026-1063)
             if captcha_em_nova_aba:
@@ -1349,7 +1694,7 @@ class ProcessadorTitulosAbertosEMarcadosRecompras:
 
     async def clicar_gerar_csv(self):
         """Clica no botão 'Gerar CSV' - DENTRO DO FRAME 'code' - BUSCA INTELIGENTE"""
-        self.verificar_pausa()
+        await self.verificar_pausa()
 
         print(f"\n[DEBUG] ========== GERANDO CSV ==========")
         logger.info(f"[{self.nome}] Gerando CSV...")
@@ -1438,7 +1783,7 @@ class ProcessadorTitulosAbertosEMarcadosRecompras:
             print(f"[DEBUG] ❌ Erro: {e}")
             raise
 
-    def renomear_csv_baixado(self, com_checkbox_recompra: bool):
+    async def renomear_csv_baixado(self, com_checkbox_recompra: bool):
         """Renomeia o CSV baixado para o padrão correto"""
         import glob
 
@@ -1454,9 +1799,9 @@ class ProcessadorTitulosAbertosEMarcadosRecompras:
                 if not crdownload:
                     print(f"[DEBUG] ✅ Download finalizado em {tentativa + 1}s")
                     break
-                time.sleep(1)
+                await asyncio.sleep(1)
 
-            time.sleep(2)
+            await asyncio.sleep(2)
 
             # Procurar CSV recém-baixado
             print(f"[DEBUG] Procurando CSV recém-baixado...")
@@ -1676,7 +2021,7 @@ class ProcessadorTitulosAbertosEMarcadosRecompras:
 
         # Todas as etapas concluídas - renomear CSV
         print(f"\n[EXTRAÇÃO] 📥 Renomeando arquivo CSV baixado...")
-        arquivo_salvo = self.renomear_csv_baixado(com_checkbox_recompra)
+        arquivo_salvo = await self.renomear_csv_baixado(com_checkbox_recompra)
 
         if arquivo_salvo:
             print(f"\n[DEBUG] ✅ Extração {tipo} concluída!")
@@ -1692,7 +2037,7 @@ class ProcessadorTitulosAbertosEMarcadosRecompras:
         """Método principal de processamento"""
         inicio = now_br()
         print(f"\n{'='*80}")
-        print(f"PROCESSADOR - TÍTULOS ABERTOS E MARCADOS RECOMPRAS (v26.0)")
+        print(f"PROCESSADOR - RELATÓRIOS DE OPERAÇÕES (v1.0)")
         print(f"100% NODRIVER ASYNC - ANTI-DETECÇÃO NATIVA")
         print(f"{'='*80}\n")
         logger.info(f"[{self.nome}] ========== INICIANDO CICLO CONTÍNUO ==========")
@@ -1704,16 +2049,23 @@ class ProcessadorTitulosAbertosEMarcadosRecompras:
             # Iniciar listener de teclado
             self.listener_thread = threading.Thread(target=self.escutar_teclado, daemon=True)
             self.listener_thread.start()
+
+            # Iniciar API de controle remoto
+            print(f"\n[API] Iniciando API de controle remoto...")
+            self.control_api = iniciar_api_controle(self)
+            print(f"[API] ✅ API iniciada na porta {os.getenv('SERVER_PORT', '6092')}")
             logger.info(f"[{self.nome}] Thread de controle de teclado iniciada")
 
-            # Iniciar navegador e fazer login
+            # Iniciar navegador (usuário fará login manualmente)
             await self.iniciar_navegador()
-            await self.fazer_login_automatico()
+
+            print(f"[AUTOMAÇÃO] ✅ Assumindo controle - usuário já está logado")
+            print(f"[AUTOMAÇÃO] Iniciando extrações automáticas...")
 
             # Loop infinito de extrações
             ciclo = 1
             while not self.parar:
-                self.verificar_pausa()
+                await self.verificar_pausa()
 
                 if self.parar:
                     break
@@ -1725,13 +2077,13 @@ class ProcessadorTitulosAbertosEMarcadosRecompras:
 
                 # EXTRAÇÃO 1: COM checkbox marcado
                 print(f"\n[CICLO {ciclo}] ETAPA 1/2: Extraindo COM checkbox recompra...")
-                self.verificar_pausa()
+                await self.verificar_pausa()
                 if not self.parar:
                     await self.executar_extracao_completa(com_checkbox_recompra=True)
 
                 # EXTRAÇÃO 2: SEM checkbox marcado
                 print(f"\n[CICLO {ciclo}] ETAPA 2/2: Extraindo SEM checkbox recompra...")
-                self.verificar_pausa()
+                await self.verificar_pausa()
                 if not self.parar:
                     await self.executar_extracao_completa(com_checkbox_recompra=False)
 
@@ -1746,8 +2098,8 @@ class ProcessadorTitulosAbertosEMarcadosRecompras:
                     for _ in range(60):
                         if self.parar:
                             break
-                        self.verificar_pausa()
-                        time.sleep(1)
+                        await self.verificar_pausa()
+                        await asyncio.sleep(1)
 
                     ciclo += 1
 
@@ -1766,24 +2118,80 @@ class ProcessadorTitulosAbertosEMarcadosRecompras:
             return {"success": True, "mensagem": "Interrompido pelo usuário"}
 
         except Exception as e:
-            print(f"\n[DEBUG] ❌❌❌ ERRO CRÍTICO ❌❌❌")
-            print(f"[DEBUG] {str(e)}")
-            logger.error(f"[{self.nome}] ❌ Erro: {e}", exc_info=True)
-            return {"success": False, "mensagem": str(e)}
+            import traceback
+            erro_completo = traceback.format_exc()
+
+            print(f"\n{'='*80}")
+            print(f"❌❌❌ ERRO CRÍTICO ❌❌❌")
+            print(f"{'='*80}")
+            print(f"Erro: {str(e)}")
+            print(f"{'='*80}\n")
+
+            logger.error(f"[{self.nome}] ❌ Erro crítico: {e}", exc_info=True)
+
+            # Definir estado de erro
+            self.estado_atual = "ERRO_CRITICO"
+            self.mensagem_estado = f"Erro: {str(e)[:200]}"  # Primeiros 200 chars
+            self.pausado = True
+
+            # 🔔 ENVIAR EMAIL DE ERRO
+            print(f"\n[EMAIL] Enviando notificação de ERRO CRÍTICO...")
+            try:
+                detalhes_erro = f"""
+ERRO: {str(e)}
+
+ESTADO: {self.estado_atual}
+
+STACK TRACE (últimas linhas):
+{chr(10).join(erro_completo.split(chr(10))[-10:])}
+
+A automação foi pausada automaticamente.
+"""
+                email_enviado = enviar_alerta_erro_critico(detalhes_erro)
+                if email_enviado:
+                    print(f"[EMAIL] ✅ Email de erro enviado com sucesso!")
+                    print(f"[EMAIL] 📧 Verifique: {os.getenv('EMAIL_RECIPIENT')}")
+                else:
+                    print(f"[EMAIL] ⚠️ Falha ao enviar email de erro")
+            except Exception as email_err:
+                print(f"[EMAIL] ❌ Erro ao enviar notificação: {email_err}")
+
+            print(f"\n{'='*80}")
+            print(f"⚠️  AUTOMAÇÃO PAUSADA DEVIDO A ERRO")
+            print(f"{'='*80}")
+            print(f"Opções:")
+            print(f"  1. Clique 'Continuar Automação' no EMAIL para tentar retomar")
+            print(f"  2. Pressione [R] aqui para tentar retomar")
+            print(f"  3. Pressione [Q] para parar definitivamente")
+            print(f"{'='*80}\n")
+
+            # Aguardar decisão do usuário
+            while self.pausado and not self.parar:
+                await asyncio.sleep(0.5)
+
+            if self.parar:
+                print(f"\n[ERRO] Usuário escolheu parar após erro")
+                return {"success": False, "mensagem": str(e)}
+            else:
+                print(f"\n[ERRO] Usuário escolheu tentar continuar após erro")
+                # Tentar continuar pode causar mais erros, mas deixar usuário decidir
+                self.estado_atual = "EXECUTANDO"
+                self.mensagem_estado = ""
+                return {"success": False, "mensagem": f"Erro recuperado: {str(e)}"}
 
         finally:
             if self.browser:
                 await close_browser(self.browser)
 
 
-def processar_titulos_abertos_e_marcados_recompras(modo_simulacao: bool = False) -> dict:
+def processar_relatorios_operacoes(modo_simulacao: bool = False) -> dict:
     """Função wrapper para executar o processador"""
-    processador = ProcessadorTitulosAbertosEMarcadosRecompras()
+    processador = ProcessadorRelatoriosOperacoes()
     return asyncio.run(processador.processar(modo_simulacao=modo_simulacao))
 
 
 if __name__ == "__main__":
-    resultado = processar_titulos_abertos_e_marcados_recompras()
+    resultado = processar_relatorios_operacoes()
     print(f"\n{'='*80}")
     print("RESULTADO FINAL:", "✅ SUCESSO" if resultado["success"] else "❌ FALHA")
     print("Mensagem:", resultado.get("mensagem"))

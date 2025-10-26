@@ -1,0 +1,37 @@
+[Unit]
+Description=x11vnc VNC Server for Display :%i
+Documentation=man:x11vnc(1)
+After=xvfb@%i.service
+Requires=xvfb@%i.service
+BindsTo=xvfb@%i.service
+
+[Service]
+Type=forking
+User=ubuntu
+Group=ubuntu
+Environment="DISPLAY=:%i"
+
+# Aguardar Xvfb estar pronto
+ExecStartPre=/bin/sleep 2
+
+# Iniciar x11vnc (idêntico ao script)
+# Porta: 5900 + (display_num - 1)
+# Display :1 → porta 5900
+# Display :2 → porta 5901
+# etc...
+ExecStart=/home/ubuntu/PROSPER-ERP-AUTOMATION/systemd/start_x11vnc.sh %i
+
+# Parar processo
+ExecStop=/usr/bin/pkill -f "x11vnc.*:%i"
+
+# Reiniciar se falhar
+Restart=on-failure
+RestartSec=5
+
+# Logs
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=x11vnc-%i
+
+[Install]
+WantedBy=multi-user.target

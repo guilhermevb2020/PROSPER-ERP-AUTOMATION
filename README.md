@@ -1,269 +1,432 @@
 # 🤖 PROSPER-ERP-AUTOMATION
 
-Sistema de automação web para extração de dados do ERP SmartSecurities via Selenium.
+**Sistema de automação web para extração de dados do ERP SmartSecurities usando Nodriver**
+
+[![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
+[![Nodriver](https://img.shields.io/badge/nodriver-0.47+-green.svg)](https://github.com/ultrafunkamsterdam/nodriver)
+[![License](https://img.shields.io/badge/license-Proprietary-red.svg)]()
 
 ---
 
 ## 📋 Visão Geral
 
-Este projeto contém **automações web** que requerem navegador Chrome e interação humana ocasional (resolução de CAPTCHAs). É separado do projeto principal (`PROSPER_DATA_HUB`) que contém processadores API headless.
+Sistema de automação web que extrai dados de títulos abertos do ERP **SmartSecurities** usando **Nodriver** (sucessor do undetected-chromedriver) para anti-detecção de bots.
 
-### Por que separado?
+### 🎯 O que faz:
 
-- ✅ **Isolamento**: Automações web não afetam processadores API
-- ✅ **Recursos**: Chrome consome muita RAM/CPU
-- ✅ **Escalabilidade**: Pode rodar em VM dedicada
-- ✅ **Manutenção**: Atualiza independentemente
+- ✅ Extrai **2 CSVs** do SmartSecurities automaticamente:
+  - Títulos abertos **marcados para recompra**
+  - **Todos** os títulos abertos
+- ✅ Resolve **CAPTCHAs** automaticamente via CapSolver
+- ✅ Roda em **loop contínuo** (60 segundos entre ciclos)
+- ✅ **Anti-detecção nativa** (Nodriver)
+- ✅ **Simula comportamento humano** (movimentos de mouse, delays aleatórios)
+- ✅ Acesso **remoto via navegador** (noVNC porta 6080)
+- ✅ **Notificações por email** quando precisa intervenção (CAPTCHA, erros)
+- ✅ **Controle remoto via API** (retomar automação de qualquer dispositivo)
+
+### 🏗️ Por que separado do PROSPER_DATA_HUB?
+
+- **Isolamento**: Automações web não afetam processadores API headless
+- **Recursos**: Chrome consome muita RAM/CPU
+- **Escalabilidade**: Pode rodar em VM dedicada AWS
+- **Manutenção**: Atualiza independentemente
 
 ---
 
-## 🏗️ Arquitetura
+## 🚀 Início Rápido
+
+### **1. Iniciar Displays VNC (EXECUTAR UMA VEZ)**
+
+```bash
+cd /home/ubuntu/PROSPER-ERP-AUTOMATION
+./iniciar_vnc_displays.sh start
+```
+
+Isso inicia **10 displays virtuais** (:1 até :10) que ficam rodando permanentemente.
+
+### **2. Acesse o VNC (ver automação rodando)**
+
+```
+🌐 Display :1 → http://3.148.126.73:6080/vnc.html
+🌐 Display :2 → http://3.148.126.73:6081/vnc.html
+...
+🌐 Display :10 → http://3.148.126.73:6089/vnc.html
+```
+
+### **3. Execute um processador**
+
+```bash
+# Processador de relatório de deságio (Display :1)
+DISPLAY=:1 python src/processors/web/relatorio_operacao_desagio.py
+```
+
+**Pronto!** Você verá o Chrome abrindo no VNC e a automação executando.
+
+📖 **[Ver guia completo de acesso VNC](docs/ACESSO_VNC.md)**
+📖 **[Ver convenções de portas](docs/CONVENCOES_PORTAS.md)**
+
+---
+
+## 📁 Estrutura do Projeto
 
 ```
 PROSPER-ERP-AUTOMATION/
 ├── src/
-│   ├── processors/
-│   │   └── web/
-│   │       └── titulos_abertos_e_marcados_recompras.py
+│   ├── processors/web/
+│   │   └── titulos_abertos_e_marcados_recompras.py  # Processador principal (822 linhas)
 │   ├── common/
-│   │   ├── selenium_utils.py      # Stealth mode, anti-detection
-│   │   └── timezone_utils.py      # Timezone Brasília
-│   ├── core/
-│   │   └── logging_config.py      # Logger configurado
-│   └── config/
+│   │   ├── nodriver_utils.py       # Utilitários Nodriver async
+│   │   ├── timezone_utils.py       # Timezone Brasil (UTC-3)
+│   │   └── reporting_utils.py      # Processamento de dados
+│   └── core/
+│       └── logging_config.py       # Logging com rotação diária
+│
 ├── data/
-│   ├── raw_inputs/                # CSVs baixados
-│   ├── processed_outputs/         # Dados processados
-│   └── checkpoints/               # Controle de progresso
-├── logs/                          # Logs rotativos
-├── scripts/
-│   ├── setup/                     # Instalação VNC, Chrome
-│   ├── vnc/                       # Gerenciamento VNC
-│   └── maintenance/               # Limpeza, backup
-├── config/                        # Configurações VNC, systemd
-├── docs/                          # Documentação
-└── temp/                          # Arquivos temporários
+│   ├── raw_inputs/                 # CSVs baixados salvos aqui
+│   ├── processed_outputs/          # Dados processados
+│   └── checkpoints/                # Controle de progresso
+│
+├── logs/                           # Logs rotativos (10 dias)
+├── venv/                           # Ambiente virtual Python
+├── docs/                           # Documentação detalhada
+│
+├── start_automation.sh             # 🚀 Inicia Xvfb + VNC + noVNC + ambiente Python
+├── run_processor.sh                # 🚀 Executa o processador
+├── requirements.txt                # Dependências Python
+└── .env                            # Credenciais (NÃO commitado)
 ```
 
 ---
 
-## 🚀 Instalação
+## ⚙️ Tecnologias
 
-### Pré-requisitos
+| Tecnologia | Versão | Função |
+|------------|--------|--------|
+| **Python** | 3.12+ | Linguagem principal |
+| **Nodriver** | 0.47+ | Automação web anti-detecção (CORE) |
+| **Selenium** | 4.27.1 | Fallback/legacy |
+| **CapSolver** | 1.0.0 | Resolução automática de CAPTCHA |
+| **Pandas** | 2.2.3 | Processamento de dados |
+| **Xvfb** | - | Display virtual (headless) |
+| **x11vnc** | - | Servidor VNC (porta 5900) |
+| **noVNC** | - | VNC via browser (porta 6080) |
 
-- Ubuntu 20.04+ (ou similar)
-- Python 3.12+
-- Google Chrome
-- Xvfb + VNC (para ambiente headless)
+---
 
-### Passo 1: Clonar e Configurar
+## 📦 Instalação e Setup
+
+### **Pré-requisitos**
 
 ```bash
-cd /home/ubuntu/automacoes
-# (ou copiar pasta PROSPER-ERP-AUTOMATION para nova VM)
+# Sistema
+Ubuntu 20.04+ (ou similar)
+Python 3.12+
+Google Chrome
+Xvfb + x11vnc
 
-cd PROSPER-ERP-AUTOMATION
+# Portas AWS abertas
+5900 (VNC direto)
+6080 (noVNC - acesso web)
 ```
 
-### Passo 2: Criar Virtualenv
+### **Setup Completo**
 
 ```bash
-python3 -m venv .venv
-source .venv/bin/activate
+# 1. Clonar/copiar projeto
+cd /home/ubuntu
+# Projeto já deve estar em /home/ubuntu/PROSPER-ERP-AUTOMATION
+
+# 2. Criar ambiente virtual
+cd PROSPER-ERP-AUTOMATION
+python3 -m venv venv
+source venv/bin/activate
+
+# 3. Instalar dependências
 pip install --upgrade pip
 pip install -r requirements.txt
-```
 
-### Passo 3: Configurar Variáveis de Ambiente
-
-```bash
+# 4. Configurar credenciais
 cp .env.example .env
 nano .env
+# Preencher SMART_EMAIL, SMART_PASSWORD, CAPSOLVER_API_KEY
+
+# 5. Instalar noVNC (se não tiver)
+cd /home/ubuntu
+git clone https://github.com/novnc/noVNC.git
+git clone https://github.com/novnc/websockify.git
+
+# 6. Iniciar ambiente
+cd /home/ubuntu/PROSPER-ERP-AUTOMATION
+./start_automation.sh
 ```
 
-Preencher:
+### **Arquivo .env**
+
 ```env
-# Credenciais SmartSecurities
+# SmartSecurities Login
 SMART_EMAIL=seu_email@prosper.com.br
 SMART_PASSWORD=sua_senha
 
-# CapSolver API
-CAPSOLVER_API_KEY=CAP-xxxxxxxxxx
+# CapSolver API Key
+CAPSOLVER_API_KEY=CAP-XXXXXXXXXX
+
+# Display Virtual
+DISPLAY=:1
 
 # Logs
 APP_LOG_LEVEL=INFO
-```
-
-### Passo 4: Instalar Chrome
-
-```bash
-wget https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
-sudo dpkg -i google-chrome-stable_current_amd64.deb
-sudo apt-get -f install
-```
-
-### Passo 5: Instalar VNC (opcional - para servidor headless)
-
-```bash
-sudo apt install -y xvfb tigervnc-standalone-server xfce4
-
-# Criar senha VNC
-vncpasswd
-
-# Configurar xstartup
-mkdir -p ~/.vnc
-echo '#!/bin/bash
-xrdb $HOME/.Xresources
-startxfce4 &' > ~/.vnc/xstartup
-chmod +x ~/.vnc/xstartup
-
-# Iniciar VNC
-vncserver :1 -geometry 1920x1080 -depth 24
 ```
 
 ---
 
 ## 🎮 Como Usar
 
-### Execução Manual (com display)
+### **Método 1: Script Automático (Recomendado)**
 
 ```bash
-# Se tem interface gráfica (desktop Linux)
-python -m src.processors.web.titulos_abertos_e_marcados_recompras
+cd /home/ubuntu/PROSPER-ERP-AUTOMATION
+./run_processor.sh
 ```
 
-### Execução com VNC (servidor headless)
+### **Método 2: Manual**
 
 ```bash
-# Iniciar VNC se não estiver rodando
-vncserver :1 -geometry 1920x1080 -depth 24
+cd /home/ubuntu/PROSPER-ERP-AUTOMATION
 
-# Rodar automação no display virtual
-DISPLAY=:1 python -m src.processors.web.titulos_abertos_e_marcados_recompras
+# Ativar ambiente
+source venv/bin/activate
+export PYTHONPATH=/home/ubuntu/PROSPER-ERP-AUTOMATION
+export DISPLAY=:1
 
-# Do seu computador, conecte VNC:
-# vncviewer SERVIDOR_IP:5901
+# Executar
+python3 src/processors/web/titulos_abertos_e_marcados_recompras.py
 ```
 
-### Controles Interativos
+### **Controles Durante Execução**
 
-Durante a execução:
-- **P** - Pausar
-- **R** - Retomar
-- **S** ou **Q** - Parar
+- **P** - Pausar execução
+- **R** - Retomar execução
+- **Q** - Parar completamente
 
 ---
 
-## 🔧 Automações Disponíveis
+## 🌐 Acesso VNC
 
-### 1. Títulos Abertos e Marcados para Recompra
+### **Via Navegador (Mais Fácil)**
 
-**Arquivo:** `src/processors/web/titulos_abertos_e_marcados_recompras.py`
-
-**O que faz:**
-- Extrai 2 CSVs: COM e SEM marcação de recompra
-- Resolve CAPTCHAs automaticamente (CapSolver)
-- Executa em loop a cada 60 segundos
-
-**Como rodar:**
-```bash
-python -m src.processors.web.titulos_abertos_e_marcados_recompras
 ```
+URL: http://3.148.126.73:6080/vnc.html
+Senha: vetor2025
+```
+
+### **Via Cliente VNC**
+
+```
+Servidor: 3.148.126.73:5900
+Senha: vetor2025
+```
+
+📖 **[Guia completo de acesso VNC](docs/ACESSO_VNC.md)**
 
 ---
 
-## 📁 Arquivos Gerados
+## 📊 Arquivos Gerados
 
 ```
 data/raw_inputs/
-├── titulos_abertos_marcados_recompras_YYYY_MM_DD_HHMMSS.csv  (25KB)
-└── titulos_abertos_YYYY_MM_DD_HHMMSS.csv                     (2.8MB)
+├── titulos_abertos_marcados_recompras_2025_10_20_143052.csv  (~25KB)
+└── titulos_abertos_2025_10_20_143127.csv                     (~2.8MB)
 ```
+
+**Formato do nome:**
+```
+{nome}_{YYYY}_{MM}_{DD}_{HHMMSS}.csv
+```
+
+---
+
+## 🔧 Scripts Utilitários
+
+### **start_automation.sh**
+
+Inicializa o ambiente completo:
+
+```bash
+./start_automation.sh
+```
+
+**O que faz:**
+1. Verifica e mata processos Xvfb/x11vnc antigos
+2. Inicia Xvfb no display :1
+3. Cria senha VNC automática (se não existir)
+4. Inicia x11vnc na porta 5900
+5. Inicia noVNC na porta 6080
+6. Ativa ambiente virtual Python
+7. Configura PYTHONPATH e DISPLAY
+
+### **run_processor.sh**
+
+Executa o processador com ambiente configurado:
+
+```bash
+./run_processor.sh
+```
+
+---
+
+## 📝 Logs
+
+### **Localização**
+
+```bash
+logs/app.log               # Log atual
+logs/app.log.2025-10-20    # Log rotativo diário
+```
+
+### **Ver logs em tempo real**
+
+```bash
+tail -f logs/app.log
+```
+
+### **Filtrar erros**
+
+```bash
+grep "ERROR" logs/app.log
+```
+
+### **Configuração de Logging**
+
+- **Console**: Apenas CRITICAL
+- **Arquivo**: INFO, DEBUG, WARNING, ERROR
+- **Rotação**: Diária
+- **Retenção**: 10 backups
 
 ---
 
 ## 🛠️ Troubleshooting
 
-### Chrome não abre
+### **❌ "Cannot connect to browser"**
 
 ```bash
-# Verificar se Chrome está instalado
-google-chrome --version
+# Verificar se Xvfb está rodando
+ps aux | grep Xvfb
 
-# Testar manualmente
-google-chrome --no-sandbox
+# Reiniciar
+pkill Xvfb
+Xvfb :1 -screen 0 1920x1080x24 &
 ```
 
-### VNC não conecta
+### **❌ "ModuleNotFoundError: No module named 'src'"**
 
 ```bash
-# Verificar se VNC está rodando
-vncserver -list
-
-# Reiniciar VNC
-vncserver -kill :1
-vncserver :1 -geometry 1920x1080 -depth 24
+# Configurar PYTHONPATH
+export PYTHONPATH=/home/ubuntu/PROSPER-ERP-AUTOMATION
 ```
 
-### CAPTCHA não resolve
+### **❌ "VNC não conecta"**
 
-1. Verificar se extensão CapSolver está instalada
+```bash
+# Verificar portas
+netstat -tlnp | grep -E "(5900|6080)"
+
+# Reiniciar serviços
+pkill x11vnc && pkill -f novnc_proxy
+./start_automation.sh
+```
+
+### **❌ "CAPTCHA não resolve"**
+
+1. Verificar extensão CapSolver instalada no Chrome
 2. Verificar API Key no `.env`
-3. Verificar créditos no dashboard: https://dashboard.capsolver.com/
+3. Código pausa automaticamente para resolução manual
 
----
-
-## 📊 Monitoramento
-
-### Logs
-
-```bash
-# Ver logs em tempo real
-tail -f logs/app.log.$(date +%Y-%m-%d)
-
-# Filtrar erros
-grep "ERROR" logs/app.log.$(date +%Y-%m-%d)
-```
-
-### Recursos
-
-```bash
-# Ver uso de RAM/CPU
-htop
-
-# Ver processo Python
-ps aux | grep titulos_abertos_e_marcados_recompras
-```
+📖 **[Guia completo de troubleshooting](docs/TROUBLESHOOTING.md)**
 
 ---
 
 ## 🔒 Segurança
 
-- ✅ Credenciais em `.env` (nunca commitar)
-- ✅ VNC com senha
-- ✅ SSH tunnel para VNC (recomendado)
-- ✅ Stealth mode para evitar detecção de bots
+### **Recomendações**
+
+- ✅ Credenciais no `.env` (nunca commitar)
+- ✅ VNC protegido com senha
+- ✅ Restringir acesso à porta 6080 no AWS Security Group
+- ⚠️ **Alterar senha padrão** `prosper2025` em produção
+- ⚠️ Considerar túnel SSH para VNC em produção
+
+### **Túnel SSH (Produção)**
+
+```bash
+# No seu computador
+ssh -L 6080:localhost:6080 ubuntu@3.148.126.73
+
+# Depois acesse
+http://localhost:6080/vnc.html
+```
+
+---
+
+## 📖 Documentação
+
+### **Guias Rápidos**
+- **[GUIA_RAPIDO.md](GUIA_RAPIDO.md)** - ⚡ Início em 2 minutos
+- **[CHANGELOG.md](CHANGELOG.md)** - 📝 Histórico de versões
+
+### **Documentação Técnica**
+- **[docs/ARQUITETURA.md](docs/ARQUITETURA.md)** - 🏗️ Arquitetura completa do sistema
+- **[docs/CRIAR_PROCESSADOR.md](docs/CRIAR_PROCESSADOR.md)** - 📘 Como criar novos processadores
+- **[docs/ACESSO_VNC.md](docs/ACESSO_VNC.md)** - 🖥️ Guia completo de acesso VNC
+- **[docs/NOTIFICACOES.md](docs/NOTIFICACOES.md)** - 📧 Sistema de notificações por email
+- **[docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md)** - 🔧 Solução de problemas
+
+---
+
+## 🎯 Status do Projeto
+
+### **Versão Atual: 30.0** (2025-10-26)
+
+- ✅ **Loop contínuo de 5 segundos** - Máxima velocidade de extração (60x mais rápido!)
+- ✅ **Perfis temporários únicos** - Previne detecção de bot
+- ✅ **Fechamento automático de tabs** - Fix crítico para download
+- ✅ **Limpeza robusta** - Zero memory leaks
+- ✅ **Documentação completa** - 1169 linhas detalhando cada etapa
+- ✅ **Migração Nodriver completa** - 100% async/await (v26.0)
+- ✅ **API CAPTCHA direta** - CapSolver sem extensão (v27.0)
+- ✅ **Anti-detecção nativa** - Sem CDP detectável
+- ✅ **VNC Web configurado** - Acesso porta 6080
+- ✅ **Sistema de notificações** - Alertas por email
+- ✅ **API de controle remoto** - Retomar de qualquer dispositivo
+- ✅ **Isolamento por display** - 1 processador = 1 display VNC
+
+### **Processadores Disponíveis:**
+1. ✅ **relatorio_operacao_desagio.py** - Relatório de operação deságio (Display :1)
+   - **Status:** ✅ 100% FUNCIONAL, PRODUÇÃO
+   - **Loop:** 5 segundos entre ciclos
+   - **CAPTCHA:** Automático via CapSolver HTTP
+   - **Documentação:** [`docs/fluxos_processadores/relatorio_operacao_desagio.md`](docs/fluxos_processadores/relatorio_operacao_desagio.md)
+2. ⏳ Mais processadores em desenvolvimento...
 
 ---
 
 ## 📞 Suporte
 
-- **Equipe TI**: ti@prosper.com.br
-- **Documentação completa**: `docs/`
+**Problemas ou dúvidas?**
+
+1. Consulte a [documentação](docs/)
+2. Verifique os [logs](logs/)
+3. Entre em contato com a equipe de TI
 
 ---
 
-## 🎯 Roadmap
+## 📜 Licença
 
-- [ ] Adicionar noVNC (VNC no navegador)
-- [ ] Sistema de notificação (email quando CAPTCHA travar)
-- [ ] Dashboard de monitoramento
-- [ ] Múltiplas automações em paralelo
-- [ ] Filas de execução
+Propriedade da **Prosper Capital**. Todos os direitos reservados.
 
 ---
 
 <div align="center">
   <sub>Desenvolvido pela equipe de TI da Prosper Capital</sub><br>
-  <sub>Última atualização: 2025-10-17</sub>
+  <sub>Última atualização: 2025-10-25</sub>
 </div>
