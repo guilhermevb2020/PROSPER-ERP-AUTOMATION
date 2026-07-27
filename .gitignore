@@ -60,3 +60,13 @@ Thumbs.db
 
 # Temporary files
 =0.33
+config/nextcloud.env
+config/robo_credito.env
+
+# Credenciais — nenhum config/*.env entra no repo (remote e publico)
+config/*.env
+config/credentials.csv
+!config/*.example.*
+
+# Perfis do Chrome: cookies de sessao viva do ERP, nunca versionar
+data/*/perfil_chrome/
