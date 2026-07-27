@@ -1,0 +1,39 @@
+services:
+  erp-automation:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: erp-automation
+    restart: unless-stopped
+    env_file:
+      - /home/prospere/docker/shared.env
+      - .env
+    ports:
+      - "6092:6092"
+      - "5900:5900"   # x11vnc nativo (clientes RealVNC, TigerVNC, etc.)
+      - "6080:6080"   # noVNC web (http://host:6080/vnc.html)
+    volumes:
+      - ./logs:/app/logs
+      - ./data:/app/data
+      - ./config:/app/config
+      - ./temp:/app/temp
+      - ./src:/app/src
+      - ./scripts:/app/scripts
+    environment:
+      - DISPLAY=:99
+      # VNC_PASSWORD vem do `.env` via env_file (fora do git). Nao reintroduzir
+      # aqui: `environment:` sobrescreve `env_file:` e o valor iria pro repo.
+    networks:
+      - prospere-network
+    shm_size: '2gb'
+    command: ["/app/scripts/boot_vnc.sh"]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import sys; sys.exit(0)"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+networks:
+  prospere-network:
+    external: true
