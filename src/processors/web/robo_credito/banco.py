@@ -1,0 +1,215 @@
+"""
+banco.py - acesso ao Postgres + controle LOCAL dos downloads.
+
+Usado pelo sub-fluxo BAIXAR NF E RESUMO (subfluxos.py) para:
+  1) DESCOBRIR as operacoes na etapa "FEEDBACK ANALISE ROB" consultando
+     trs.operacoes_desagio (coluna id_operacao = numero da operacao do Smart;
+     coluna etapa = etapa ATUAL). Substitui a raspagem da tela de consulta.
+  2) REGISTRAR, em arquivo LOCAL, quais operacoes ja tiveram NF + resumo
+     baixados (e se a etapa ja foi movida), para nao reprocessar.
+
+O arquivo de controle e um CSV (delimitador ';') com uma linha por operacao:
+  id_operacao;data_download;arquivo_nfe;arquivo_resumo;nfe_ok;resumo_ok;etapa_movida
+
+OBS: nao usamos uma tabela no banco para o controle (decisao do usuario) - fica
+tudo neste arquivo local na maquina onde o robo roda.
+"""
+
+import csv
+import os
+from datetime import datetime
+
+import config
+
+_CABECALHO = ["id_operacao", "data_download", "arquivo_nfe",
+              "arquivo_resumo", "nfe_ok", "resumo_ok", "etapa_movida"]
+
+_VERDADEIRO = ("1", "true", "sim", "yes")
+
+
+# --------------------------------------------------------------------------- #
+# PostgreSQL
+# --------------------------------------------------------------------------- #
+def operacoes_na_etapa(etapa: str) -> list:
+    """Retorna os numeros de operacao (str) que estao na 'etapa' informada,
+    lendo trs.operacoes_desagio. LEVANTA excecao se o banco estiver inacessivel
+    (o chamador trata e cai p/ a raspagem da UI). connect_timeout curto evita
+    travar o ciclo quando a VPN esta fora."""
+    import psycopg2  # import tardio: so quando realmente vai falar com o banco
+    conn = psycopg2.connect(connect_timeout=config.DB_CONNECT_TIMEOUT, **config.DB_CONFIG)
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            f"SELECT id_operacao FROM {config.TABELA_OPERACOES} "
+            "WHERE etapa = %s ORDER BY id_operacao",
+            (etapa,),
+        )
+        ops = [str(r[0]).strip() for r in cur.fetchall() if r[0] is not None]
+        cur.close()
+        return ops
+    finally:
+        conn.close()
+
+
+def quadro_societario(op) -> dict:
+    """Busca o quadro societario da operacao no Postgres (tabelas que o robo de
+    analise de credito - prospercredit - popula). Usado pela conferencia V3 p/
+    checar assinaturas x representantes legais.
+
+    Retorna:
+      {
+        "cedente": {"cnpj","nome","socios":[...],"administracao":[...]|None,"receita_federal":{...}|None} | None,
+        "sacados": [{"cnpj","nome","socio_principal","qtd_socios"}, ...]
+      }
+    O CEDENTE vem COMPLETO (stg.robo_analise_cedente: socios/administracao/receita_federal).
+    Os SACADOS vem PARCIAIS (stg.robo_analise_sacado + int.enriquecimento_sacado:
+    so socio_principal/qtd_socios - o banco nao guarda o QSA completo do sacado).
+    Retorna {"cedente": None, "sacados": []} se o banco estiver inacessivel
+    (best-effort: a checagem de assinaturas fica "sem dados", nao derruba o resto).
+    """
+    import psycopg2  # import tardio
+    op = str(op)
+    out = {"cedente": None, "sacados": []}
+    try:
+        conn = psycopg2.connect(connect_timeout=config.DB_CONNECT_TIMEOUT, **config.DB_CONFIG)
+    except Exception as e:
+        print(f"  [societario] banco inacessivel ({e}) -> sem dados societarios")
+        return out
+    try:
+        cur = conn.cursor()
+        # CEDENTE (completo)
+        try:
+            cur.execute(
+                "SELECT cnpj, nome, socios, administracao, receita_federal "
+                "FROM stg.robo_analise_cedente WHERE numero_operacao = %s "
+                "ORDER BY data_carga DESC NULLS LAST LIMIT 1", (op,))
+            r = cur.fetchone()
+            if r:
+                out["cedente"] = {"cnpj": r[0], "nome": r[1], "socios": r[2],
+                                  "administracao": r[3], "receita_federal": r[4]}
+        except Exception as e:
+            print(f"  [societario] erro cedente op {op}: {e}")
+        # SACADOS (cnpj+nome da analise; societario parcial via enriquecimento).
+        # Dedup por CNPJ (a op tem 1 linha por titulo -> mesmo sacado repete).
+        try:
+            cur.execute("SELECT DISTINCT cnpj, nome FROM stg.robo_analise_sacado "
+                        "WHERE numero_operacao = %s", (op,))
+            vistos = set()
+            for cnpj, nome in cur.fetchall():
+                chave = (cnpj or "").strip()
+                if chave in vistos:
+                    continue
+                vistos.add(chave)
+                sac = {"cnpj": cnpj, "nome": nome, "socio_principal": None, "qtd_socios": None}
+                try:
+                    cur.execute(
+                        "SELECT socio_principal_nome, qtd_socios, razao_social "
+                        "FROM int.enriquecimento_sacado "
+                        "WHERE regexp_replace(cpf_cnpj,'[^0-9]','','g') = "
+                        "      regexp_replace(%s,'[^0-9]','','g') LIMIT 1", (cnpj or "",))
+                    e = cur.fetchone()
+                    if e:
+                        sac["socio_principal"] = e[0]
+                        sac["qtd_socios"] = e[1]
+                        if not sac["nome"] and e[2]:
+                            sac["nome"] = e[2]
+                except Exception:
+                    pass
+                out["sacados"].append(sac)
+        except Exception as e:
+            print(f"  [societario] erro sacados op {op}: {e}")
+        cur.close()
+    finally:
+        conn.close()
+    return out
+
+
+# --------------------------------------------------------------------------- #
+# Controle local (CSV) dos downloads ja feitos
+# --------------------------------------------------------------------------- #
+def carregar_controle() -> dict:
+    """Le o CSV de controle -> dict {id_operacao(str): registro}. {} se nao existir."""
+    caminho = config.ARQ_CONTROLE_DOWNLOAD
+    dados = {}
+    if not os.path.exists(caminho):
+        return dados
+    try:
+        with open(caminho, newline="", encoding="utf-8-sig") as f:
+            for linha in csv.DictReader(f, delimiter=";"):
+                op = (linha.get("id_operacao") or "").strip()
+                if not op:
+                    continue
+                dados[op] = {
+                    "data_download": linha.get("data_download", ""),
+                    "arquivo_nfe": linha.get("arquivo_nfe", ""),
+                    "arquivo_resumo": linha.get("arquivo_resumo", ""),
+                    "nfe_ok": (linha.get("nfe_ok") or "").strip().lower() in _VERDADEIRO,
+                    "resumo_ok": (linha.get("resumo_ok") or "").strip().lower() in _VERDADEIRO,
+                    "etapa_movida": (linha.get("etapa_movida") or "").strip().lower() in _VERDADEIRO,
+                }
+    except Exception as e:
+        print(f"  [controle] aviso ao ler {caminho}: {e}")
+    return dados
+
+
+def _salvar_controle(dados: dict) -> None:
+    """Reescreve o CSV inteiro (arquivo pequeno: dezenas de operacoes)."""
+    caminho = config.ARQ_CONTROLE_DOWNLOAD
+    try:
+        with open(caminho, "w", newline="", encoding="utf-8-sig") as f:
+            w = csv.writer(f, delimiter=";")
+            w.writerow(_CABECALHO)
+            # ordena por numero quando possivel, senao por texto
+            for op in sorted(dados, key=lambda x: (0, int(x)) if x.isdigit() else (1, x)):
+                r = dados[op]
+                w.writerow([
+                    op, r.get("data_download", ""),
+                    r.get("arquivo_nfe", "") or "", r.get("arquivo_resumo", "") or "",
+                    "1" if r.get("nfe_ok") else "0",
+                    "1" if r.get("resumo_ok") else "0",
+                    "1" if r.get("etapa_movida") else "0",
+                ])
+    except Exception as e:
+        print(f"  [controle] ERRO ao gravar {caminho}: {e}")
+
+
+def registrar_download(op, arquivo_nfe, arquivo_resumo) -> None:
+    """Upsert no controle: marca NF/resumo baixados (ok = caminho != None).
+    Preserva etapa_movida e nao 'desmarca' um ok ja gravado."""
+    op = str(op)
+    dados = carregar_controle()
+    reg = dados.get(op, {})
+    reg.update({
+        "data_download": datetime.now().strftime("%d/%m/%Y %H:%M:%S"),
+        "arquivo_nfe": arquivo_nfe or reg.get("arquivo_nfe", ""),
+        "arquivo_resumo": arquivo_resumo or reg.get("arquivo_resumo", ""),
+        "nfe_ok": bool(arquivo_nfe) or reg.get("nfe_ok", False),
+        "resumo_ok": bool(arquivo_resumo) or reg.get("resumo_ok", False),
+        "etapa_movida": reg.get("etapa_movida", False),
+    })
+    dados[op] = reg
+    _salvar_controle(dados)
+
+
+def marcar_etapa_movida(op) -> None:
+    """Marca no controle que a etapa da op ja foi movida (-> Análise de crédito)."""
+    op = str(op)
+    dados = carregar_controle()
+    reg = dados.get(op, {})
+    reg["etapa_movida"] = True
+    dados[op] = reg
+    _salvar_controle(dados)
+
+
+def ja_baixou(reg) -> bool:
+    """True se o registro de controle indica NF E resumo ja baixados com sucesso."""
+    return bool(reg) and bool(reg.get("nfe_ok")) and bool(reg.get("resumo_ok"))
+
+
+def pode_mover(reg) -> bool:
+    """True se da p/ MOVER a etapa da operacao. Exige apenas o RESUMO baixado;
+    a NF e OPCIONAL: existem operacoes que legitimamente NAO tem nota fiscal, e
+    nesses casos a NF nao pode bloquear o avanco (senao a op fica presa em loop
+    infinito em 'Feedback ROB'). A ausencia da NF fica registrada no controle
+    (nfe_ok=0) para auditoria."""
+    return bool(reg) and bool(reg.get("resumo_ok"))

@@ -1,0 +1,5 @@
+# Estado/runtime local do robô — gerado em execução, NÃO versionar.
+__pycache__/
+controle_downloads.csv
+ops_move_revisar_manual.txt
+ops_digitais_revisar_manual.txt
