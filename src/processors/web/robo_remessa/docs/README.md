@@ -34,10 +34,32 @@ cobrança e `02` quitação/cancelamento. Nome: `CB` + `DDMM` + sequencial(7) +
 | VNC / noVNC | 5903 / 6083 | debug: dá para ver o robô trabalhando |
 | CDP | 9224 | 9222 boletos, 9223 doc2you |
 | Perfil Chrome | `/app/data/robo_remessa/perfil_chrome` | perfil compartilhado trava no lock |
-| Destino dos `.REM` | `/app/data/remessas_a_enviar` | bind-mount → `process-automation/tmp/remessas a enviar` |
+| Destino dos `.REM` | `/app/data/remessas_a_enviar` | ⚠️ ver a nota abaixo |
 | Controle | `/app/data/robo_remessa/controle_remessas.csv` | idempotência (id/arquivo/md5) |
 | Credenciais | `/app/config/robo_remessa.env` | fora do git |
 | Log ao vivo | `/app/logs/robo_remessa_<data>.log` | além do stdout que o hub captura |
+
+> ### ⚠️ O destino dos `.REM` MUDA na próxima recriação do container
+>
+> `/app/data/remessas_a_enviar` resolve hoje para
+> **`erp-automation/data/remessas_a_enviar`** no host, pelo volume `./data:/app/data`
+> que já existia.
+>
+> Mas o `docker-compose.yml` declara um bind-mount para
+> `process-automation/tmp/remessas a enviar` que **ainda não está ativo** — o Docker
+> não sabe adicionar volume a container em execução, e a recriação mataria o robô de
+> crédito no meio do dia (ele não volta sozinho; a task dele dispara 07:45).
+>
+> Então: **no próximo `docker compose up -d`, seja por qual motivo for, o destino
+> passa a ser a pasta do process-automation** — sem aviso e sem mudança de código.
+> Quem for atrás dos arquivos e não os encontrar, é isto.
+>
+> Confirme com:
+> ```bash
+> docker inspect erp-automation --format \
+>   '{{range .Mounts}}{{if eq .Destination "/app/data/remessas_a_enviar"}}{{.Source}}{{end}}{{end}}'
+> ```
+> Saída vazia = ainda no `data/` do erp-automation.
 
 ---
 
