@@ -28,6 +28,29 @@ services:
       - DISPLAY=:99
       # VNC_PASSWORD vem do `.env` via env_file (fora do git). Nao reintroduzir
       # aqui: `environment:` sobrescreve `env_file:` e o valor iria pro repo.
+      #
+      # Role PROPRIA deste projeto desde 03/08/2026. Antes daqui `DB_USER` valia
+      # `prospere`, que e SUPERUSUARIO do cluster e ignora qualquer permissao.
+      #
+      # ⚠️ Este projeto tem DOIS caminhos de credencial, e os dois entram aqui:
+      #   DB_*        -> src/common/core/database.py, doc2you/baixar_dia.py,
+      #                  robo_credito/config.py   (era `prospere`, SUPERUSUARIO)
+      #   POSTGRES_*  -> src/processors/web/boletos/_db.py   (era `dev_user`)
+      # Trocar so um deixaria metade do projeto sem atribuicao no log.
+      #
+      # ⛔ Aqui entra so a REFERENCIA `${...}`; o valor vem do `.env` local, que ja
+      # esta fora do git. Nunca escreva o valor literal.
+      #
+      # Pre-voo: `app_erp_automation` alcanca os 7 objetos que o codigo usa
+      # (`int.enriquecimento_sacado`, `operacional.boleto_*`, `stg.robo_analise_*`,
+      # `trs.operacoes_desagio`) em leitura e escrita, e as 19 sequencias de
+      # `int`/`operacional`/`stg`/`trs`.
+      #
+      # ROLLBACK: comentar as 4 linhas abaixo e `docker compose up -d`.
+      - DB_USER=${APP_DB_USER}
+      - DB_PASSWORD=${APP_DB_PASSWORD}
+      - POSTGRES_USER=${APP_DB_USER}
+      - POSTGRES_PASSWORD=${APP_DB_PASSWORD}
     networks:
       - prospere-network
     shm_size: '2gb'
