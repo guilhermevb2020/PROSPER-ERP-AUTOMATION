@@ -8,7 +8,7 @@ Diferenca chave do envio:
   * CONVENCIONAL = bancos nomeados (BB, BB Ativos, etc.) — em nome da
     SECURITIZADORA (ImprimirBoletoEmNome=f), classes P (Padrao) e T (Tranche).
   * OCULTO = contas comecando com 'mp ' — em nome do CEDENTE
-    (ImprimirBoletoEmNome=c), classes E, B, BG, CL, I.
+    (ImprimirBoletoEmNome=c), classes P, T, E, B, BG, CL, I.
 - modalidadeS=G (Todas) — emissao varre tudo. O envio filtra C (Convencional).
 - POST de print com boleto=1, carne=0, NumEmail=0, imprimirMultiplos=0.
 
@@ -48,9 +48,18 @@ CONFIG_GRUPO: dict[str, dict] = {
     },
     GRUPO_OCULTO: {
         "radio": "c",                       # ImprimirBoletoEmNome=c (Cedente)
-        "classes": ["E", "B", "BG", "CL", "I"],
+        "classes": ["P", "T", "E", "B", "BG", "CL", "I"],
         # E=Boleto especial, B=Esp.+Tranche, BG=Boleto garantido,
         # CL=Op.Clean, I=Intercompany
+        # P=Padrao, T=Tranche incluidas 2026-07-31, MESMA assimetria do CL acima:
+        # o ENVIO oculto ja lista P e T (CLASSES_MP=P;T;E;B;I;BG;CL em _config.py),
+        # entao um titulo P numa conta 'mp ' era ENVIAVEL mas nunca EMITIDO. Medido
+        # no dia: 21 titulos P + 2 CE em aberto sem `nosso_numero`, 13 deles em 6
+        # contas onde a emissao RODOU no mesmo dia e emitiu os E ao lado.
+        # Quem manda no nome do boleto e a CONTA (radio=c, cedente), nao a classe —
+        # a classe so decide elegibilidade. Confirmado com a Gerencia em 31/07/2026.
+        # CUIDADO: comissaria (C) fica de FORA de proposito — nao emite boleto nem
+        # entra em remessa.
     },
 }
 
