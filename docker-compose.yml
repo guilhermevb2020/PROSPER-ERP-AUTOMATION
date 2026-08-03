@@ -19,6 +19,11 @@ services:
       - ./temp:/app/temp
       - ./src:/app/src
       - ./scripts:/app/scripts
+      # Destino dos .REM do robo de remessa. Mora FORA deste projeto de
+      # proposito: quem consome os arquivos e o Financeiro (e, quando for
+      # ligado, o job `enviar_remessas` do process-automation). O robo so
+      # ESCREVE aqui — nunca le nem apaga o que ja esta na pasta.
+      - /home/prospere/docker/automation/process-automation/tmp/remessas a enviar:/app/data/remessas_a_enviar
     environment:
       - DISPLAY=:99
       # VNC_PASSWORD vem do `.env` via env_file (fora do git). Nao reintroduzir
