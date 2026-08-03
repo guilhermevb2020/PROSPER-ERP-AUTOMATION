@@ -1,0 +1,43 @@
+# Barreira MÍNIMA de segredo — só gitleaks, de propósito.
+#
+# Por que existe, e por que só isto:
+#
+# Em 03/08/2026 a senha do SUPERUSUÁRIO do Postgres foi encontrada em texto puro em
+# arquivos versionados deste projeto — inclusive no `CLAUDE.md`, que carrega sozinho no
+# contexto de toda sessão de agente que trabalhe nesta pasta. Varrendo os oito projetos
+# com `gitleaks detect`, o histórico acusou: erp-automation 6, data-hub 4, forms-hub 1,
+# prospere-crm 1.
+#
+# A causa não foi falta de regra — "credencial não vai para arquivo versionado" já é
+# sabido, e quem escreveu a senha ali não o fez por ignorar isso. A causa foi falta de
+# DETECTOR: dos 8 projetos, só o `process-automation` tinha pre-commit. Nos outros 7,
+# nada olhava.
+#
+# Por isso este arquivo é mínimo. Ele não traz lint, formatação nem convenção — nada
+# disso falhou aqui, e acrescentar o que não falhou é o que transforma verificação em
+# cerimônia. Se um dia algo mais falhar de verdade neste projeto, aí sim.
+#
+# ⚠️ O gitleaks NÃO é completo, e isso está medido: ele devolveu ZERO no `scatambulo`,
+# onde a mesma senha está no `.claude/settings.local.json` (achada por `git grep`). Ele
+# reduz muito; não zera. Não trate "gitleaks verde" como "não há segredo".
+#
+# ⚠️ E ele não limpa o passado: os achados que já estão no histórico só se resolvem por
+# ROTAÇÃO da credencial. Reescrever histórico não está em questão.
+#
+# Instalar (uma vez por clone/worktree):  pre-commit install
+# Rodar à mão no que está staged:         pre-commit run --all-files
+
+minimum_pre_commit_version: "3.5.0"
+default_stages: [pre-commit]
+fail_fast: false
+
+repos:
+  # Hook upstream congelado por commit — outro clone não depende de um binário
+  # gitleaks pré-instalado na máquina. Mesma revisão que o `process-automation` usa,
+  # para os oito projetos não derivarem de versão.
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: 83d9cd684c87d95d656c1458ef04895a7f1cbd8e  # frozen: v8.30.1
+    hooks:
+      - id: gitleaks
+        name: gitleaks (segredos nos arquivos staged)
+        args: [--max-archive-depth=1]
