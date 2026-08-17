@@ -212,7 +212,7 @@ def baixar_documentos_complementares(ctx, op: str) -> tuple[int, int]:
 # --------------------------------------------------------------------------- #
 def _descobrir_ops_feedback(ctx):
     """Lista as operacoes em "Feedback Analise ROB". Tenta o BANCO
-    (trs.operacoes_desagio WHERE etapa = 'FEEDBACK ANALISE ROB'); se o banco
+    (trs.operacao_desagio WHERE etapa = 'FEEDBACK ANALISE ROB'); se o banco
     estiver inacessivel (ex.: VPN fora), cai p/ a raspagem da UI do Smart.
     Retorna (ops, origem)."""
     if config.USAR_BANCO_DOWNLOAD:

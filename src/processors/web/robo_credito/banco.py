@@ -3,7 +3,7 @@ banco.py - acesso ao Postgres + controle LOCAL dos downloads.
 
 Usado pelo sub-fluxo BAIXAR NF E RESUMO (subfluxos.py) para:
   1) DESCOBRIR as operacoes na etapa "FEEDBACK ANALISE ROB" consultando
-     trs.operacoes_desagio (coluna id_operacao = numero da operacao do Smart;
+     trs.operacao_desagio (coluna id_operacao = numero da operacao do Smart;
      coluna etapa = etapa ATUAL). Substitui a raspagem da tela de consulta.
   2) REGISTRAR, em arquivo LOCAL, quais operacoes ja tiveram NF + resumo
      baixados (e se a etapa ja foi movida), para nao reprocessar.
@@ -32,7 +32,7 @@ _VERDADEIRO = ("1", "true", "sim", "yes")
 # --------------------------------------------------------------------------- #
 def operacoes_na_etapa(etapa: str) -> list:
     """Retorna os numeros de operacao (str) que estao na 'etapa' informada,
-    lendo trs.operacoes_desagio. LEVANTA excecao se o banco estiver inacessivel
+    lendo trs.operacao_desagio. LEVANTA excecao se o banco estiver inacessivel
     (o chamador trata e cai p/ a raspagem da UI). connect_timeout curto evita
     travar o ciclo quando a VPN esta fora."""
     import psycopg2  # import tardio: so quando realmente vai falar com o banco

@@ -118,7 +118,7 @@ NUM_FACTORING = os.getenv("NUM_FACTORING", "3912")
 # Banco de dados (PostgreSQL) - societario p/ conferencia V3 (NAO p/ descoberta)
 # --------------------------------------------------------------------------- #
 # FONTE DOS OPS = SMART (raspagem da UI), nao o banco. Motivo (validado 2026-06-25):
-# trs.operacoes_desagio NAO sincroniza a SAIDA da etapa - quando uma op e
+# trs.operacao_desagio NAO sincroniza a SAIDA da etapa - quando uma op e
 # rejeitada/avanca, ela CONTINUA aparecendo na etapa antiga no banco. Ex.: o
 # banco listava 30 ops em "FEEDBACK ANALISE ROB" e 160 em "Análise de crédito",
 # enquanto o Smart ao vivo tinha 0 e 1, respectivamente. Descobrir ops pelo banco
@@ -137,22 +137,56 @@ DB_CONFIG = {
 }
 # timeout curto: VPN fora -> falha rapido e cai no fallback (nao trava o ciclo)
 DB_CONNECT_TIMEOUT = int(os.getenv("DB_CONNECT_TIMEOUT", "10"))
-TABELA_OPERACOES = os.getenv("TABELA_OPERACOES", "trs.operacoes_desagio")
+TABELA_OPERACOES = os.getenv("TABELA_OPERACOES", "trs.operacao_desagio")
 # Valor da coluna 'etapa' no banco (MAIUSCULO e SEM acento - diferente do
 # rotulo do Smart "Feedback Analise ROB").
 ETAPA_DB_FEEDBACK_ROB = os.getenv("ETAPA_DB_FEEDBACK_ROB", "FEEDBACK ANALISE ROB")
-# Arquivo LOCAL de controle dos downloads ja feitos (1 linha por operacao).
-# Evita rebaixar e permite retentar so a troca de etapa sem rebaixar.
-ARQ_CONTROLE_DOWNLOAD = os.getenv(
-    "ARQ_CONTROLE_DOWNLOAD",
-    os.path.join(os.path.dirname(os.path.abspath(__file__)), "controle_downloads.csv"))
+# --------------------------------------------------------------------------- #
+# Estado LOCAL do robo — mora em data/, nao junto do codigo
+#
+# Ate 12/08/2026 estes arquivos ficavam dentro de src/processors/web/robo_credito/,
+# isto e: estado de execucao dentro da arvore de fonte. Os outros robos deste repo
+# (remessa, retorno) sempre gravaram em /app/data/<robo>/.
+#
+# A resolucao abaixo e deliberadamente tolerante, para que a troca seja um simples
+# `cp` sem NENHUMA janela em que o robo leia um controle vazio e re-baixe tudo:
+#
+#   ja esta em data/          -> usa data/
+#   nao esta em lugar nenhum  -> usa data/  (instalacao nova ja nasce certa)
+#   so existe no local antigo -> usa o antigo, ate a migracao rodar
+#
+# Sempre UM caminho so, para leitura e escrita — nunca os dois ao mesmo tempo.
+#
+# ⚠️ O diretorio e criado aqui de proposito: `_salvar_controle()` (banco.py)
+# reescreve o arquivo INTEIRO a cada gravacao e engole erro de escrita num print.
+# Se o diretorio faltasse, o robo perderia o controle do run em silencio.
+# --------------------------------------------------------------------------- #
+_DIR_ROBO = os.path.dirname(os.path.abspath(__file__))
+_DIR_ESTADO = os.getenv("DIR_ESTADO_ROBO_CREDITO", "/app/data/robo_credito")
+
+
+def _arquivo_estado(nome: str) -> str:
+    novo = os.path.join(_DIR_ESTADO, nome)
+    antigo = os.path.join(_DIR_ROBO, nome)
+    if os.path.exists(novo) or not os.path.exists(antigo):
+        try:
+            os.makedirs(_DIR_ESTADO, exist_ok=True)
+        except OSError:
+            return antigo          # data/ nao gravavel -> nao muda nada
+        return novo
+    return antigo
+
+
+# Controle dos downloads ja feitos (1 linha por operacao). Evita rebaixar e
+# permite retentar so a troca de etapa sem rebaixar.
+ARQ_CONTROLE_DOWNLOAD = (
+    os.getenv("ARQ_CONTROLE_DOWNLOAD") or _arquivo_estado("controle_downloads.csv"))
 # Move robusto: maximo de ciclos consecutivos tentando mover uma op que NAO sai
 # da fila de Feedback ROB. Apos isso a op vai p/ ops_move_revisar_manual.txt e o
 # robo PARA de tentar (evita loop quando o move "verifica OK" mas a op nao sai
 # da fila de verdade). 0 = nunca desiste.
 MAX_TENTATIVAS_MOVE = int(os.getenv("MAX_TENTATIVAS_MOVE", "5"))
-ARQ_MOVE_REVISAR = os.path.join(
-    os.path.dirname(os.path.abspath(__file__)), "ops_move_revisar_manual.txt")
+ARQ_MOVE_REVISAR = _arquivo_estado("ops_move_revisar_manual.txt")
 
 # XPath/CSS exato usado no PAD (linha 72) para extrair o numero da operacao
 # da tabela de resultados.
