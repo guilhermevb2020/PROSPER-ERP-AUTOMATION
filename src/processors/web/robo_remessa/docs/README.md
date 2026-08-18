@@ -1,8 +1,8 @@
-# Robô de Remessa CNAB — Smart → arquivo
+# Robô de Remessa CNAB — Smart → disco → Nextcloud
 
-Gera a remessa no Smart Securities e baixa os `.REM` (CNAB-400), **tudo por
-HTTP**. Sobe o próprio Chrome só para ter uma sessão logada: nenhuma etapa
-depende de clicar em tela.
+Gera a remessa no Smart Securities, baixa os `.REM` (CNAB-400) e os publica no
+Nextcloud do Financeiro, **tudo por HTTP**. Sobe o próprio Chrome só para ter uma
+sessão logada: nenhuma etapa depende de clicar em tela.
 
 **O envio ao banco não é deste robô.** Quem sobe o arquivo para a API do BMP é o
 job `enviar_remessas`, no `process-automation` — hoje em `modo_teste` e não
@@ -19,6 +19,7 @@ agendado.
 | Resultado | `gridremessagerada.php?resultado=<base64>` | `{"idsSucesso": {"<tipo>": <id>}}` |
 | Listar | `POST financeiro/downloadremessa.php` | por conta + período |
 | Baixar | `GET financeiro/mandarremessa.php?file=<id>` | **sem** `confirmar=1` (ver abaixo) |
+| Publicar | `PUT` WebDAV no Nextcloud | `FINANCEIRO/CNAB/Remessas/<ano>/<MM-Mês>/<DD>/<Banco>/` |
 
 Cada geração produz **um arquivo por tipo de ocorrência** — ex.: `01` envio de
 cobrança e `02` quitação/cancelamento. Nome: `CB` + `DDMM` + sequencial(7) +
@@ -34,32 +35,29 @@ cobrança e `02` quitação/cancelamento. Nome: `CB` + `DDMM` + sequencial(7) +
 | VNC / noVNC | 5903 / 6083 | debug: dá para ver o robô trabalhando |
 | CDP | 9224 | 9222 boletos, 9223 doc2you |
 | Perfil Chrome | `/app/data/robo_remessa/perfil_chrome` | perfil compartilhado trava no lock |
-| Destino dos `.REM` | `/app/data/remessas_a_enviar` | ⚠️ ver a nota abaixo |
+| Destino 1 — disco | `/app/data/remessas_a_enviar` | fonte de verdade da idempotência |
+| Destino 2 — Nextcloud | `FINANCEIRO/CNAB/Remessas/…` | **é onde o Financeiro enxerga** |
 | Controle | `/app/data/robo_remessa/controle_remessas.csv` | idempotência (id/arquivo/md5) |
-| Credenciais | `/app/config/robo_remessa.env` | fora do git |
+| Credenciais Smart | `/app/config/robo_remessa.env` | fora do git |
+| Credenciais Nextcloud | `/app/config/nextcloud.env` | usuário `automacao`, fora do git |
 | Log ao vivo | `/app/logs/robo_remessa_<data>.log` | além do stdout que o hub captura |
 
-> ### ⚠️ O destino dos `.REM` MUDA na próxima recriação do container
+> ### O destino no disco JÁ MUDOU — e a pasta não está em share nenhum
 >
 > `/app/data/remessas_a_enviar` resolve hoje para
-> **`erp-automation/data/remessas_a_enviar`** no host, pelo volume `./data:/app/data`
-> que já existia.
+> **`process-automation/tmp/remessas a enviar`** no host, e não para
+> `erp-automation/data/`. O bind-mount que este README avisava que entraria em vigor
+> "na próxima recriação" entrou: conferido em 17/08/2026, com arquivos de 31/07 a
+> 17/08 do lado de lá e só resto velho (31/07 e 03/08) do lado de cá.
 >
-> Mas o `docker-compose.yml` declara um bind-mount para
-> `process-automation/tmp/remessas a enviar` que **ainda não está ativo** — o Docker
-> não sabe adicionar volume a container em execução, e a recriação mataria o robô de
-> crédito no meio do dia (ele não volta sozinho; a task dele dispara 07:45).
->
-> Então: **no próximo `docker compose up -d`, seja por qual motivo for, o destino
-> passa a ser a pasta do process-automation** — sem aviso e sem mudança de código.
-> Quem for atrás dos arquivos e não os encontrar, é isto.
->
-> Confirme com:
 > ```bash
 > docker inspect erp-automation --format \
 >   '{{range .Mounts}}{{if eq .Destination "/app/data/remessas_a_enviar"}}{{.Source}}{{end}}{{end}}'
 > ```
-> Saída vazia = ainda no `data/` do erp-automation.
+>
+> ⚠️ **Essa pasta não está no Nextcloud nem em share Samba** — os shares expõem só
+> os groupfolders do Nextcloud. De um Windows ninguém a enxerga; só quem tem acesso
+> ao servidor. Foi exatamente por isso que o envio ao Nextcloud passou a existir.
 
 ---
 
@@ -76,6 +74,11 @@ docker exec -e PYTHONPATH=/app erp-automation \
   python /app/src/processors/web/robo_remessa/robo_remessa.py --gerar --conta tigrao
 docker exec -e PYTHONPATH=/app erp-automation \
   python /app/src/processors/web/robo_remessa/robo_remessa.py --listar --conta cast --dias 30
+
+# sobe para o Nextcloud o que JÁ está na pasta local (não abre navegador,
+# não fala com o Smart). Serve p/ histórico e p/ tentar de novo o que falhou.
+docker exec -e PYTHONPATH=/app erp-automation \
+  python /app/src/processors/web/robo_remessa/robo_remessa.py --subir-pendentes
 
 # quando abrirem/fecharem conta no Smart
 docker exec -e PYTHONPATH=/app erp-automation \
@@ -143,6 +146,31 @@ conta/banco (protesto, dias, mensagens). Três armadilhas já resolvidas:
 arquivo vem byte-idêntico. Como não foi confirmado se `confirmar=1` marca a
 remessa como enviada no Smart, o robô não usa.
 
+**O Nextcloud é cópia, nunca substituto.** O `.REM` é gravado no disco primeiro e
+só depois sobe (`_nextcloud.py`, por WebDAV, com o cliente compartilhado). Falha no
+upload é **aviso**, não falha de rodada: o arquivo já está salvo, o controle já tem
+a linha, e `--subir-pendentes` alcança depois. O contrário — subir antes de gravar —
+faria uma queda de rede virar arquivo perdido.
+
+**O caminho no Nextcloud sai do ARQUIVO, não do relógio.** Empresa, banco e data de
+geração vêm do header do próprio `.REM` (posições 47-76, 77-79 e 95-100), medidas em
+17/08/2026 e idênticas às do `.RET`:
+
+```
+FINANCEIRO/CNAB/Remessas/<ano>/<MM-Mês>/<DD>/<Banco>/<Empresa> - <arquivo>.REM
+```
+
+É a mesma convenção que o `organizar_remessas` (process-automation) já usa em
+`FINANCEIRO/CNAB/Retornos` desde 13/08 — inclusive o eixo pela DATA e não pelo
+banco, para a pergunta *"saiu tudo hoje?"* se responder abrindo uma pasta só.
+Consequência prática: remessa rebaixada dias depois cai na pasta do dia em que foi
+**gerada**, e subir duas vezes sobrescreve o mesmo destino em vez de duplicar.
+
+⛔ **O destino é env (`REMESSA_NC_DEST`), nunca fixo no fonte.** Quando essa árvore
+mudou em 13/08, caminho embutido em código fez 67 `.RET` sumirem em silêncio
+(BUG-566, 282 liquidações, R$ 1.084.030,81). `ENVIAR_NEXTCLOUD_REM=false` desliga o
+envio sem tocar em código.
+
 **Validação antes de salvar.** Confere header `01REMESSA` e linhas de 400 chars.
 Se a sessão cair, o Smart devolve HTML — o robô descarta em vez de salvar lixo
 com nome de `.REM`.
@@ -188,13 +216,28 @@ ponta a ponta na conta `mp tigrao` (4 títulos → 2 arquivos, conferidos contra
 listagem do próprio Smart), listagem, download com MD5 idêntico ao manual,
 idempotência e validação CNAB.
 
-**Nunca exercitado (vale para esta porta também):**
+**Em produção desde 03/08/2026**, `0 18 * * 1-5`. Medido em 17/08: 12 rodadas, 11
+com `exit 0` e uma falha (14/08, `exit 2`, auto-login devolveu "Login inválido"); 235
+arquivos baixados, 235 linhas no controle. `--todas-contas` e o auto-login por
+CapSolver, que este bloco listava como nunca exercitados, rodam **todo dia útil**.
 
-- `--todas-contas` no ciclo completo — é justamente o que o agendado faz;
+**Envio ao Nextcloud — validado em 17/08/2026**, nas duas pernas:
+
+- upload puro (`--subir-pendentes`): **235 de 235, zero falha**, criando a árvore de
+  31/07 a 17/08 — conferido pelo PROPFIND, ou seja, indexado e visível na interface;
+- ponta a ponta (`--ids 25831`): login real → download do Smart → validação CNAB →
+  disco → Nextcloud, com pasta e controle temporários (produção intocada).
+
+**Nunca exercitado:**
+
+- a **rodada agendada com o envio ligado** — a primeira é 18/08 às 18:00. Não dá para
+  ensaiar sem gerar: o wrapper força `--gerar --todas-contas` e o `DRY_RUN_REM=false`
+  do `.env` sobrescreve qualquer variável passada por fora;
 - contas com protesto/devolução (`ckNNI7/8/9`);
 - contas com mensagem para o banco (`imprimeMensagem=1`);
 - `idsErro` não-vazio;
-- o auto-login por CapSolver **neste** usuário e nesta tela.
+- upload de arquivo cujo header não decodifica — o caminho vira `SEM-DATA/Banco ???`
+  de propósito (pasta feia é recuperável, arquivo não enviado não), mas nunca aconteceu.
 
 **Desempenho medido no Windows:** ~20s por conta sem títulos, ~45s por conta com
 remessa. 51 contas ≈ 18-20 min — daí o timeout de 2700s na task.

@@ -63,6 +63,7 @@ if _AQUI not in sys.path:
 
 from playwright.sync_api import sync_playwright  # noqa: E402
 
+import _nextcloud as nuvem                        # noqa: E402
 import _sessao                                    # noqa: E402
 import gerar as ger                               # noqa: E402
 import login as autenticacao                      # noqa: E402
@@ -319,6 +320,7 @@ def processar(ctx, itens, forcar=False):
     """Baixa, valida e salva cada item ({'id':..., 'rotulo':...}). Retorna quantos salvou."""
     controle = ler_controle()
     salvos = 0
+    enviados_nc = falhas_nc = 0
     os.makedirs(cfg.PASTA_REMESSAS, exist_ok=True)
 
     for item in sorted(itens, key=lambda x: x["id"]):
@@ -362,6 +364,21 @@ def processar(ctx, itens, forcar=False):
         md5 = hashlib.md5(dados).hexdigest()
         log(f"  id={fid} ({rotulo}): OK {msg}, {titulos} titulo(s), "
             f"{len(dados)} bytes -> {os.path.basename(destino)}")
+
+        # Nextcloud DEPOIS do disco, e nunca no lugar dele: a pasta local e o
+        # controle continuam sendo a fonte de verdade da idempotencia. Falha
+        # aqui e AVISO, nao falha de rodada - o arquivo ja esta salvo, e a
+        # proxima subida o alcanca (`--subir-pendentes`).
+        if cfg.ENVIAR_NEXTCLOUD:
+            ok_nc, alvo_nc, detalhe_nc = nuvem.enviar(dados, os.path.basename(destino))
+            if ok_nc:
+                enviados_nc += 1
+                log(f"     -> Nextcloud: {alvo_nc}")
+            else:
+                falhas_nc += 1
+                log(f"     -> Nextcloud FALHOU ({detalhe_nc}) - o arquivo esta "
+                    f"no disco, nada foi perdido: {alvo_nc}")
+
         gravar_controle({
             "id": fid, "arquivo": os.path.basename(destino), "tipo": rotulo,
             "bytes": len(dados), "md5": md5, "titulos": titulos,
@@ -369,6 +386,9 @@ def processar(ctx, itens, forcar=False):
         })
         salvos += 1
 
+    if falhas_nc:
+        log(f"  ATENCAO Nextcloud: {enviados_nc} enviado(s), {falhas_nc} falha(s) "
+            f"- rode `--subir-pendentes` depois de resolver")
     return salvos
 
 
@@ -550,6 +570,57 @@ def rodada_geracao(ctx, args, dry):
 
 
 # --------------------------------------------------------------------------- #
+# subir para o Nextcloud o que ja esta no disco
+# --------------------------------------------------------------------------- #
+def subir_pendentes(limite=0):
+    """Sobe para o Nextcloud os .REM que JA estao na pasta local.
+
+    Nao abre navegador e nao fala com o Smart — le o disco e sobe. Serve para
+    dois casos: o historico que ficou parado antes de este envio existir, e a
+    segunda tentativa do que falhou numa rodada.
+
+    Seguro de repetir: o caminho no Nextcloud e derivado do CONTEUDO (data de
+    geracao e cedente saem do header do proprio arquivo), entao subir duas vezes
+    sobrescreve o mesmo destino em vez de criar duplicata.
+    """
+    if not nuvem.disponivel():
+        log("ERRO: sem credencial do Nextcloud (/app/config/nextcloud.env).")
+        return SAIU_RODADA_INCOMPLETA
+
+    arquivos = sorted(f for f in os.listdir(cfg.PASTA_REMESSAS)
+                      if f.upper().endswith(".REM"))
+    if limite:
+        log(f"LIMITE: {limite} de {len(arquivos)} arquivo(s) — o resto NAO sobe nesta rodada")
+        arquivos = arquivos[:limite]
+    log("=" * 66)
+    log(f"SUBIR PENDENTES: {len(arquivos)} arquivo(s) de {cfg.PASTA_REMESSAS}")
+    log(f"destino: {nuvem.DEST_BASE}/<ano>/<MM-Mes>/<dia>/<Banco>/")
+    log("=" * 66)
+
+    ok = falhou = 0
+    for nome in arquivos:
+        caminho_local = os.path.join(cfg.PASTA_REMESSAS, nome)
+        try:
+            with open(caminho_local, "rb") as f:
+                dados = f.read()
+        except OSError as e:
+            falhou += 1
+            log(f"  {nome}: nao li o arquivo ({e})")
+            continue
+        enviado, alvo, detalhe = nuvem.enviar(dados, nome)
+        if enviado:
+            ok += 1
+            log(f"  OK   {nome} -> {alvo}")
+        else:
+            falhou += 1
+            log(f"  FALHA {nome} ({detalhe}) -> {alvo}")
+
+    log("=" * 66)
+    log(f"RESUMO: {ok} enviado(s), {falhou} falha(s), de {len(arquivos)} arquivo(s)")
+    return SAIU_OK if not falhou else SAIU_RODADA_INCOMPLETA
+
+
+# --------------------------------------------------------------------------- #
 # main
 # --------------------------------------------------------------------------- #
 def montar_parser():
@@ -587,6 +658,13 @@ def montar_parser():
                     help=f"carteira usada na geracao (padrao {cfg.CARTEIRA_PADRAO})")
     ap.add_argument("--pra-valer", action="store_true",
                     help="desliga o DRY_RUN: GERA DE VERDADE no Smart")
+    # --- nextcloud ---
+    ap.add_argument("--subir-pendentes", action="store_true",
+                    help="sobe para o Nextcloud os .REM que JA estao na pasta "
+                         "local. Nao abre navegador e nao toca no Smart.")
+    ap.add_argument("--limite", type=int, default=0,
+                    help="com --subir-pendentes: sobe no maximo N arquivos "
+                         "(0 = todos)")
     # --- sessao ---
     ap.add_argument("--cdp", action="store_true",
                     help="usa um Chrome JA ABERTO (dev/VNC) em vez de subir o proprio")
@@ -692,6 +770,11 @@ def main():
         pass
 
     args = montar_parser().parse_args()
+
+    # Este modo le o DISCO: nao precisa de Smart nem de Chrome. Sai antes de
+    # gastar um login (e a janela de horario do usuario no Smart).
+    if args.subir_pendentes:
+        return subir_pendentes(args.limite)
 
     with sync_playwright() as p:
         try:

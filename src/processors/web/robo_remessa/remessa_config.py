@@ -116,6 +116,14 @@ PREFIXO_CONTAS = _s("PREFIXO_CONTAS_REM", "mp ")
 # Destino dos .REM. No compose isto e um bind-mount do host:
 #   /home/prospere/docker/automation/process-automation/tmp/remessas a enviar
 PASTA_REMESSAS = _s("PASTA_REMESSAS", "/app/data/remessas_a_enviar")
+# Alem do disco, sobe cada .REM para o Nextcloud — e la que o Financeiro
+# enxerga: a PASTA_REMESSAS acima nao esta em share nenhum (nem Nextcloud nem
+# Samba), so quem tem acesso ao servidor a alcanca. Destino e convencao de
+# caminho ficam em `_nextcloud.py`; aqui so o interruptor.
+# `ENVIAR_NEXTCLOUD_REM=false` desliga sem tocar no codigo — licao do BUG-566,
+# em que caminho fixo no fonte fez 67 arquivos sumirem em silencio quando a
+# arvore do Nextcloud mudou.
+ENVIAR_NEXTCLOUD = _b("ENVIAR_NEXTCLOUD_REM", "True")
 # Controle de idempotencia (id/arquivo/md5). Fica no volume ./data, que
 # sobrevive a recriacao do container.
 ARQ_CONTROLE = _s("ARQ_CONTROLE", "/app/data/robo_remessa/controle_remessas.csv")
