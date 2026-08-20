@@ -24,6 +24,17 @@ services:
       # ligado, o job `enviar_remessas` do process-automation). O robo so
       # ESCREVE aqui — nunca le nem apaga o que ja esta na pasta.
       - /home/prospere/docker/automation/process-automation/tmp/remessas a enviar:/app/data/remessas_a_enviar
+      # A arvore CNAB do Nextcloud (groupfolder 4 = FINANCEIRO), de onde o
+      # `robo_retorno` passa a ler os .RET. Decisao do dono em 17/08/2026:
+      # centralizar as pastas no Nextcloud, uma casa so para o arquivo.
+      #
+      # ⛔ SOMENTE LEITURA. Quem escreve nesta arvore e o Nextcloud (pelo WebDAV,
+      # via `baixar_retorno` do process-automation) e o `organizar_remessas`.
+      # Gravar direto no disco por baixo do Nextcloud deixa o arquivo INVISIVEL
+      # na interface ate um `files:scan` — por isso `:ro`, e por isso o robo roda
+      # com MOVER_PROCESSADOS_RET=False (a idempotencia dele e o MD5 do conteudo,
+      # nao a pasta).
+      - /home/prospere/docker/app/nextcloud/data/__groupfolders/4/files/CNAB:/app/data/cnab_nextcloud:ro
     environment:
       - DISPLAY=:99
       # VNC_PASSWORD vem do `.env` via env_file (fora do git). Nao reintroduzir
@@ -51,6 +62,26 @@ services:
       - DB_PASSWORD=${APP_DB_PASSWORD}
       - POSTGRES_USER=${APP_DB_USER}
       - POSTGRES_PASSWORD=${APP_DB_PASSWORD}
+      #
+      # ⛔ ONDE ESTE PROJETO GRAVA O LASTRO — mudou em 20/08/2026, na virada do
+      # setor LASTRO para group folder próprio (decisão da Gerência, 15/08/2026).
+      #
+      # Os 4 sítios que sobem arquivo leem `os.getenv(<VAR>, "CADASTRO/LASTRO
+      # DAS OPERACOES…")`. Aquele caminho **foi esvaziado na virada**: as 6
+      # subpastas migraram para o group folder `LASTRO`. Sem estas 3 linhas, o
+      # default do código ainda vale e os uploads gravam numa pasta que a esteira
+      # não varre mais — arquivo nasce órfão, **sem erro nenhum**. É o `BUG-369`
+      # pela mesma porta: lá foram 714 arquivos invisíveis por semanas.
+      #
+      # ⚠️ Vão em `environment:` e não no `.env` de propósito: são CAMINHO, não
+      # segredo. O comentário lá em cima proíbe `environment:` para o que é
+      # secreto — a regra é sobre o valor, não sobre o bloco.
+      #
+      # ⛔ Variável de ambiente só entra na CRIAÇÃO do container: depois de mexer
+      # aqui é `docker compose up -d --force-recreate`, não `restart`.
+      - DOC2YOU_NC_DEST=LASTRO/entrada/documentos assinados
+      - DOC2YOU_COMPL_NC_DEST=LASTRO/entrada
+      - ROBO_CREDITO_NC_DEST=LASTRO/entrada
     networks:
       - prospere-network
     shm_size: '2gb'
