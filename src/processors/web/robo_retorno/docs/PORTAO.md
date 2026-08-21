@@ -1,6 +1,6 @@
 # Portão — a última conferência antes da baixa
 
-O `PROCESSAR_ARQUIVO` é o único passo irreversível do robô: depois dele o título
+O `PROCESSAR_ARQUIVO` é o único passo irreversível da automação de retorno: depois dele o título
 está baixado no Smart. O **portão** fica exatamente ali, entre o upload e a
 baixa. Ele lê a grade que o upload devolveu, compara **o título que o Smart
 resolveu** com **a linha que o arquivo mandou**, e recusa o arquivo quando os
@@ -33,7 +33,7 @@ Vá direto:
 
 ---
 
-## Antes de qualquer coisa: onde este robô roda
+## Antes de qualquer coisa: onde este automação roda
 
 ⛔ **`src/` deste projeto é bind-mount `rw`.** Salvar um arquivo aqui **publica
 na hora**. Não há imagem, não há `docker compose build`, não há passo de deploy.
@@ -320,7 +320,7 @@ Recusa de portão **não é motivo benigno**. Confirmado lendo o código:
 - logo `_e_pendencia()` devolve **`True`**, o arquivo entra em `com_erro`, e a
   rodada retorna **`SAIU_COM_PENDENCIA` = 6**;
 - o `run_agendado.sh` guarda o **maior** exit code das 5 pastas-dia
-  (`run_agendado.sh:122`), e 6 é o maior que o robô usa — basta **uma** recusa em
+  (`run_agendado.sh:122`), e 6 é o maior que a automação de retorno usa — basta **uma** recusa em
   **qualquer** dia para o wrapper inteiro sair com 6.
 
 **O hub marca a execução como `failed`** e, por `max_retries=2`, **repete a
@@ -349,7 +349,7 @@ acima do limite de linhas e conta não cadastrada também dão 6. Leia a lista
 
 ## Rodar à mão: a janela segura
 
-⛔ **O robô agendado MATA qualquer Chrome do perfil dele na largada.**
+⛔ **A automação de retorno agendado MATA qualquer Chrome do perfil dele na largada.**
 `run_agendado.sh:26` faz `pkill -f "user-data-dir=$PERFIL"`, porque um perfil com
 lock não sobe. Não há negociação: quem chegou primeiro perde.
 
@@ -379,7 +379,7 @@ começa 18:50 e pode levar 27 min —, fins de semana) a pista está livre. **Ma
 
 ### ⛔⛔ A armadilha do dry-run
 
-**Não existe flag `--dry-run`.** O robô calcula `dry = cfg.DRY_RUN and not
+**Não existe flag `--dry-run`.** A automação de retorno calcula `dry = cfg.DRY_RUN and not
 args.pra_valer`, e `cfg.DRY_RUN` é **`False`** neste container. Ou seja:
 **qualquer rodada manual aqui dá baixa de verdade, por padrão.**
 
@@ -401,7 +401,7 @@ docker exec -e PYTHONPATH=/app -e DRY_RUN_RET=true erp-automation \
     --limite 3 --detalhes
 ```
 
-⭐ Confirme na primeira linha do bloco: o robô imprime
+⭐ Confirme na primeira linha do bloco: a automação de retorno imprime
 `DRY_RUN (nao processa)` ou `*** PRA VALER - VAI DAR BAIXA ***`. **Leia essa
 linha antes de sair de perto.**
 
@@ -430,4 +430,4 @@ linha antes de sair de perto.**
 | Flags | [`../robo_retorno.py:500-509`](../robo_retorno.py) |
 | Chaves | [`../retorno_config.py:86-87`](../retorno_config.py) |
 | Testes | `tests/unit/test_portao_retorno.py` — **45 testes, rodam no HOST** (o container não tem pytest): `cd /home/prospere/docker/automation/erp-automation && python3 -m pytest -q tests/unit/test_portao_retorno.py` |
-| Visão geral do robô | [`README.md`](README.md) |
+| Visão geral da automação de retorno | [`README.md`](README.md) |

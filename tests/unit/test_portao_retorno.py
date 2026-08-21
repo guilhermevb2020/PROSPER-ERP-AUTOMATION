@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Testes do portao do robo de retorno - o que decide se a grade vira baixa.
+Testes do portao da automação de retorno de retorno - o que decide se a grade vira baixa.
 
 POR QUE ESTES TESTES EXISTEM
 ----------------------------
@@ -27,7 +27,7 @@ RESTRICOES DE AMBIENTE (conferidas em 21/08/2026)
   puxam `playwright` e `src.common.clients`, que nao resolvem no host - e por
   isso que o portao foi escrito como modulo puro, so com stdlib.
 - Os CSV de `data/robo_retorno/` sao capturas DATADAS e entram aqui SO PARA
-  LEITURA. Nenhum caminho agendado do robo os reescreve: o `_gravar_titulos`
+  LEITURA. Nenhum caminho agendado da automação de retorno os reescreve: o `_gravar_titulos`
   so roda quando alguem passa `--csv-titulos <caminho>` a mao
   (`robo_retorno.py:410`), e os tres nomes abaixo nao sao default de nada.
 """

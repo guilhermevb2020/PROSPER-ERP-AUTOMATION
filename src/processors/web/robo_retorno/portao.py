@@ -60,7 +60,7 @@ APROVADO = "aprovado"
 RECUSADO = "recusado"
 RESUMO = "resumo"          # linha do rodape da grade, nao e titulo
 
-# Motivos de recusa (texto estavel: o relato do robo e o teste citam)
+# Motivos de recusa (texto estavel: o relato da automação de retorno e o teste citam)
 POR_VALOR = "valor no Smart diverge do valor no arquivo"
 POR_SEM_CASAMENTO = "o Smart nao resolveu titulo para esta linha"
 POR_STATUS = "status diferente de OK"

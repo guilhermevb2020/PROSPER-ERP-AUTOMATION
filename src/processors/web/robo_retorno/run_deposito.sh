@@ -1,5 +1,5 @@
 #!/bin/sh
-# Wrapper do robo para a BAIXA POR DEPOSITO — chamado pelo hub-orchestration.
+# Wrapper da automação de retorno para a BAIXA POR DEPOSITO — chamado pelo hub-orchestration.
 #
 # ⭐ Irmao do `run_agendado.sh`, e as diferencas sao TODAS deliberadas:
 #
@@ -15,7 +15,7 @@
 # no titulo de OUTRO sacado). No retorno do banco essa conferencia nao faz sentido;
 # aqui ela e a razao de o passo existir.
 #
-# ⛔ A pasta e `_deposito`, SUBPASTA de propósito: o robo nao desce um nivel, entao
+# ⛔ A pasta e `_deposito`, SUBPASTA de propósito: a automação de retorno nao desce um nivel, entao
 # nenhuma rodada agendada de retorno bancario a alcanca por acidente.
 #
 # ⚠️ Horario: `40 9,17 * * 1-5`, cinco minutos depois do `baixar_deposito_erp` (35) e
@@ -38,7 +38,7 @@ pkill -f "user-data-dir=$PERFIL" 2>/dev/null || true
 sleep 1
 rm -f "$PERFIL"/Singleton* 2>/dev/null || true
 
-# Xvfb :95 — mesmo slot do robo de retorno, e e de propósito: e o mesmo robo, com o
+# Xvfb :95 — mesmo slot da automação de retorno de retorno, e e de propósito: e o mesmo automação, com o
 # mesmo perfil e a mesma sessao do Smart. Slot proprio exigiria login proprio.
 if ! pgrep -f "Xvfb :95" >/dev/null 2>&1; then
     rm -f /tmp/.X95-lock /tmp/.X11-unix/X95 2>/dev/null || true
@@ -74,7 +74,7 @@ RC="/tmp/robo_deposito_rc.$$"
 # ⛔ `--pular-processados` NAO e opcional aqui, e custou uma baixa dupla para eu
 # aprender: em 21/08/2026 esta rodada reprocessou `DEP2108261035345.RET` porque o
 # arquivo continua na pasta (`MOVER_PROCESSADOS_RET=False`, imposto pela montagem `:ro`
-# do Nextcloud) e sem a flag o robo NAO consulta o hash do controle. O Smart aceitou de
+# do Nextcloud) e sem a flag a automação de retorno NAO consulta o hash do controle. O Smart aceitou de
 # novo — contou em `refinan` em vez de `liquidacao` e por sorte nao criou segunda
 # quitacao. ⚠️ Sorte nao e desenho: a flag e a trava.
 { python /app/src/processors/web/robo_retorno/robo_retorno.py \
