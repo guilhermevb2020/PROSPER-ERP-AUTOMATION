@@ -70,6 +70,22 @@ DRY_RUN = _b("DRY_RUN_RET", "True")
 # decidir, o padrao e pular e reportar.
 ACEITAR_CONTA_DESCONHECIDA = _b("ACEITAR_CONTA_DESCONHECIDA_RET", "False")
 
+# PORTAO: confere a grade do upload ANTES do PROCESSAR_ARQUIVO e recusa o
+# arquivo quando o titulo que o Smart resolveu discorda do que o arquivo mandou
+# — o modo de falha do BUG-548 (baixa no titulo de outro sacado).
+#
+# ⛔ PADRAO DESLIGADO, e de proposito. `src/` deste projeto e BIND-MOUNT: salvar
+# publica na hora, e o `processar_retornos_cnab` roda de hora em hora com
+# DRY_RUN_RET=false, dando baixa de verdade. Ligar o portao MUDA o
+# comportamento desse job — e ato do dono, nao efeito colateral de um commit.
+#
+# Medido antes de propor (`portao.py` guarda os numeros): sobre 1.238 titulos
+# reais de banco, o criterio padrao recusaria ZERO. Ligar `PORTAO_STATUS_OK_RET`
+# alem dele recusaria 5 arquivos por `Data de vencimento diferente`, que e
+# liquidacao legitima — por isso sao duas chaves, e nao uma.
+PORTAO = _b("PORTAO_RET", "False")
+PORTAO_STATUS_OK = _b("PORTAO_STATUS_OK_RET", "False")
+
 # --------------------------------------------------------------------------- #
 # Pastas
 # --------------------------------------------------------------------------- #
