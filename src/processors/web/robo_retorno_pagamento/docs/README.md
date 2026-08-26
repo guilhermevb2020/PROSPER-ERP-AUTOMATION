@@ -19,20 +19,37 @@ da entrada e nunca é reenviado — não importa o que o Smart tenha respondido.
 
 ---
 
-## Estado: registrado no hub, etapa 1 provada de verdade, etapa 2 nunca rodou (26/08/2026)
+## Estado: EM PRODUÇÃO DE VERDADE — as duas etapas provadas (26/08/2026)
 
 | | |
 |---|---|
 | ✅ Contrato de ENVIO medido (`descobrir.py --url`, GET, sem submeter nada) | 26/08 |
 | ✅ Ciclo completo testado em DRY_RUN — Nextcloud → Smart (login OK, permissão confirmada) | 26/08 |
-| ✅ **Etapa 1 (upload) rodada `--pra-valer` de verdade** — HTTP 200, devolveu a prévia | 26/08 |
-| ✅ Task no hub (`robo_retorno_pagamento`, depende de `baixar_retorno_pagamento`, cron `55 8-18 * * 1-5`, **enabled**) | 26/08 |
-| ❌ **Etapa 2 (confirmar) nunca rodou de verdade** — código escrito depois de ver a prévia, sem teste real ainda | — |
+| ✅ Etapa 1 (upload) rodada `--pra-valer` de verdade — HTTP 200, devolveu a prévia | 26/08 |
+| ✅ **Etapa 2 (confirmar) rodada `--pra-valer` de verdade, 5 arquivos** — HTTP 200 nas duas etapas, nos 5 | 26/08, 21:29 |
+| ✅ Task no hub (`processar_retorno_pagamento_cnab_240` — renomeada, era `robo_retorno_pagamento`; depende de `receber_retorno_pagamento_cnab_240`, cron `55 8-18 * * 1-5`, **enabled**) | 26/08 |
+| ✅ **`DRY_RUN_RETPAG=false` persistido em `config/robo_retorno_pagamento.env`** — próximas rodadas agendadas dão baixa de verdade | 26/08, 18:44 |
 
-⚠️ **Rodar agendado hoje é seguro mesmo sem a etapa 2 provada**: `DRY_RUN_RETPAG`
-fica `True` por padrão (não existe `config/robo_retorno_pagamento.env` ainda),
-então o cron só loga intenção — não faz POST nenhum. Só liga de verdade
-mudando essa chave.
+### Como a etapa 2 foi validada, já que a resposta HTML não distingue sucesso de erro
+
+O robô **insere, não julga** — a resposta da etapa 2 é sempre a mesma casca de
+página (`title` = "Processar Retorno"), byte-a-byte quase idêntica entre um
+arquivo e outro. **Não confie em grep por "sucesso"/"erro" no HTML** — essas
+palavras aparecem em JavaScript de template (`if(sucesso){...}`), não como
+mensagem de resultado.
+
+O sinal real está no `window.open('popuppagtobmp.php?...&entrej=N&liquid=N...')`
+embutido na resposta — um contador por tipo de ação. Nos 5 arquivos de
+26/08/2026, `liquid=N` bateu **exatamente** com o nº de pagamentos código-00
+de cada remessa (2, 1, 4), e o único rejeitado pelo BMP (ANFEER, código 55)
+caiu em `entrej=1` em vez de `liquid` — o Smart tratou o caso corretamente.
+Não é confirmação 100% (não há acesso direto ao banco do Smart), mas é o sinal
+mais forte disponível sem entrar na tela.
+
+```bash
+# extrair o contador de uma resposta salva em DEBUG_DIR
+grep -oE "popuppagtobmp.php\?[^']*" /app/data/robo_retorno_pagamento/debug/<arquivo>.etapa2_confirmado.html
+```
 
 ## Por que a etapa 2 existe — descoberta em 26/08/2026
 
@@ -119,15 +136,21 @@ AMBAS as etapas são salvas em `DEBUG_DIR` (evidência, não fila de rotina).
 | `_nextcloud.py` | wrapper fino sobre `NextcloudWebDAV` (que ganhou `baixar`/`mover` para este robô) |
 | `run_agendado.sh` | wrapper agendado (display + env + python) |
 
-## Como ligar de verdade (falta só isto)
+## ✅ Como foi ligado de verdade (feito em 26/08/2026)
 
-1. Esperar um retorno de pagamento REAL chegar em `_RETORNOS` (via
-   `baixar_retorno_pagamento`, automático).
-2. Rodar `--pra-valer --limite 1` nesse arquivo, supervisionado — olhar o HTML
-   da etapa 2 salvo em `DEBUG_DIR` pra confirmar que o "Continuar" realmente
-   dá baixa (é a etapa nunca testada).
-3. Só depois disso considerar tirar `DRY_RUN_RETPAG` do padrão `True` — hoje
-   ele já está agendado no hub, mas em modo seguro.
+1. Esperou 5 retornos de pagamento REAIS chegarem em `_RETORNOS` (via
+   `receber_retorno_pagamento_cnab_240`, automático).
+2. Rodou `--pra-valer` (sem `--limite`, os 5 pendentes) supervisionado, via
+   `run_agendado.sh` — todos HTTP 200 nas duas etapas; conferido o HTML da
+   etapa 2 salvo em `DEBUG_DIR` (o contador `liquid=N`, ver seção acima).
+3. Criado `config/robo_retorno_pagamento.env` com `DRY_RUN_RETPAG=false` —
+   tirou o robô do padrão seguro. Confirmado o valor efetivo dentro do
+   container antes de considerar feito.
+
+⭐ **Próxima pessoa que mexer aqui:** o robô agora dá baixa de verdade a cada
+hora (`55 8-18 * * 1-5`), sem fila de revisão. Ver a seção
+["O robô INSERE — não julga o resultado"](#robô-de-retorno-de-pagamento-bmp-money-plus)
+no topo antes de mudar qualquer coisa no fluxo das duas etapas.
 
 ## Exit codes
 

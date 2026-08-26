@@ -39,10 +39,16 @@ Até o passo 5 nada é efetivado — por isso o `DRY_RUN` para exatamente ali.
 | Arquivo processado | `_PROCESSADOS/<AAAA-MM>/` dentro da entrada |
 | Controle | `/app/data/robo_retorno/controle_processados.csv` |
 | Credenciais | `/app/config/robo_retorno.env` (fora do git) |
-| Task no hub | `processar_retornos_cnab`, `30 8 * * 1-5` |
+| Task no hub | `processar_retorno_cobranca_cnab_400` ⏪ renomeada 2× em 26/08/2026, era `processar_retornos_cnab` → `processar_retornos_cnab400` → nome atual. Cron real: `50 8-18 * * 1-5` (hora em hora, não `30 8`) |
 
 Os arquivos vão **soltos** na raiz da entrada — o robô não desce um nível. É por
 isso que `_PROCESSADOS/` pode morar lá dentro sem atrapalhar.
+
+⭐ **Este script tem um SEGUNDO consumidor desde 26/08/2026:** `baixar_deposito_no_erp`
+(`run_deposito.sh`, pasta `_deposito`, `--portao` sempre ligado) chama o
+mesmo `robo_retorno.py`/`retorno.py` com uma flag `--portao` que NÃO existe
+para a task acima — ver [`PORTAO.md`](PORTAO.md) antes de mexer em qualquer
+uma das duas.
 
 ---
 

@@ -1,5 +1,37 @@
 # Portão — a última conferência antes da baixa
 
+> ## ⚠️ CORREÇÃO 26/08/2026 — leia antes do resto
+>
+> **A maior parte deste documento descreve uma integração que NÃO EXISTE no
+> código hoje.** Verificado lendo `retorno.py` e `robo_retorno.py` INTEIROS em
+> 26/08/2026: não há `--portao`, `--sem-portao`, `--portao-status-ok`, nem
+> leitura de `PORTAO`/`PORTAO_STATUS_OK` em lugar nenhum dos dois arquivos.
+> `MOTIVOS_BENIGNOS` (citado abaixo) também não existe. As chaves
+> `PORTAO_RET`/`PORTAO_STATUS_OK_RET` **existem** em `retorno_config.py` (ver
+> `PORTAO = _b("PORTAO_RET", "False")`), mas nada as lê — são flags mortas.
+>
+> **O que aconteceu:** o commit `3f72b99` (21/08/2026) escreveu `portao.py` +
+> este documento + os 45 testes — e escreveu TAMBÉM a integração em
+> `retorno.py`/`robo_retorno.py` que este documento descreve, mas **deixou os
+> dois de fora do commit de propósito** (mensagem do commit: *"os dois já
+> carregavam trabalho não commitado de outra pessoa antes desta sessão, e
+> commitá-los varreria esse trabalho para dentro deste commit"*). Ficou como
+> edição não commitada — e depois se perdeu, sobrescrita por edições
+> seguintes nos mesmos dois arquivos. Ninguém percebeu até hoje.
+>
+> **O que EXISTE de verdade hoje:** um portão diferente e mais simples, para
+> um job diferente — `baixar_deposito_no_erp` (`run_deposito.sh`), não
+> `processar_retorno_cobranca_cnab_400` (nome atual; era `processar_retornos_cnab`
+> até 26/08, renomeado duas vezes no mesmo dia). Ver
+> [seção nova abaixo](#o-portão-que-existe-de-verdade-hoje-26082026).
+>
+> **O resto deste documento continua valendo como REFERÊNCIA DE DESENHO** — o
+> raciocínio do BUG-548, os números medidos (0 recusa falsa em 1.238 títulos),
+> o que o portão garante e não garante. Só não confie nos comandos `--portao`/
+> `--sem-portao`/`PORTAO_RET` contra `robo_retorno.py`: eles não fazem nada
+> até alguém reescrever a integração — do zero, seguindo este documento como
+> especificação.
+
 O `PROCESSAR_ARQUIVO` é o único passo irreversível da automação de retorno: depois dele o título
 está baixado no Smart. O **portão** fica exatamente ali, entre o upload e a
 baixa. Ele lê a grade que o upload devolveu, compara **o título que o Smart
@@ -7,13 +39,45 @@ resolveu** com **a linha que o arquivo mandou**, e recusa o arquivo quando os
 dois discordam.
 
 O *porquê* e as medições estão no docstring de
-[`portao.py`](../portao.py). Este documento é o outro lado: **como operar**.
+[`portao.py`](../portao.py). Este documento é o outro lado: **como operar**
+— **quando a integração abaixo existir de verdade.**
 
-> ⛔ **Hoje o portão está DESLIGADO.** Conferido em 21/08/2026: não há chave
+## O portão que existe DE VERDADE hoje (26/08/2026)
+
+Wiring mínimo, feito hoje para destravar `baixar_deposito_no_erp` (desabilitada
+pelo circuit breaker após 3 falhas — `run_deposito.sh` chamava `--portao` que
+o argparse não reconhecia, exit 2 determinístico, 100% das vezes).
+
+| | Este (hoje) | O que o resto do doc descreve (não existe) |
+|---|---|---|
+| Flag | `--portao` (`store_true`, sem oposto) | `--portao` / `--sem-portao`, "última flag vence" |
+| Config | nenhuma — sempre chumbado no wrapper | `PORTAO_RET` / `PORTAO_STATUS_OK_RET` no `.env` |
+| Job | `baixar_deposito_no_erp` (`run_deposito.sh`, `--portao` fixo na linha) | `processar_retorno_cobranca_cnab_400` |
+| `exigir_status_ok` | sempre `False` (não exposto) | `--portao-status-ok` opcional |
+| Ponto de entrada | `retorno.py::processar()`, param `usar_portao`, entre o corte do `dry_run` e `processar_arquivo` | mesmo lugar, mesma ideia |
+| Motivo gravado | `"RECUSADO PELO PORTAO: {sumario}"` | `"PORTAO recusou: ..."` (texto diferente) |
+| Log por título recusado | `robo_retorno.py::relatar()`, bloco `PORTAO RECUSOU O ARQUIVO` | formato "três vezes" descrito abaixo (não existe) |
+
+Reusa o **mesmo** `portao.py`/`avaliar_grade()` — o módulo puro é o mesmo para
+os dois jobs, só a chamada (`retorno.py`) e a exposição (`robo_retorno.py`)
+divergem. Commit: `2be6786`. Verificado com import real dentro do container e
+a suíte de 45 testes de `portao.py` (inalterada, ainda passa).
+
+⛔ **Se alguém quiser o portão em `processar_retorno_cobranca_cnab_400`** (o
+job que este documento originalmente descreve — hourly, `50 8-18 * * 1-5`,
+retorno bancário real), a integração completa (`--sem-portao`,
+`PORTAO_STATUS_OK`, o formato de log "três vezes", `MOTIVOS_BENIGNOS`) precisa
+ser **escrita de novo** em `retorno.py`/`robo_retorno.py` — nada disso
+sobrevive hoje. É trabalho novo, não é ligar uma chave.
+
+---
+
+> ⛔ **Descrição original (21/08/2026) — não reflete o código atual, ver
+> correção acima.** Hoje o portão está DESLIGADO para o job abaixo porque a
+> integração nunca chegou a ser commitada. Não há chave
 > `PORTAO_RET` em `config/robo_retorno.env`, e `retorno_config` dentro do
-> container devolve `PORTAO = False` / `PORTAO_STATUS_OK = False`.
-> **Ligar é decisão do dono.** Não ligue por conta própria — a razão está em
-> [Como ligar](#como-ligar).
+> container devolve `PORTAO = False` / `PORTAO_STATUS_OK = False` — mas isso é
+> irrelevante hoje: mesmo `True`, nada leria essas chaves.
 
 ## ⭐ Chegou aqui por um alarme?
 
@@ -46,9 +110,11 @@ Isto é o **oposto** do `process-automation`, onde `setores/` vem da imagem e s�
 entra no ar com `deploy_process_automation.sh`. Aqui, editar `portao.py` muda o
 comportamento da próxima rodada — que sai **daqui a menos de uma hora**.
 
-⭐ **Consequência prática:** o código do portão **já está em produção**. O módulo
-está lá, as flags estão lá. Só a chave está desligada. Ligar não exige publicar
-nada.
+⭐ **Consequência prática, quando a integração existir:** editar `retorno.py`/
+`robo_retorno.py` muda o comportamento da próxima rodada — que sai em menos de
+uma hora. Não exige publicar nada. ⛔ **Hoje (26/08/2026) só o módulo
+(`portao.py`) está lá — as flags dos dois arquivos não** (ver correção no
+topo).
 
 E o job que ele guarda não é ensaio:
 

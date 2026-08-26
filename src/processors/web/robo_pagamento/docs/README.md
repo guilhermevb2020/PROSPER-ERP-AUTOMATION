@@ -32,8 +32,9 @@ O que falta é só o item de decisão de dono (quem mais mexe na conta 404) — 
 [`PENDENTE.md`](PENDENTE.md).
 
 O elo seguinte do ciclo — ler o retorno do banco e inserir de volta no Smart —
-é o `robo_retorno_pagamento`, também já registrado no hub (em DRY_RUN até a
-segunda etapa dele ser provada contra um título real). Ver
+é o `robo_retorno_pagamento` (task `processar_retorno_pagamento_cnab_240`),
+⏪ **produção de verdade desde 26/08/2026** — as duas etapas provadas contra
+5 títulos reais, `DRY_RUN_RETPAG=false`. Ver
 `../robo_retorno_pagamento/docs/README.md`.
 
 ## O ciclo — duas requisições, e acabou
