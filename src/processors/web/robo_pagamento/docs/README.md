@@ -12,32 +12,29 @@ Remessa** (`financeiro/pagtobmp/`).
 
 ---
 
-## Estado: validada, **aguardando registro no hub** (25/08/2026)
+## Estado: EM PRODUÇÃO, agendada e rodando (26/08/2026)
 
-O contrato foi medido contra o Smart real em 21/08/2026 pelo sandbox do host (o
-HTML cru e o `.REM` gerado estão em `data/sandbox/robo_pagamento/`), e em
-25/08/2026 o **wrapper de produção rodou no host com o login definitivo**.
+O contrato foi medido contra o Smart real em 21/08/2026 pelo sandbox do host, e
+em 25/08/2026 o fluxo completo foi validado com dinheiro de verdade se movendo
+(confirmado pelo dono).
 
 | | |
 |---|---|
-| ✅ Fluxo validado em produção real (gerou `CP2108000003.REM`) | 21/08 |
+| ✅ Fluxo validado em produção real, dinheiro se moveu | 25/08 |
 | ✅ 116 testes no host | |
 | ✅ `config/robo_pagamento.env` com a credencial definitiva | 25/08 |
-| ✅ Run supervisionado: logou, alcançou a conta 404, tela ofereceu «Gerar» | 25/08 |
-| ❌ As duas chaves de geração | **desligadas** — `DRY_RUN_PAG=True`, `PRA_VALER_PAG` comentado |
-| ❌ **Commitado** | **não** — `.git` não tem escrita para o grupo |
-| ❌ Task no hub | **não** — depende de quem tem `docker exec` |
+| ✅ As duas chaves de geração ligadas — `DRY_RUN_PAG=False`, `PRA_VALER_PAG=--pra-valer` | 25/08 |
+| ✅ Commitado | 25-26/08 |
+| ✅ Task no hub — `gerar_remessa_pagamento_bmp`, cron `0,30 8-18 * * 1-5`, **enabled** | 25/08 |
+| ✅ `enviar_pagamento` (process-automation) depende desta task (status `success`) | 25/08 |
 
-⛔ **O agendamento é no `hub-orchestration`, como todas as outras.** Registrar a
-task exige `docker exec`, que o `operacional2` não tem — então é **pedido a quem
-administra o hub**, não desvio. Uma tentativa de agendar por crontab do próprio
-usuário foi feita em 25/08 e **recusada pelo dono**: sai do padrão das outras 9
-automações e fica fora do inventário e da vigilância do hub. O comando exato do
-pedido está em [`PENDENTE.md`](PENDENTE.md).
+O que falta é só o item de decisão de dono (quem mais mexe na conta 404) — ver
+[`PENDENTE.md`](PENDENTE.md).
 
-⛔ **Nada disto está no git ainda.** Enquanto não estiver, um `git clean` leva
-tudo. O que falta está em [`PENDENTE.md`](PENDENTE.md) — apague aquele arquivo
-quando terminarem.
+O elo seguinte do ciclo — ler o retorno do banco e inserir de volta no Smart —
+é o `robo_retorno_pagamento`, também já registrado no hub (em DRY_RUN até a
+segunda etapa dele ser provada contra um título real). Ver
+`../robo_retorno_pagamento/docs/README.md`.
 
 ## O ciclo — duas requisições, e acabou
 
@@ -91,7 +88,7 @@ As vírgulas no fim de cada lista (`"143,"`) são fiéis ao `+=` do JS.
 
 | Recurso | Valor |
 |---|---|
-| Onde roda | no container `erp-automation`, agendada pelo hub |
+| Onde roda | container `erp-automation`, agendada pelo hub |
 | Display / VNC / noVNC / CDP | `:94` / 5905 / 6085 / 9226 |
 | Navegador | Google Chrome (canal `chrome`, `/opt/google/chrome`). No host não existe — daí o `SMART_CHROME_CANAL` vazio, que cai no Chromium da `.venv-sandbox` |
 | Perfil Chrome | `/app/data/robo_pagamento/perfil_chrome` |
@@ -105,8 +102,9 @@ As vírgulas no fim de cada lista (`"143,"`) são fiéis ao `+=` do JS.
 > precedente: o destino do `robo_remessa` é `remessas a enviar`.
 >
 > ⚠️ **A pasta não está em share nenhum** — nem Nextcloud, nem Samba. De um
-> Windows ninguém a enxerga. Se o Financeiro precisar ver, o uploader
-> compartilhado é `src/common/clients/nextcloud_webdav.py`.
+> Windows ninguém a enxerga. O `.REM` sobe pro Nextcloud (`_nextcloud.py`,
+> `FINANCEIRO/Pagamentos-MoneyPlus/_A_ENVIAR`) logo depois de gerado — é dali
+> que o `enviar_pagamento` (process-automation) lê.
 
 ---
 
@@ -118,6 +116,7 @@ As vírgulas no fim de cada lista (`"143,"`) são fiéis ao `+=` do JS.
 | `gerar.py` | o ciclo (pesquisa → gera → guarda → recupera) |
 | `analise.py` | **puro**, só stdlib: leitura de tela e montagem dos POSTs |
 | `pagamento_config.py` | tudo por env, sufixo `_PAG` |
+| `_nextcloud.py` | sobe o `.REM` gerado pro Nextcloud (wrapper sobre `NextcloudWebDAV`) |
 | `run_agendado.sh` | wrapper agendado (host **ou** container), com **trava de sobreposição** |
 | `descobrir.py` + `run_descoberta.sh` | Fase 0 — reconferir a tela quando o Smart mudar |
 
@@ -155,9 +154,10 @@ seguinte — possivelmente entre o gerar e o gravar.
 | Trava órfã (pid morto) | remove e segue |
 
 **Janela de horário.** O cron não pode ser `*/30 * * * *`: fora da janela do
-usuário o `dologin.php` responde `Usuário com acesso restrito`. Algo como
-`*/30 7-20 * * 1-5`. Cada rodada custa um CapSolver — medido: a sessão do Smart
-não sobrevive ao fechamento do Chrome, então o perfil persistente não a reusa.
+usuário o `dologin.php` responde `Usuário com acesso restrito`. O cron
+registrado é `0,30 8-18 * * 1-5`. Cada rodada custa um CapSolver — medido: a
+sessão do Smart não sobrevive ao fechamento do Chrome, então o perfil
+persistente não a reusa.
 
 ---
 
@@ -187,34 +187,10 @@ que o robô agendado chama.
 
 ---
 
-## Como ligar
+## Parar, se precisar
 
-**Ordem, e ela importa:** registrar no hub (desabilitada) → run supervisionado no
-container → ligar as duas chaves → habilitar a task. O comando de cada passo está
-em [`PENDENTE.md`](PENDENTE.md).
-
-**Parar**, depois de ligada — qualquer uma das duas basta: refazer o
-`upsert-docker` com `--disabled`, ou voltar `DRY_RUN_PAG=True` no `.env`.
-
-Rodar à mão **no host**, para conferir login e permissão sem depender do Docker
-(foi assim que o login definitivo foi validado em 25/08):
-
-```bash
-RAIZ_PAG=$PWD PYTHON_PAG=$PWD/.venv-sandbox/bin/python \
-  sh src/processors/web/robo_pagamento/run_agendado.sh --listar   # só olha
-```
-
-Para isso, descomente no `.env` as quatro linhas marcadas **SÓ para o host**
-(`HEADLESS_PAG`, `SMART_CHROME_CANAL`, `CAPSOLVER_API_KEY`) — e **comente de
-volta antes de a task do hub rodar**, senão o container procura um Chromium que
-não tem e a chave do `env_file` é sobrescrita.
-
-Conferir as rodadas:
-
-```bash
-grep '=====' logs/robo_pagamento_$(date +%F).log
-grep -h 'exit=' logs/robo_pagamento_*.log | grep -v 'exit=0'    # só as falhas
-```
+Qualquer uma das duas basta: refazer o `upsert-docker` da task com
+`--disabled`, ou voltar `DRY_RUN_PAG=True` no `.env`.
 
 Receita geral e armadilhas medidas:
 [`docs/COMO_SUBIR_UM_ROBO.md`](../../../../../docs/COMO_SUBIR_UM_ROBO.md).

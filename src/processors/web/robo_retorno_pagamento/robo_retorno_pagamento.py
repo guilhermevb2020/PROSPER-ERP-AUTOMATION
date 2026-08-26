@@ -132,27 +132,48 @@ def tratar(ctx, nome_arquivo: str, dry: bool, feitos: set) -> str:
         return "repete"
 
     if dry:
-        log(f"  [DRY][enviaria] {nome_arquivo} ({len(dados)} bytes) -> {cfg.URL_RETORNO}")
+        log(f"  [DRY][enviaria] {nome_arquivo} ({len(dados)} bytes) -> {cfg.URL_RETORNO} "
+            "(etapa 1: upload — etapa 2: confirmar)")
         return "pendente"
 
-    resposta = ret.enviar(ctx, cfg.URL_RETORNO, nome_arquivo, dados)
-
-    if not resposta["ok_rede"]:
-        log(f"  {nome_arquivo}: FALHA DE REDE ({resposta['erro_rede']}) — "
+    # Etapa 1 — upload. Só STAGEIA o arquivo e devolve uma prévia; não efetiva
+    # nada. Reenviar esta etapa de novo (se a etapa 2 falhar de rede) é
+    # inofensivo — o Smart só re-stagea, não dá baixa duas vezes.
+    resposta1 = ret.enviar(ctx, cfg.URL_RETORNO, nome_arquivo, dados)
+    if not resposta1["ok_rede"]:
+        log(f"  {nome_arquivo}: FALHA DE REDE na etapa 1 ({resposta1['erro_rede']}) — "
             "fica na entrada, tenta de novo na próxima rodada")
         return "pendente"
-
-    if smart_sessao.parece_deslogado(resposta["html"] or ""):
-        log(f"  {nome_arquivo}: sessão caiu DURANTE o upload — não dá para saber se o "
-            "POST chegou a sair. Fica na entrada; a próxima rodada tenta de novo.")
+    if smart_sessao.parece_deslogado(resposta1["html"] or ""):
+        log(f"  {nome_arquivo}: sessão caiu na etapa 1 — fica na entrada, tenta de novo")
         return "pendente"
 
-    caminho_html = salvar_resposta(nome_arquivo, resposta["html"])
-    log(f"  {nome_arquivo}: inserido (HTTP {resposta['status']})"
-        + (f" | resposta salva em {caminho_html}" if caminho_html else ""))
+    caminho1 = salvar_resposta(f"{nome_arquivo}.etapa1_previa", resposta1["html"])
+    target = ret.extrair_target(resposta1["html"] or "")
+    if not target:
+        log(f"  {nome_arquivo}: etapa 1 respondeu (HTTP {resposta1['status']}) mas sem "
+            f"'target' reconhecível — a tela pode ter mudado. Resposta em {caminho1}. "
+            "Fica na entrada.")
+        return "pendente"
+
+    # Etapa 2 — confirmar. É esta que de fato dá baixa.
+    resposta2 = ret.confirmar(ctx, cfg.URL_RETORNO, target)
+    if not resposta2["ok_rede"]:
+        log(f"  {nome_arquivo}: etapa 1 OK mas FALHA DE REDE na etapa 2 "
+            f"({resposta2['erro_rede']}) — NÃO efetivou (a etapa 2 é quem confirma). "
+            "Fica na entrada, tenta de novo (reenviar a etapa 1 é seguro).")
+        return "pendente"
+    if smart_sessao.parece_deslogado(resposta2["html"] or ""):
+        log(f"  {nome_arquivo}: sessão caiu na etapa 2 — provavelmente NÃO efetivou. "
+            "Fica na entrada, tenta de novo.")
+        return "pendente"
+
+    caminho2 = salvar_resposta(f"{nome_arquivo}.etapa2_confirmado", resposta2["html"])
+    log(f"  {nome_arquivo}: inserido (etapa1 HTTP {resposta1['status']}, "
+        f"etapa2 HTTP {resposta2['status']}) | respostas em {caminho1} e {caminho2}")
 
     gravar_controle({
-        "arquivo": nome_arquivo, "hash": digest, "status_http": resposta["status"],
+        "arquivo": nome_arquivo, "hash": digest, "status_http": resposta2["status"],
         "quando": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
     })
     nuvem.mover_para(nome_arquivo, cfg.SUB_PROCESSADOS)
