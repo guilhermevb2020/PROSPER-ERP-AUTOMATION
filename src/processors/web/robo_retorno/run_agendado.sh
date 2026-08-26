@@ -61,8 +61,61 @@ mkdir -p "$PERFIL"
 # robo_retorno.env — e confira o valor efetivo depois de editar o arquivo.
 export DRY_RUN_RET="${DRY_RUN_RET:-True}"
 
-# 8) roda o robo (uma vez, e sai). `tee` grava um log AO VIVO alem do stdout
-#    capturado pelo hub.
+# 7b) ⭐ ONDE ESTA O RETORNO BANCARIO DE VERDADE
+#
+# ⛔ Ate 26/08/2026 esta task rodava SEM `--pasta` e caia no default
+# `/app/data/retornos_a_processar`, onde o unico conteudo eram 13 `.RET` que o
+# `gerar_retorno_erp` deixou em 18/08 e que ja estavam processados. Resultado
+# medido: 0 processados e `exit=6` em toda rodada, enquanto o retorno bancario
+# real esperava em `cnab_nextcloud/Retornos`, que o robo nunca alcancava. Em
+# 26/08 eram 60 titulos, R$ 155.957,53, casados pela conciliacao e ainda abertos.
+#
+# ⚠️ Quem fazia o trabalho era UMA PESSOA, a mao, dia a dia: os logs de 21 e
+# 25/08 trazem `--pasta .../<dia>/MoneyPlus` repetido, andando para tras. Esta
+# etapa automatiza exatamente isso — as MESMAS pastas, com os MESMOS nomes.
+#
+# ⛔ MESMA PASTA E REQUISITO, NAO CONVENIENCIA. O robo so pula um arquivo quando
+# o Smart diz "ja processado" (comparando o NOME saneado por `nome_limpo`) **E**
+# o hash esta no controle — as duas condicoes, no `if` do `pular_se_processado`.
+# Copiar o `.RET` para outra pasta com outro nome quebraria a metade do NOME, o
+# Smart o veria como novo, e o mesmo pagamento entraria DUAS vezes.
+#
+# ⭐ So entra pasta com arquivo GENUINAMENTE NOVO. Sem esse filtro a rodada
+# revisita dias inteiros ja processados, paga ~1,5 s por arquivo pulado e ainda
+# termina em `exit=6` — porque "ja processado" entra em `com_erro` no somatorio
+# do robo e vira pendencia.
+#
+# ⚠️ O hash e do conteudo com as quebras NORMALIZADAS: o robo abre o arquivo em
+# modo texto, entao `\r\n` vira `\n` antes do md5. O md5 do arquivo cru nao casa
+# com nada — conferido em 26/08/2026 contra o proprio controle.
+ARVORE_RET="${ARVORE_RETORNO_RET:-/app/data/cnab_nextcloud/Retornos}"
+DIAS_RET="${DIAS_RETORNO_RET:-3}"
+ENTRADA_RET="${PASTA_ENTRADA_RET:-/app/data/retornos_a_processar}"
+CONTROLE_RET="${ARQ_CONTROLE_RET:-/app/data/robo_retorno/controle_processados.csv}"
+
+# ⚠️ `--pasta` do chamador MANDA. Quem roda a mao apontando uma pasta especifica
+# nao pode ser sequestrado pela descoberta automatica.
+TEM_PASTA=0
+for _a in "$@"; do
+    case "$_a" in --pasta|--pasta=*) TEM_PASTA=1 ;; esac
+done
+
+PASTAS_RET="/tmp/robo_retorno_pastas.$$"
+: > "$PASTAS_RET"
+if [ "$TEM_PASTA" -eq 0 ]; then
+    # ⚠️ `-maxdepth`/`-mtime` limitam a varredura; sem eles seriam 534 arquivos.
+    # A entrada classica entra junto: quem largar um `.RET` la continua atendido.
+    { find "$ARVORE_RET" -type f -name '*.RET' -mtime -"$DIAS_RET" 2>/dev/null
+      find "$ENTRADA_RET" -maxdepth 1 -type f -name '*.RET' 2>/dev/null
+    } | while IFS= read -r _f; do
+        [ -n "$_f" ] || continue
+        _h=$(tr -d '\r' < "$_f" | md5sum | cut -d' ' -f1)
+        grep -qa "$_h" "$CONTROLE_RET" 2>/dev/null || dirname "$_f"
+    done | sort -u > "$PASTAS_RET"
+fi
+
+# 8) roda o robo — uma vez por pasta com novidade — e sai. `tee` grava um log AO
+#    VIVO alem do stdout capturado pelo hub.
 #
 #    O exit code que o hub precisa ver e o do PYTHON, nao o do `tee` (que e
 #    sempre 0). `PIPESTATUS` resolveria, mas e bashism e o hub chama este
@@ -70,10 +123,44 @@ export DRY_RUN_RET="${DRY_RUN_RET:-True}"
 #    Dai o arquivo de retorno, que funciona nos dois shells.
 LOGROBO="/app/logs/robo_retorno_$(date +%Y-%m-%d).log"
 RC="/tmp/robo_retorno_rc.$$"
-echo "===== inicio $(date '+%F %T %Z') =====" >> "$LOGROBO"
-{ python /app/src/processors/web/robo_retorno/robo_retorno.py \
-      "$@"; echo $? > "$RC"; } 2>&1 | tee -a "$LOGROBO"
-CODIGO=$(cat "$RC" 2>/dev/null || echo 1)
-rm -f "$RC"
-echo "===== fim $(date '+%F %T %Z') exit=$CODIGO =====" >> "$LOGROBO"
+PIOR="/tmp/robo_retorno_pior.$$"
+echo 0 > "$PIOR"
+
+rodar() {   # $1 = pasta ou vazio; demais argumentos vao depois
+    _p="$1"; shift
+    echo "===== inicio $(date '+%F %T %Z') ${_p:+pasta=$_p} =====" >> "$LOGROBO"
+    # ⚠️ `--pasta` vai ANTES de "$@": se o chamador tambem passou um, o dele
+    # vence no argparse, que fica com o ultimo.
+    if [ -n "$_p" ]; then
+        { python /app/src/processors/web/robo_retorno/robo_retorno.py \
+              --pasta "$_p" "$@"; echo $? > "$RC"; } 2>&1 | tee -a "$LOGROBO"
+    else
+        { python /app/src/processors/web/robo_retorno/robo_retorno.py \
+              "$@"; echo $? > "$RC"; } 2>&1 | tee -a "$LOGROBO"
+    fi
+    _c=$(cat "$RC" 2>/dev/null || echo 1)
+    echo "===== fim $(date '+%F %T %Z') exit=$_c =====" >> "$LOGROBO"
+    [ "$_c" -gt "$(cat "$PIOR")" ] && echo "$_c" > "$PIOR"
+    return 0
+}
+
+if [ "$TEM_PASTA" -eq 1 ] || [ ! -s "$PASTAS_RET" ]; then
+    if [ "$TEM_PASTA" -eq 0 ]; then
+        # ⭐ Nada novo NAO e falha. Antes disto a task terminava em `exit=6` todo
+        # dia por reler arquivo velho, e aviso que sempre falha se aprende a ignorar.
+        echo "nenhum retorno bancario novo em $ARVORE_RET (janela de $DIAS_RET dias)" \
+            | tee -a "$LOGROBO"
+        rm -f "$RC" "$PIOR" "$PASTAS_RET"
+        exit 0
+    fi
+    rodar "" "$@"
+else
+    while IFS= read -r _pasta; do
+        [ -n "$_pasta" ] || continue
+        rodar "$_pasta" "$@"
+    done < "$PASTAS_RET"
+fi
+
+CODIGO=$(cat "$PIOR" 2>/dev/null || echo 1)
+rm -f "$RC" "$PIOR" "$PASTAS_RET"
 exit "$CODIGO"
