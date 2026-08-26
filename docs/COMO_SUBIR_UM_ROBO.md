@@ -10,8 +10,11 @@ subida real, e três delas produzem *falha que parece sucesso*, que é a pior
 espécie.
 
 > **Antes de começar, leia o robô que mais se parece com o seu.**
-> `src/processors/web/robo_remessa/` é o mais recente e o mais próximo deste
-> guia. `doc2you/` é o modelo de "loga 1×/dia, faz o trabalho e fecha".
+> `src/processors/web/robo_retorno/` é o mais recente e o molde deste guia — é o
+> primeiro a consumir a sessão compartilhada (`src/common/clients/smart_sessao.py`),
+> e por isso tem só 4 arquivos. `robo_remessa/` é anterior a esse módulo: copie
+> dele a **lógica de tela** (`gerar.py`), não a sessão. `doc2you/` é o modelo de
+> "loga 1×/dia, faz o trabalho e fecha".
 
 ---
 
@@ -40,9 +43,16 @@ dois no mesmo `user-data-dir` disputam o lock — um simplesmente não sobe.
 |---|---|---|---|---|---|
 | `boletos` | `:99` | 5900 | 6080 | 9222 | `data/boletos/perfil_chrome` |
 | `doc2you` | `:98` | 5901 | 6081 | 9223 | `data/doc2you/perfil_chrome` |
-| `robo_credito` | `:96` | 5902 | 6082 | *(pipe)* | `data/robo_credito/perfil_chrome` |
 | `robo_remessa` | `:97` | 5903 | 6083 | 9224 | `data/robo_remessa/perfil_chrome` |
-| **próximo livre** | **`:95`** | **5904** | **6084** | **9225** | `data/<robo>/perfil_chrome` |
+| `robo_credito` | `:96` | 5902 | 6082 | *(pipe)* | `data/robo_credito/perfil_chrome` |
+| `robo_retorno` | `:95` | 5904 | 6084 | 9225 | `data/robo_retorno/perfil_chrome` |
+| `robo_pagamento` | `:94` | 5905 | 6085 | 9226 | `data/robo_pagamento/perfil_chrome` |
+| **próximo livre** | **`:93`** | **5906** | **6086** | **9227** | `data/<robo>/perfil_chrome` |
+
+> Atualizada em 21/08/2026, quando o `robo_retorno` ocupou o `:95` que esta tabela
+> anunciava como livre. **Quem toma um slot atualiza esta linha no mesmo commit** —
+> tabela desatualizada aqui é dois Chromes no mesmo display, que é a falha nº 1 do §1.
+> Quem roda junto com quem (horários): [`orchestracao.md`](orchestracao.md#quem-roda-quando).
 
 Confira antes de assumir que está livre:
 
@@ -62,13 +72,17 @@ da rede do container.
 src/processors/web/<robo>/
 ├── __init__.py           docstring: o que faz, qual o entrypoint agendado
 ├── <robo>.py             entrypoint: main() + exit codes
-├── _sessao.py            sobe o Chrome, entrega contexto logado, fecha
 ├── <robo>_config.py      TUDO por env; zero caminho de Windows
 ├── run_agendado.sh       wrapper do hub (display + env + python)
 └── docs/README.md        obrigatório — inclusive o que NÃO foi testado
 ```
 
 Prefixo `_` = privado ao robô. Sem prefixo = alguém de fora pode importar.
+
+**Sem `_sessao.py` e sem `login.py` próprios.** Subir o Chrome, detectar sessão
+morta e logar já são de `src/common/clients/smart_sessao.py` (§4 e §5). O
+`robo_remessa` ainda tem os dois porque é anterior a esse módulo; o `robo_retorno`
+é o primeiro a consumi-lo e por isso é **o molde a copiar**.
 
 ---
 
@@ -104,27 +118,35 @@ O `.gitignore` já re-inclui `!config/*.example.*`, então o exemplo entra sozin
 
 ---
 
-## 4. Login: **não reimplemente**
+## 4. Login e sessão: **não reimplemente — importe**
 
-Já existem duas implementações do login do Smart (a sync em `boletos/_sessao.py`,
-a async em `doc2you/_login.py`). Uma terceira é o que a regra 3 do `CLAUDE.md`
-proíbe. Delegue:
+O login do Smart já tem duas implementações (a sync em `boletos/_sessao.py`, a
+async em `doc2you/_login.py`). Uma terceira é o que a regra 3 do `CLAUDE.md`
+proíbe. Desde 08/2026 nem é preciso delegar à mão: está tudo em
+`src/common/clients/smart_sessao.py`, que entrega
+
+| função | o que resolve |
+|---|---|
+| `parece_deslogado(html)` | o `expira.php` — a armadilha nº 1 lá embaixo |
+| `esta_logado(ctx, cfg)` | ping HTTP autenticado contra a tela do robô |
+| `sessao_viva(ctx, cfg)` | ping com retentativa (timeout ≠ sessão morta) |
+| `login(ctx, cfg)` | delega ao fluxo CapSolver já em produção (boletos) |
+| `abrir_chrome(p, cfg)` / `anexar(p, cfg)` | launch com os 2 args do container |
+| `sessao(p, cfg)` | context manager: entrega `ctx` logado e fecha no fim |
 
 ```python
-def login(ctx, log=print):
-    if esta_logado(ctx):
-        return True
-    # boletos._config resolve credencial/ping NO IMPORT e o load_dotenv dele
-    # não sobrescreve env existente -> publicar ANTES, e por isso o import é
-    # preguiçoso (dentro da função).
-    os.environ["BOLETO_EMAIL"] = cfg.EMAIL
-    os.environ["BOLETO_SENHA"] = cfg.SENHA
-    os.environ["URL_SESSAO"]   = cfg.URL_PING     # a SUA tela, não a de boleto
-    from src.processors.web.boletos._sessao import login_automatico_capsolver
-    return login_automatico_capsolver(ctx, timeout_total_s=300)
+from src.common.clients import smart_sessao
+
+with smart_sessao.sessao(p, cfg, log=log) as ctx:
+    if not smart_sessao.sessao_viva(ctx, cfg, log=log):
+        return 3
+    ...          # ctx.request.get/post autenticados
 ```
 
-Aponte `URL_SESSAO` para **a tela que o seu robô precisa**. Assim "logado" passa a
+O `cfg` do seu robô só precisa expor: `EMAIL`, `SENHA`, `URL_PING`, `URL_LOGIN`,
+`USER_DATA_DIR`, `CDP_PORT`, `CDP_URL`, `DISPLAY`, `HEADLESS` e `ensure_dirs()`.
+
+Aponte `URL_PING` para **a tela que o seu robô precisa**. Assim "logado" passa a
 significar "alcança a tela", e um usuário sem permissão falha no começo, com
 mensagem clara — em vez de virar "não há nada a fazer" lá na frente.
 
@@ -134,6 +156,9 @@ Efeito colateral conhecido: screenshot de falha de login cai em
 ---
 
 ## 5. Sessão própria, e o Chrome precisa de dois argumentos
+
+É o que `smart_sessao.abrir_chrome()` faz por você — está aqui para você
+reconhecer os dois argumentos que **não** podem sumir se algum dia editar aquilo:
 
 ```python
 ctx = p.chromium.launch_persistent_context(
@@ -153,7 +178,7 @@ já existe (boletos), porque alguém precisa da sessão o dia inteiro.
 
 ## 6. `run_agendado.sh`
 
-Copie de `robo_remessa/run_agendado.sh` e troque display/portas/nome. Os pontos
+Copie de `robo_retorno/run_agendado.sh` e troque display/portas/nome. Os pontos
 que **não** podem ser simplificados:
 
 ```sh
@@ -170,16 +195,16 @@ PERFIL="${USER_DATA_DIR_X:-/app/data/<robo>/perfil_chrome}"
 pkill -f "user-data-dir=$PERFIL" 2>/dev/null || true
 sleep 1; rm -f "$PERFIL"/Singleton* 2>/dev/null || true
 
-# 3-6) Xvfb :95 + fluxbox + x11vnc 5904 + websockify 6084 (idempotente)
-if ! pgrep -f "Xvfb :95" >/dev/null 2>&1; then
-    rm -f /tmp/.X95-lock /tmp/.X11-unix/X95 2>/dev/null || true
-    Xvfb :95 -screen 0 1920x1080x24 -ac -nolisten tcp > "$LOG/xvfb95.log" 2>&1 &
+# 3-6) Xvfb :94 + fluxbox + x11vnc 5905 + websockify 6085 (idempotente)
+if ! pgrep -f "Xvfb :94" >/dev/null 2>&1; then
+    rm -f /tmp/.X94-lock /tmp/.X11-unix/X94 2>/dev/null || true
+    Xvfb :94 -screen 0 1920x1080x24 -ac -nolisten tcp > "$LOG/xvfb94.log" 2>&1 &
     sleep 3
 fi
-pgrep -f "fluxbox.*:95" >/dev/null 2>&1 || (DISPLAY=:95 fluxbox > "$LOG/fluxbox95.log" 2>&1 &)
+pgrep -f "fluxbox.*:94" >/dev/null 2>&1 || (DISPLAY=:94 fluxbox > "$LOG/fluxbox94.log" 2>&1 &)
 
 # 7) ambiente
-export DISPLAY=:95
+export DISPLAY=:94
 export PYTHONPATH=/app          # resolve `src.processors.web.boletos...`
 export PYTHONUNBUFFERED=1
 

@@ -162,11 +162,17 @@ def abrir_chrome(p, cfg, log=print):
         if not os.path.exists(soquete):
             log(f"  AVISO: display {cfg.DISPLAY} nao esta no ar ({soquete} nao "
                 "existe). Rode pelo run_agendado.sh, que sobe o Xvfb.")
-    log(f"  subindo Chrome | display={cfg.DISPLAY} perfil={cfg.USER_DATA_DIR}")
-    return p.chromium.launch_persistent_context(
+    # O canal 'chrome' e o Google Chrome de verdade, em /opt/google/chrome —
+    # existe no container e NAO existe no host (instala-lo pede root, que o
+    # `operacional2` nao tem). Com SMART_CHROME_CANAL="" cai no Chromium que o
+    # Playwright baixou na venv, que e o que o `scripts/sandbox/_ambiente.py` ja
+    # fazia. O default segue "chrome": nada muda para quem roda no container.
+    canal = os.getenv("SMART_CHROME_CANAL", "chrome")
+    log(f"  subindo Chrome | display={cfg.DISPLAY} perfil={cfg.USER_DATA_DIR}"
+        f" canal={canal or 'chromium (bundled)'}")
+    kwargs = dict(
         user_data_dir=cfg.USER_DATA_DIR,
         headless=cfg.HEADLESS,
-        channel="chrome",
         args=[
             f"--remote-debugging-port={cfg.CDP_PORT}",
             "--start-maximized",
@@ -175,6 +181,9 @@ def abrir_chrome(p, cfg, log=print):
         ],
         no_viewport=True,
     )
+    if canal:
+        kwargs["channel"] = canal
+    return p.chromium.launch_persistent_context(**kwargs)
 
 
 def anexar(p, cfg, log=print):
