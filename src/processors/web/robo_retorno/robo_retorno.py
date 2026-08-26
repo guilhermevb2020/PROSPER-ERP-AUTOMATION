@@ -318,7 +318,8 @@ def rodada(ctx, args, dry):
     log("=" * 66)
     processados = [r for r in resultados if r["processado"]]
     com_erro = [r for r in resultados if not r["processado"] and r["motivo"]
-                and not r["motivo"].startswith("DRY_RUN")]
+                and not r["motivo"].startswith("DRY_RUN")
+                and r["motivo"] != ret.MOTIVO_JA_PROCESSADO]
     titulos = sum(r["titulos"] for r in resultados)
     log(f"RESUMO: {len(resultados)} arquivo(s) | {len(processados)} processado(s) | "
         f"{titulos} titulo(s) no total")

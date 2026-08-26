@@ -42,6 +42,11 @@ from src.common.clients import smart_sessao as autenticacao
 URL_AJAX = cfg.SMART_BASE + "/financeiro/ajax/ajaxretornocnab.php"
 LIMITE_LINHAS = 5000          # mesmo valor do campo #limiteLinhas da tela
 
+#: Motivo do skip por --pular-processados (mesmo conteudo ja processado com
+#: SUCESSO antes). `robo_retorno.py` usa esta constante pra NAO contar o skip
+#: como erro no exit code - e a prova de um sucesso anterior, nao uma pendencia.
+MOTIVO_JA_PROCESSADO = "conteudo identico ja processado (--pular-processados)"
+
 
 class ErroRetorno(Exception):
     """Falha esperada no fluxo (arquivo invalido, banco nao achado, etc.)."""
@@ -323,7 +328,7 @@ def processar(ctx, caminho, dry_run=True, pular_se_processado=False,
     saida["ja_processado"] = ja_processado(ctx, nome)
     if pular_se_processado and saida["ja_processado"] and hashes_ja_feitos \
             and saida["hash"] in hashes_ja_feitos:
-        saida["motivo"] = "conteudo identico ja processado (--pular-processados)"
+        saida["motivo"] = MOTIVO_JA_PROCESSADO
         return saida
 
     try:
