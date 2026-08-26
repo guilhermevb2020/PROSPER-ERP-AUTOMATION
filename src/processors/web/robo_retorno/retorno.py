@@ -35,6 +35,7 @@ import os
 import re
 import urllib.parse
 
+import portao
 import retorno_config as cfg
 # so o `parece_deslogado` interessa aqui — e ele agora e compartilhado
 from src.common.clients import smart_sessao as autenticacao
@@ -283,7 +284,8 @@ def soltar_trava(ctx, nome):
 # fluxo completo de UM arquivo
 # --------------------------------------------------------------------------- #
 def processar(ctx, caminho, dry_run=True, pular_se_processado=False,
-              aceitar_conta_desconhecida=False, hashes_ja_feitos=None):
+              aceitar_conta_desconhecida=False, hashes_ja_feitos=None,
+              usar_portao=False):
     """Roda a sequencia inteira para um .RET. Retorna dict com o resultado.
 
     dry_run=True para no passo 6 (upload): valida banco/conta e mostra quantos
@@ -304,6 +306,12 @@ def processar(ctx, caminho, dry_run=True, pular_se_processado=False,
     aceitar_conta_desconhecida=False: quando o retorno nao casa com conta
     cadastrada a tela PERGUNTA se prossegue. Sem gente pra decidir, o padrao e
     pular e reportar - ligar so se o usuario mandar.
+
+    usar_portao=False: confere a grade do upload, TITULO A TITULO, contra o
+    que o proprio arquivo mandou ANTES de chamar `processar_arquivo` (ver
+    `portao.py` - a ultima defesa contra o BUG-548, a baixa que caiu no
+    titulo de OUTRO sacado). Recusa o ARQUIVO INTEIRO quando algum titulo
+    diverge - nao filtra linha, porque o Smart processa o .RET completo.
     """
     nome = nome_limpo(caminho)
     conteudo = ler_arquivo(caminho)
@@ -353,6 +361,12 @@ def processar(ctx, caminho, dry_run=True, pular_se_processado=False,
         if dry_run:
             saida["motivo"] = "DRY_RUN (upload validado, sem processar)"
             return saida
+        if usar_portao:
+            veredito = portao.avaliar_grade(saida["detalhes"])
+            if not veredito["liberado"]:
+                saida["motivo"] = f"RECUSADO PELO PORTAO: {veredito['sumario']}"
+                saida["portao_recusados"] = veredito["recusados"]
+                return saida
         resultado = processar_arquivo(ctx, nome, dados)
         saida["processado"] = (resultado.get("message") or "OK") == "OK"
         saida["motivo"] = resultado.get("message") or "OK"

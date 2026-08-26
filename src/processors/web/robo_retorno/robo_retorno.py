@@ -24,6 +24,8 @@ SEGURANCA
 - Sessao caida ABORTA a rodada — nunca segue reportando "nada a fazer".
 - Timeout NAO e deslogado: o Smart fica lento depois de processar, e o ping
   estourando nao significa sessao morta (ver smart_sessao.sessao_viva).
+- Grade que diverge do arquivo (titulo errado resolvido pelo Smart) e recusada
+  ANTES da baixa quando --portao esta ligado (ver `portao.py`, BUG-548).
 
 Uso:
     # producao (o wrapper do hub chama isto)
@@ -218,6 +220,13 @@ def relatar(res, args, dry):
     acoes = res.get("acoes") or {}
     if acoes:
         log("            acoes: " + ", ".join(f"{k}={v}" for k, v in acoes.items()))
+    recusados = res.get("portao_recusados") or []
+    if recusados:
+        log(f"            PORTAO RECUSOU O ARQUIVO: {len(recusados)} titulo(s) divergente(s)")
+        for r in recusados[:5]:
+            log(f"              {r['numero_titulo']:12} {r['motivo']} — {r['detalhe']}")
+        if len(recusados) > 5:
+            log(f"              ... (+{len(recusados) - 5})")
     ocor = res.get("ocorrencias") or {}
     if ocor:
         log("            RESULTADO: " + ", ".join(f"{k}={v}" for k, v in ocor.items()))
@@ -279,7 +288,8 @@ def rodada(ctx, args, dry):
                 ctx, caminho, dry_run=dry,
                 pular_se_processado=args.pular_processados,
                 aceitar_conta_desconhecida=args.aceitar_conta_desconhecida,
-                hashes_ja_feitos=hashes_feitos)
+                hashes_ja_feitos=hashes_feitos,
+                usar_portao=args.portao)
         except ret.ErroRetorno as e:
             res = {"arquivo": nome, "nome_smart": ret.nome_limpo(caminho),
                    "conta": None, "titulos": 0, "ja_processado": False,
@@ -403,6 +413,10 @@ def montar_parser():
     ap.add_argument("--csv-criticas", help="grava as criticas neste CSV")
     ap.add_argument("--cdp", action="store_true",
                     help="usa um Chrome JA ABERTO (dev/VNC) em vez de subir o proprio")
+    ap.add_argument("--portao", action="store_true",
+                    help="recusa o ARQUIVO INTEIRO quando a grade diverge do que "
+                         "ele mandou, titulo a titulo, antes de dar a baixa "
+                         "(ver portao.py — protecao contra o BUG-548)")
     return ap
 
 
