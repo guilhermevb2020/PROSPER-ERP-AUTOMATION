@@ -70,3 +70,11 @@ config/credentials.csv
 
 # Perfis do Chrome: cookies de sessao viva do ERP, nunca versionar
 data/*/perfil_chrome/
+
+# Boletos emitidos (producao e sandbox): PDF com nome/CNPJ/valor do sacado.
+# Evidencia operacional, nunca versionada.
+data/boletos/emitidos/
+data/sandbox/
+
+# venv do host para rodar o sandbox dos robos (scripts/sandbox/)
+.venv-sandbox/
