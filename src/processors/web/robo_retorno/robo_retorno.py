@@ -176,6 +176,26 @@ def arquivar(caminho, dry):
     """
     if dry or not cfg.MOVER_PROCESSADOS:
         return None
+    # 4. ⛔ NAO tenta arquivar o que veio de pasta SOMENTE LEITURA. Desde
+    #    26/08/2026 o `run_agendado.sh` aponta o robo para
+    #    `/app/data/cnab_nextcloud/Retornos`, que e o groupfolder do Nextcloud
+    #    montado `rw=false`. Ali o `shutil.move` falha sempre, e como isso
+    #    acontece DEPOIS de a baixa ter sido dada, cada arquivo geraria um
+    #    "AVISO: processou mas NAO consegui arquivar" — um por arquivo, 82 na
+    #    rodada de 26/08. Aviso que sai sempre e aviso que ninguem le.
+    #
+    #    ⭐ E arquivar dali nao faria sentido nem se desse: a arvore do Nextcloud
+    #    JA E o arquivo morto, organizada por ano/mes/dia/banco pelo
+    #    `organizar_remessas`. Quem protege contra reprocessar e o controle por
+    #    hash, nao o move.
+    #
+    #    ⚠️ Por isso `MOVER_PROCESSADOS_RET=False` no env NAO e anomalia a
+    #    consertar: e o valor certo enquanto a origem for a arvore. Esta guarda
+    #    existe para o dia em que alguem o ligar de volta olhando so o default
+    #    do codigo.
+    origem_dir = os.path.dirname(caminho) or "."
+    if not os.access(origem_dir, os.W_OK):
+        return None
     destino_dir = os.path.join(cfg.PASTA_PROCESSADOS, datetime.now().strftime("%Y-%m"))
     nome = os.path.basename(caminho)
     destino = os.path.join(destino_dir, nome)
