@@ -303,6 +303,31 @@ def ciclo(ctx, conta=None, dry_run=True, log=print):
     nome, dados = baixar(ctx, ident, log=log)
     if not dados:
         return saida
+
+    # A grade de GERADO pode devolver so o arquivo MAIS ANTIGO que ja
+    # conheciamos -- nada garante que a remessa NOVA (a que motivou esta
+    # recuperacao) ja apareceu ali. Medido em 28/08/2026: o POST veio
+    # malformado para 5 titulos, e "o mais recente" continuava sendo um
+    # leftover de 27/08 (mesmo nome, mesmo conteudo, recuperado repetidas
+    # vezes). Sem esta checagem isso virava `gerou=True` -- os titulos ja
+    # tinham saido da fila de Pendente no Smart, e ninguem saberia que a
+    # remessa real nunca foi capturada. `caminho` fica None de proposito: e
+    # o que ja liga o alerta existente em robo_pagamento.py (`enviado and
+    # not caminho` -> SAIU_RODADA_INCOMPLETA) sem precisar duplicar a trava.
+    destino = os.path.join(cfg.PASTA_SAIDA, nome)
+    ja_conhecido = os.path.exists(destino)
+    if ja_conhecido:
+        with open(destino, "rb") as f:
+            ja_conhecido = f.read() == dados
+    if ja_conhecido:
+        saida["motivo"] = (
+            f"recuperacao achou so {nome}, ja conhecido -- a remessa NOVA nao "
+            f"apareceu na grade de GERADO. Titulos {saida['ids']} podem ter "
+            f"saido de Pendente sem remessa capturada -- CONFERIR NO SMART"
+        )
+        log(f"  ATENCAO: {saida['motivo']}")
+        return saida
+
     saida["gerou"] = True
     saida["arquivo"] = nome
     saida["caminho"], saida["md5"] = guardar(dados, nome, log=log)
