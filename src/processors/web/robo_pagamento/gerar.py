@@ -119,6 +119,22 @@ def pesquisar_pendentes(ctx, conta=None, log=print):
 # --------------------------------------------------------------------------- #
 # 2) geracao
 # --------------------------------------------------------------------------- #
+def _salvar_resposta_malformada(dados, log=print):
+    """Guarda o bruto da resposta malformada do POST de geracao, para dar para
+    inspecionar depois -- hoje ninguem sabia o QUE vinha nessa resposta, so
+    que ela falhava na checagem de layout (linhas de tamanho errado). So
+    leitura de diagnostico; nao muda nenhum comportamento do robo."""
+    try:
+        cfg.ensure_dirs()
+        caminho = os.path.join(
+            cfg.DEBUG_DIR, f"{datetime.now():%Y%m%d-%H%M%S}_post_malformado.bin")
+        with open(caminho, "wb") as f:
+            f.write(dados)
+        log(f"  resposta malformada salva em {caminho} (diagnostico)")
+    except Exception as e:                                          # noqa: BLE001
+        log(f"  nao consegui salvar a resposta malformada para diagnostico: {e}")
+
+
 def gerar_remessa(ctx, grade, dry_run=True, log=print):
     """Monta (e, se dry_run=False, envia) o POST de geracao.
 
@@ -166,6 +182,10 @@ def gerar_remessa(ctx, grade, dry_run=True, log=print):
         return {"ok": False, "enviado": True, "corpo": corpo, "dados": None,
                 "nome": None,
                 "motivo": "o POST foi e a resposta diz DESLOGADO — CONFERIR no Smart"}
+    # Diagnostico: ninguem tinha olhado o CONTEUDO desta resposta malformada
+    # ainda, so o resumo (linhas de tamanho errado). So leitura, nao muda
+    # nenhum comportamento do robo -- guarda o bruto para inspecionar depois.
+    _salvar_resposta_malformada(dados, log=log)
     return {"ok": False, "enviado": True, "corpo": corpo, "dados": None,
             "nome": None, "html": texto[:1500],
             "motivo": f"o POST foi (status={r.status}) mas a resposta nao e "
