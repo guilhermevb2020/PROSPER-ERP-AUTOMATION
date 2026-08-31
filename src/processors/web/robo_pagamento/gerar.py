@@ -50,11 +50,18 @@ padrao. Gerar remessa de pagamento MOVE DINHEIRO e nao tem desfazer.
 """
 import hashlib
 import os
+import time
 from datetime import datetime
 
 import analise
 import pagamento_config as cfg
 from src.common.clients import smart_sessao
+
+# Quantas vezes tenta reler a grade de GERADO antes de desistir, e quanto
+# espera entre tentativas -- da tempo pro Smart indexar o arquivo novo.
+# So leitura (procurar_gerados + baixar), sem risco de duplicidade.
+_TENTATIVAS_RECUPERACAO = 3
+_ESPERA_RECUPERACAO_S = 5
 
 
 class SessaoCaiu(Exception):
@@ -287,49 +294,62 @@ def ciclo(ctx, conta=None, dry_run=True, log=print):
     # POST foi e nao veio arquivo -> tentar recuperar pela grade de GERADO
     saida["motivo"] = res["motivo"]
     log(f"  ATENCAO: {res['motivo']}")
-    log("  recuperando pela grade de GERADO (so leitura)...")
-    try:
-        arquivos = procurar_gerados(ctx, conta, log=log)
-    except SessaoCaiu:
-        raise
-    except Exception as e:                                          # noqa: BLE001
-        log(f"  a recuperacao falhou: {e}")
-        return saida
-    if not arquivos:
-        log("  a grade de GERADO nao mostrou arquivo — CONFERIR NO SMART")
-        return saida
-    ident = max(arquivos, key=lambda a: int(a["id"]))["id"]
-    log(f"  arquivo mais recente na grade: file={ident}")
-    nome, dados = baixar(ctx, ident, log=log)
-    if not dados:
-        return saida
 
-    # A grade de GERADO pode devolver so o arquivo MAIS ANTIGO que ja
-    # conheciamos -- nada garante que a remessa NOVA (a que motivou esta
-    # recuperacao) ja apareceu ali. Medido em 28/08/2026: o POST veio
-    # malformado para 5 titulos, e "o mais recente" continuava sendo um
-    # leftover de 27/08 (mesmo nome, mesmo conteudo, recuperado repetidas
-    # vezes). Sem esta checagem isso virava `gerou=True` -- os titulos ja
-    # tinham saido da fila de Pendente no Smart, e ninguem saberia que a
-    # remessa real nunca foi capturada. `caminho` fica None de proposito: e
-    # o que ja liga o alerta existente em robo_pagamento.py (`enviado and
-    # not caminho` -> SAIU_RODADA_INCOMPLETA) sem precisar duplicar a trava.
-    destino = os.path.join(cfg.PASTA_SAIDA, nome)
-    ja_conhecido = os.path.exists(destino)
-    if ja_conhecido:
-        with open(destino, "rb") as f:
-            ja_conhecido = f.read() == dados
-    if ja_conhecido:
-        saida["motivo"] = (
-            f"recuperacao achou so {nome}, ja conhecido -- a remessa NOVA nao "
-            f"apareceu na grade de GERADO. Titulos {saida['ids']} podem ter "
-            f"saido de Pendente sem remessa capturada -- CONFERIR NO SMART"
-        )
-        log(f"  ATENCAO: {saida['motivo']}")
-        return saida
+    # O Smart pode levar alguns segundos para indexar o arquivo novo nessa
+    # grade -- medido em 31/08/2026: a checagem rodava no MESMO segundo do
+    # POST malformado, e nas 3 ocorrencias do dia sempre achava so o arquivo
+    # mais antigo ja conhecido (CP2708000028.REM, de 27/08, recuperado
+    # repetidas vezes ao longo de 4 dias). Tenta de novo com espera curta
+    # antes de desistir -- e leitura pura (procurar_gerados + baixar), sem
+    # risco de duplicidade.
+    nome = dados = None
+    for tentativa in range(1, _TENTATIVAS_RECUPERACAO + 1):
+        log(f"  recuperando pela grade de GERADO (so leitura, "
+            f"tentativa {tentativa}/{_TENTATIVAS_RECUPERACAO})...")
+        try:
+            arquivos = procurar_gerados(ctx, conta, log=log)
+        except SessaoCaiu:
+            raise
+        except Exception as e:                                      # noqa: BLE001
+            log(f"  a recuperacao falhou: {e}")
+            return saida
+        if not arquivos:
+            log("  a grade de GERADO nao mostrou arquivo — CONFERIR NO SMART")
+            return saida
+        ident = max(arquivos, key=lambda a: int(a["id"]))["id"]
+        log(f"  arquivo mais recente na grade: file={ident}")
+        nome, dados = baixar(ctx, ident, log=log)
+        if not dados:
+            return saida
 
-    saida["gerou"] = True
-    saida["arquivo"] = nome
-    saida["caminho"], saida["md5"] = guardar(dados, nome, log=log)
-    saida["motivo"] = "recuperado pela grade de GERADO"
+        # A grade de GERADO pode devolver so o arquivo MAIS ANTIGO que ja
+        # conheciamos -- nada garante que a remessa NOVA (a que motivou esta
+        # recuperacao) ja apareceu ali. `caminho` fica None de proposito
+        # quando as tentativas se esgotam: e o que ja liga o alerta existente
+        # em robo_pagamento.py (`enviado and not caminho` ->
+        # SAIU_RODADA_INCOMPLETA) sem precisar duplicar a trava.
+        destino = os.path.join(cfg.PASTA_SAIDA, nome)
+        ja_conhecido = os.path.exists(destino)
+        if ja_conhecido:
+            with open(destino, "rb") as f:
+                ja_conhecido = f.read() == dados
+        if not ja_conhecido:
+            saida["gerou"] = True
+            saida["arquivo"] = nome
+            saida["caminho"], saida["md5"] = guardar(dados, nome, log=log)
+            saida["motivo"] = "recuperado pela grade de GERADO"
+            return saida
+
+        log(f"  ainda e {nome}, ja conhecido")
+        if tentativa < _TENTATIVAS_RECUPERACAO:
+            time.sleep(_ESPERA_RECUPERACAO_S)
+
+    saida["motivo"] = (
+        f"recuperacao tentou {_TENTATIVAS_RECUPERACAO}x "
+        f"({_ESPERA_RECUPERACAO_S}s entre tentativas), achou so {nome}, ja "
+        f"conhecido -- a remessa NOVA nao apareceu na grade de GERADO. "
+        f"Titulos {saida['ids']} podem ter saido de Pendente sem remessa "
+        f"capturada -- CONFERIR NO SMART"
+    )
+    log(f"  ATENCAO: {saida['motivo']}")
     return saida
