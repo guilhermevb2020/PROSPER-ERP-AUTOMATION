@@ -26,6 +26,8 @@ SEGURANCA
   estourando nao significa sessao morta (ver smart_sessao.sessao_viva).
 - Grade que diverge do arquivo (titulo errado resolvido pelo Smart) e recusada
   ANTES da baixa quando --portao esta ligado (ver `portao.py`, BUG-548).
+- A rota sintetica de deposito usa --deposito: portao estrito, movimento
+  individual para processados/rejeitados/inconclusivos e recibo JSON auditavel.
 
 Uso:
     # producao (o wrapper do hub chama isto)
@@ -50,6 +52,7 @@ if _AQUI not in sys.path:
 
 from playwright.sync_api import sync_playwright  # noqa: E402
 
+import artefatos                                   # noqa: E402
 import retorno as ret                             # noqa: E402
 import retorno_config as cfg                      # noqa: E402
 from src.common.clients import smart_sessao       # noqa: E402
@@ -227,6 +230,9 @@ def relatar(res, args, dry):
             log(f"              {r['numero_titulo']:12} {r['motivo']} — {r['detalhe']}")
         if len(recusados) > 5:
             log(f"              ... (+{len(recusados) - 5})")
+    erros_grade = res.get("portao", {}).get("erros_grade") or []
+    for erro in erros_grade:
+        log(f"            PORTAO RECUSOU O ARQUIVO: {erro}")
     ocor = res.get("ocorrencias") or {}
     if ocor:
         log("            RESULTADO: " + ", ".join(f"{k}={v}" for k, v in ocor.items()))
@@ -289,11 +295,14 @@ def rodada(ctx, args, dry):
                 pular_se_processado=args.pular_processados,
                 aceitar_conta_desconhecida=args.aceitar_conta_desconhecida,
                 hashes_ja_feitos=hashes_feitos,
-                usar_portao=args.portao)
+                usar_portao=args.portao,
+                modo_deposito=args.deposito)
         except ret.ErroRetorno as e:
             res = {"arquivo": nome, "nome_smart": ret.nome_limpo(caminho),
                    "conta": None, "titulos": 0, "ja_processado": False,
-                   "processado": False, "motivo": str(e)}
+                   "processado": False, "motivo": str(e),
+                   "passo_irreversivel_chamado": False,
+                   "estado_final": "erro"}
             if "sessao do Smart caiu" in str(e):
                 log(f"  [{i}/{len(alvos)}] {nome}: {e}")
                 log("ABORTANDO: a sessao morreu no meio da rodada.")
@@ -304,7 +313,9 @@ def rodada(ctx, args, dry):
             res = {"arquivo": nome, "nome_smart": ret.nome_limpo(caminho),
                    "conta": None, "titulos": 0, "ja_processado": False,
                    "processado": False,
-                   "motivo": f"{type(e).__name__}: {str(e)[:120]}"}
+                   "motivo": f"{type(e).__name__}: {str(e)[:120]}",
+                   "passo_irreversivel_chamado": False,
+                   "estado_final": "erro"}
 
         marca = ("PROCESSADO" if res["processado"]
                  else ("dry-run" if dry and not res["motivo"].startswith(
@@ -335,7 +346,28 @@ def rodada(ctx, args, dry):
         linha["divergencias"] = "; ".join(res.get("divergencias") or [])
         # o controle vem ANTES de mover: se o move falhar, o registro ja existe
         gravar_controle(linha)
-        if res.get("processado"):
+        if args.deposito:
+            categoria = artefatos.categoria_do_resultado(res)
+            if categoria and not dry:
+                try:
+                    destino = artefatos.mover_sem_sobrescrever(
+                        caminho, args.pasta, categoria
+                    )
+                    res["arquivado_em"] = destino
+                    res["destino_relativo"] = os.path.relpath(destino, args.pasta)
+                    log(f"            arquivado -> {res['destino_relativo']}")
+                except OSError as e:
+                    res["artefato_erro"] = f"nao consegui mover para {categoria}: {e}"
+                    log(f"            ERRO DE ARTEFATO: {res['artefato_erro']}")
+            if args.recibos_dir:
+                try:
+                    recibo = artefatos.gravar_recibo_atomico(args.recibos_dir, res)
+                    res["recibo_em"] = recibo
+                    log(f"            recibo -> {os.path.relpath(recibo, args.pasta)}")
+                except OSError as e:
+                    res["artefato_erro"] = f"nao consegui gravar recibo: {e}"
+                    log(f"            ERRO DE ARTEFATO: {res['artefato_erro']}")
+        elif res.get("processado"):
             destino = arquivar(caminho, dry)
             if destino:
                 res["arquivado_em"] = destino
@@ -347,9 +379,15 @@ def rodada(ctx, args, dry):
     # ----------------------------------------------------------------------- #
     log("=" * 66)
     processados = [r for r in resultados if r["processado"]]
-    com_erro = [r for r in resultados if not r["processado"] and r["motivo"]
-                and not r["motivo"].startswith("DRY_RUN")
-                and r["motivo"] != ret.MOTIVO_JA_PROCESSADO]
+    com_erro = [
+        r for r in resultados
+        if r.get("artefato_erro")
+        or (
+            not r["processado"] and r["motivo"]
+            and not r["motivo"].startswith("DRY_RUN")
+            and r["motivo"] != ret.MOTIVO_JA_PROCESSADO
+        )
+    ]
     titulos = sum(r["titulos"] for r in resultados)
     log(f"RESUMO: {len(resultados)} arquivo(s) | {len(processados)} processado(s) | "
         f"{titulos} titulo(s) no total")
@@ -417,6 +455,11 @@ def montar_parser():
                     help="recusa o ARQUIVO INTEIRO quando a grade diverge do que "
                          "ele mandou, titulo a titulo, antes de dar a baixa "
                          "(ver portao.py — protecao contra o BUG-548)")
+    ap.add_argument("--deposito", action="store_true",
+                    help="modo estrito da baixa por deposito: CNAB/grade/resultado "
+                         "precisam fechar exatamente")
+    ap.add_argument("--recibos-dir",
+                    help="grava recibos JSON auditaveis (usado no modo deposito)")
     return ap
 
 
@@ -427,6 +470,12 @@ def main():
         pass
 
     args = montar_parser().parse_args()
+    if args.deposito:
+        args.portao = True
+        args.pular_processados = True
+        if not args.recibos_dir:
+            log("ERRO: --deposito exige --recibos-dir no volume compartilhado.")
+            return SAIU_PASTA_INVALIDA
     dry = cfg.DRY_RUN and not args.pra_valer
 
     if not os.path.isdir(args.pasta):

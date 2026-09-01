@@ -64,6 +64,10 @@ RESUMO = "resumo"          # linha do rodape da grade, nao e titulo
 POR_VALOR = "valor no Smart diverge do valor no arquivo"
 POR_SEM_CASAMENTO = "o Smart nao resolveu titulo para esta linha"
 POR_STATUS = "status diferente de OK"
+POR_VALOR_ARQUIVO_ILEGIVEL = "valor do arquivo vazio ou ilegivel"
+POR_ACAO = "acao diferente de Liquidado"
+POR_GRADE_VAZIA = "grade do upload sem titulo avaliavel"
+POR_QUANTIDADE = "quantidade do arquivo, upload e grade divergem"
 
 
 def _num(texto):
@@ -125,7 +129,8 @@ def e_linha_de_resumo(linha):
     return sem_titulo and sem_status
 
 
-def avaliar_titulo(linha, exigir_status_ok=False):
+def avaliar_titulo(linha, exigir_status_ok=False, exigir_valor_arquivo=False,
+                   exigir_acao=None):
     """Um titulo da grade -> (veredito, motivo, detalhe).
 
     `detalhe` traz os numeros que sustentam a recusa, para o relato nao obrigar
@@ -143,6 +148,10 @@ def avaliar_titulo(linha, exigir_status_ok=False):
                 (f"arquivo={linha.get('valor_titulo_arq') or '-'} "
                  f"smart={linha.get('valor_titulo') or '(vazio)'}"))
 
+    if exigir_valor_arquivo and arquivo is None:
+        return (RECUSADO, POR_VALOR_ARQUIVO_ILEGIVEL,
+                f"arquivo={linha.get('valor_titulo_arq') or '(vazio)'!r}")
+
     # o par que discrimina o BUG-548
     if arquivo is not None and smart != arquivo:
         return (RECUSADO, POR_VALOR,
@@ -153,10 +162,16 @@ def avaliar_titulo(linha, exigir_status_ok=False):
         return (RECUSADO, POR_STATUS,
                 f"status={(linha.get('status') or '(vazio)')!r}")
 
+    if exigir_acao and _sem_acento(linha.get("acao_tomada")) != _sem_acento(exigir_acao):
+        return (RECUSADO, POR_ACAO,
+                f"acao={(linha.get('acao_tomada') or '(vazio)')!r}")
+
     return APROVADO, "", ""
 
 
-def avaliar_grade(detalhes, exigir_status_ok=False):
+def avaliar_grade(detalhes, exigir_status_ok=False, quantidade_esperada=None,
+                  quantidade_arquivo=None, exigir_valor_arquivo=False,
+                  exigir_acao=None):
     """A grade inteira -> veredito do ARQUIVO.
 
     Args:
@@ -171,7 +186,12 @@ def avaliar_grade(detalhes, exigir_status_ok=False):
     """
     recusados, avaliados, resumo = [], 0, 0
     for linha in (detalhes or []):
-        veredito, motivo, detalhe = avaliar_titulo(linha, exigir_status_ok)
+        veredito, motivo, detalhe = avaliar_titulo(
+            linha,
+            exigir_status_ok=exigir_status_ok,
+            exigir_valor_arquivo=exigir_valor_arquivo,
+            exigir_acao=exigir_acao,
+        )
         if veredito == RESUMO:
             resumo += 1
             continue
@@ -184,14 +204,148 @@ def avaliar_grade(detalhes, exigir_status_ok=False):
                 "acao_tomada": (linha.get("acao_tomada") or "").strip(),
             })
 
-    liberado = not recusados
+    erros_grade = []
+    if quantidade_esperada is not None:
+        try:
+            esperada = int(quantidade_esperada)
+        except (TypeError, ValueError):
+            esperada = -1
+        if esperada <= 0:
+            erros_grade.append(
+                f"{POR_QUANTIDADE}: upload={quantidade_esperada!r}"
+            )
+        if avaliados == 0:
+            erros_grade.append(POR_GRADE_VAZIA)
+        if esperada >= 0 and avaliados != esperada:
+            erros_grade.append(
+                f"{POR_QUANTIDADE}: upload={esperada} grade={avaliados}"
+            )
+        if quantidade_arquivo is not None:
+            try:
+                no_arquivo = int(quantidade_arquivo)
+            except (TypeError, ValueError):
+                no_arquivo = -1
+            if no_arquivo <= 0 or no_arquivo != esperada:
+                erros_grade.append(
+                    f"{POR_QUANTIDADE}: arquivo={quantidade_arquivo!r} "
+                    f"upload={esperada} grade={avaliados}"
+                )
+
+    liberado = not recusados and not erros_grade
     if liberado:
         sumario = f"{avaliados} titulo(s) conferido(s), nenhuma divergencia"
     else:
         porque = {}
         for r in recusados:
             porque[r["motivo"]] = porque.get(r["motivo"], 0) + 1
-        sumario = (f"{len(recusados)} de {avaliados} titulo(s) recusado(s): "
-                   + ", ".join(f"{m} ({q})" for m, q in sorted(porque.items())))
+        partes = []
+        if recusados:
+            partes.append(
+                f"{len(recusados)} de {avaliados} titulo(s) recusado(s): "
+                + ", ".join(f"{m} ({q})" for m, q in sorted(porque.items()))
+            )
+        partes.extend(erros_grade)
+        sumario = "; ".join(partes)
     return {"liberado": liberado, "avaliados": avaliados, "resumo": resumo,
-            "recusados": recusados, "sumario": sumario}
+            "recusados": recusados, "erros_grade": erros_grade,
+            "sumario": sumario}
+
+
+def avaliar_cnab_deposito(linhas):
+    """Valida o envelope CNAB-400 fabricado para a baixa por deposito.
+
+    O identificador de 25 digitos em ``[37:62]`` e a chave exata do boleto no
+    Smart. Sem ele o Smart cai no nosso numero reciclado entre cedentes.
+    """
+    registros = list(linhas or [])
+    erros = []
+    for numero, linha in enumerate(registros, 1):
+        if len(linha) != 400:
+            erros.append(f"linha {numero} tem {len(linha)} posicoes, esperado 400")
+
+    if len(registros) < 3:
+        erros.append("arquivo precisa de cabecalho, detalhe e trailer")
+        detalhes = []
+    else:
+        if not registros[0].startswith("0"):
+            erros.append("cabecalho CNAB nao inicia com registro 0")
+        if not registros[-1].startswith("9"):
+            erros.append("trailer CNAB nao inicia com registro 9")
+        detalhes = registros[1:-1]
+
+    if not detalhes:
+        erros.append("arquivo sem detalhe CNAB")
+    for numero, linha in enumerate(detalhes, 2):
+        if not linha.startswith("1"):
+            erros.append(f"linha {numero} nao e detalhe tipo 1")
+            continue
+        identificador = linha[37:62] if len(linha) >= 62 else ""
+        if not re.fullmatch(r"\d{25}", identificador):
+            erros.append(
+                f"linha {numero} sem identificador CNAB de 25 digitos em [37:62]"
+            )
+
+    return {
+        "liberado": not erros,
+        "quantidade": len(detalhes),
+        "erros": erros,
+        "sumario": (
+            f"{len(detalhes)} detalhe(s) CNAB valido(s)"
+            if not erros else "; ".join(erros)
+        ),
+    }
+
+
+def _contador_inteiro(valor):
+    """Contador do Smart como inteiro; ausente e zero, ilegivel e inconclusivo."""
+    if valor in (None, "", False):
+        return 0
+    try:
+        return int(valor)
+    except (TypeError, ValueError):
+        return None
+
+
+def avaliar_resultado_deposito(resposta, quantidade_esperada):
+    """A resposta pos-passo irreversivel prova exatamente as baixas pedidas?"""
+    erros = []
+    if not isinstance(resposta, dict):
+        return {
+            "comprovado": False,
+            "erros": ["resposta do PROCESSAR_ARQUIVO nao e objeto JSON"],
+            "sumario": "resposta do PROCESSAR_ARQUIVO nao e objeto JSON",
+        }
+
+    if resposta.get("message") != "OK":
+        erros.append(f"message={resposta.get('message')!r}, esperado 'OK'")
+
+    try:
+        esperada = int(quantidade_esperada)
+    except (TypeError, ValueError):
+        esperada = -1
+    liquidacao = _contador_inteiro(resposta.get("liquidacao"))
+    refinan = _contador_inteiro(resposta.get("refinan"))
+    if esperada <= 0 or liquidacao != esperada:
+        erros.append(f"liquidacao={liquidacao!r}, esperado {esperada}")
+    if refinan != 0:
+        erros.append(f"refinan={refinan!r}, esperado 0")
+
+    ignorar = {
+        "message", "varRetorno2", "dateMsgRetorno", "DifSistema",
+        "liquidacao", "refinan",
+    }
+    outros = []
+    for chave, valor in resposta.items():
+        if chave in ignorar:
+            continue
+        contador = _contador_inteiro(valor)
+        if contador is None or contador != 0:
+            outros.append(f"{chave}={valor!r}")
+    if outros:
+        erros.append("outros resultados: " + ", ".join(sorted(outros)))
+
+    return {
+        "comprovado": not erros,
+        "erros": erros,
+        "sumario": "baixa comprovada pelo Smart" if not erros else "; ".join(erros),
+    }

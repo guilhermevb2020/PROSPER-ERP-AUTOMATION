@@ -285,7 +285,7 @@ def soltar_trava(ctx, nome):
 # --------------------------------------------------------------------------- #
 def processar(ctx, caminho, dry_run=True, pular_se_processado=False,
               aceitar_conta_desconhecida=False, hashes_ja_feitos=None,
-              usar_portao=False):
+              usar_portao=False, modo_deposito=False):
     """Roda a sequencia inteira para um .RET. Retorna dict com o resultado.
 
     dry_run=True para no passo 6 (upload): valida banco/conta e mostra quantos
@@ -312,14 +312,24 @@ def processar(ctx, caminho, dry_run=True, pular_se_processado=False,
     `portao.py` - a ultima defesa contra o BUG-548, a baixa que caiu no
     titulo de OUTRO sacado). Recusa o ARQUIVO INTEIRO quando algum titulo
     diverge - nao filtra linha, porque o Smart processa o .RET completo.
+
+    modo_deposito=False: preserva o retorno bancario normal. Quando True, exige
+    o arquivo sintetico com identificador/hash, faz o portao fechar arquivo,
+    upload e grade, e so considera processado quando a resposta prova exatamente
+    `liquidacao=quantidade`, sem `refinan` nem outro resultado.
     """
     nome = nome_limpo(caminho)
     conteudo = ler_arquivo(caminho)
+    normalizado = conteudo.encode("iso-8859-1", "replace")
+    with open(caminho, "rb") as arquivo_bruto:
+        bruto = arquivo_bruto.read()
     saida = {"arquivo": os.path.basename(caminho), "nome_smart": nome,
              "titulos": 0, "conta": None, "processado": False,
              "ja_processado": False, "motivo": "",
+             "passo_irreversivel_chamado": False,
              # IDENTIDADE PELO CONTEUDO, nao pelo nome (ver nota abaixo)
-             "hash": hashlib.md5(conteudo.encode("iso-8859-1", "replace")).hexdigest()}
+             "hash": hashlib.md5(normalizado).hexdigest(),
+             "sha256": hashlib.sha256(bruto).hexdigest()}
     linhas = [l for l in conteudo.splitlines() if l.strip()]
     if not linhas:
         saida["motivo"] = "arquivo vazio"
@@ -327,6 +337,34 @@ def processar(ctx, caminho, dry_run=True, pular_se_processado=False,
     if len(linhas) > LIMITE_LINHAS:
         saida["motivo"] = f"{len(linhas)} linhas (limite {LIMITE_LINHAS})"
         return saida
+
+    arquivo_deposito = None
+    if modo_deposito:
+        arquivo_deposito = portao.avaliar_cnab_deposito(linhas)
+        sufixo_hash = saida["sha256"][:16].upper()
+        if (
+            not re.fullmatch(r"DEP\d+[0-9A-F]{16}\.RET", saida["arquivo"])
+            or not saida["arquivo"].endswith(f"{sufixo_hash}.RET")
+        ):
+            arquivo_deposito["liberado"] = False
+            arquivo_deposito["erros"].append(
+                "nome do arquivo nao carrega o prefixo do SHA-256 do conteudo"
+            )
+            arquivo_deposito["sumario"] = "; ".join(arquivo_deposito["erros"])
+        saida["arquivo_deposito"] = arquivo_deposito
+        if not arquivo_deposito["liberado"]:
+            veredito = {
+                "liberado": False,
+                "avaliados": 0,
+                "resumo": 0,
+                "recusados": [],
+                "erros_grade": arquivo_deposito["erros"],
+                "sumario": arquivo_deposito["sumario"],
+            }
+            saida["portao"] = veredito
+            saida["estado_final"] = "recusado_portao"
+            saida["motivo"] = f"RECUSADO PELO PORTAO: {veredito['sumario']}"
+            return saida
 
     if em_processamento(ctx, nome):
         saida["motivo"] = "ja esta em processamento no Smart"
@@ -337,6 +375,7 @@ def processar(ctx, caminho, dry_run=True, pular_se_processado=False,
     if pular_se_processado and saida["ja_processado"] and hashes_ja_feitos \
             and saida["hash"] in hashes_ja_feitos:
         saida["motivo"] = MOTIVO_JA_PROCESSADO
+        saida["estado_final"] = "ja_processado"
         return saida
 
     try:
@@ -358,23 +397,66 @@ def processar(ctx, caminho, dry_run=True, pular_se_processado=False,
         saida["criticas"] = dados.get("criticas") or []
         saida["data_hora"] = dados.get("dataHora")
         saida["valor_total"] = dados.get("valorTotalTitulos")
-        if dry_run:
-            saida["motivo"] = "DRY_RUN (upload validado, sem processar)"
-            return saida
-        if usar_portao:
-            veredito = portao.avaliar_grade(saida["detalhes"])
+        if usar_portao or modo_deposito:
+            veredito = portao.avaliar_grade(
+                saida["detalhes"],
+                exigir_status_ok=modo_deposito,
+                quantidade_esperada=saida["titulos"] if modo_deposito else None,
+                quantidade_arquivo=(
+                    arquivo_deposito["quantidade"] if modo_deposito else None
+                ),
+                exigir_valor_arquivo=modo_deposito,
+                exigir_acao="Liquidado" if modo_deposito else None,
+            )
+            saida["portao"] = veredito
             if not veredito["liberado"]:
                 saida["motivo"] = f"RECUSADO PELO PORTAO: {veredito['sumario']}"
                 saida["portao_recusados"] = veredito["recusados"]
+                saida["estado_final"] = "recusado_portao"
                 return saida
-        resultado = processar_arquivo(ctx, nome, dados)
-        saida["processado"] = (resultado.get("message") or "OK") == "OK"
-        saida["motivo"] = resultado.get("message") or "OK"
+        if dry_run:
+            saida["estado_final"] = "dry_run"
+            saida["motivo"] = "DRY_RUN (upload e portao validados, sem processar)"
+            return saida
+
+        saida["passo_irreversivel_chamado"] = True
+        try:
+            resultado = processar_arquivo(ctx, nome, dados)
+        except Exception as exc:
+            if not modo_deposito:
+                raise
+            saida["estado_final"] = "inconclusivo"
+            saida["inconclusivo"] = True
+            saida["motivo"] = (
+                "RESULTADO INCONCLUSIVO APOS PROCESSAR_ARQUIVO: "
+                f"{type(exc).__name__}: {str(exc)[:160]}"
+            )
+            return saida
+
         saida["resposta_processamento"] = resultado
         # conferencia do que o Smart FEZ (contador por tipo de ocorrencia)
         saida["ocorrencias"] = resumo_processamento(resultado)
-        saida["divergencias"] = conferir_divergencias(saida.get("acoes"),
-                                                      saida["ocorrencias"])
+        if modo_deposito:
+            confirmacao = portao.avaliar_resultado_deposito(
+                resultado, saida["titulos"]
+            )
+            saida["confirmacao_smart"] = confirmacao
+            saida["processado"] = confirmacao["comprovado"]
+            saida["inconclusivo"] = not confirmacao["comprovado"]
+            saida["estado_final"] = (
+                "processado_smart" if confirmacao["comprovado"] else "inconclusivo"
+            )
+            saida["motivo"] = (
+                "OK" if confirmacao["comprovado"]
+                else f"RESULTADO INCONCLUSIVO: {confirmacao['sumario']}"
+            )
+            saida["divergencias"] = confirmacao["erros"]
+        else:
+            saida["processado"] = (resultado.get("message") or "OK") == "OK"
+            saida["motivo"] = resultado.get("message") or "OK"
+            saida["divergencias"] = conferir_divergencias(
+                saida.get("acoes"), saida["ocorrencias"]
+            )
         try:
             saida["criticas"] = verificar_criticas(ctx, nome, dados)
         except ErroRetorno:

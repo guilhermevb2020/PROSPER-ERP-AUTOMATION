@@ -78,24 +78,18 @@ RC="/tmp/robo_deposito_rc.$$"
 # novo — contou em `refinan` em vez de `liquidacao` e por sorte nao criou segunda
 # quitacao. ⚠️ Sorte nao e desenho: a flag e a trava.
 { python /app/src/processors/web/robo_retorno/robo_retorno.py \
-      --pasta "$PASTA" --portao --detalhes --pra-valer --pular-processados "$@"; \
+      --pasta "$PASTA" --deposito --portao --detalhes --pra-valer \
+      --pular-processados --recibos-dir "$PASTA/_RESULTADOS" "$@"; \
   echo $? > "$RC"; } 2>&1 | tee -a "$LOGROBO"
 CODIGO=$(cat "$RC" 2>/dev/null || echo 1)
 rm -f "$RC"
 
-# ⭐ SEGUNDA trava, independente da primeira: tira da fila o que ja subiu. Aqui a pasta
-# e NOSSA e gravavel (nao e o Nextcloud `:ro`), entao mover e possivel — e mover e o
-# que impede a pasta de crescer e cada rodada reler tudo. So move quando a rodada
-# fechou limpa: falha deixa o arquivo visivel, e a proxima tentativa o pega.
-if [ "$CODIGO" = "0" ]; then
-    DESTINO="$PASTA/_PROCESSADOS/$(date +%Y-%m)"
-    mkdir -p "$DESTINO" 2>/dev/null || true
-    for f in "$PASTA"/*.RET "$PASTA"/*.ret; do
-        [ -f "$f" ] || continue
-        mv "$f" "$DESTINO/$(basename "$f")" 2>/dev/null \
-          && echo "  arquivado -> _PROCESSADOS/$(date +%Y-%m)/$(basename "$f")" >> "$LOGROBO"
-    done
-fi
+# O Python move CADA arquivo individualmente, sem sobrescrever:
+#   aprovado e comprovado -> _PROCESSADOS
+#   recusado antes da baixa -> _REJEITADOS
+#   resposta inconclusiva depois do passo irreversivel -> _INCONCLUSIVOS
+# Erro operacional anterior ao passo irreversivel permanece na entrada para retry.
+# O recibo JSON fica em _RESULTADOS e e a ponte auditavel com process-automation.
 
 echo "===== fim $(date '+%F %T %Z') exit=$CODIGO =====" >> "$LOGROBO"
 exit "$CODIGO"

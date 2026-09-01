@@ -45,10 +45,12 @@ Os arquivos vão **soltos** na raiz da entrada — o robô não desce um nível.
 isso que `_PROCESSADOS/` pode morar lá dentro sem atrapalhar.
 
 ⭐ **Este script tem um SEGUNDO consumidor desde 26/08/2026:** `baixar_deposito_no_erp`
-(`run_deposito.sh`, pasta `_deposito`, `--portao` sempre ligado) chama o
-mesmo `robo_retorno.py`/`retorno.py` com uma flag `--portao` que NÃO existe
-para a task acima — ver [`PORTAO.md`](PORTAO.md) antes de mexer em qualquer
-uma das duas.
+(`run_deposito.sh`, pasta `_deposito`, `--deposito` e `--portao` sempre ligados)
+chama o mesmo `robo_retorno.py`/`retorno.py`. O modo depósito é estrito e não
+altera o retorno bancário: exige CNAB-400 com identificador de 25 dígitos,
+quantidade idêntica no arquivo/upload/grade, valor legível e igual, ação
+`Liquidado`, status `OK` e, depois do passo irreversível, `message=OK`,
+`liquidacao=quantidade` e `refinan=0`.
 
 ---
 
@@ -71,6 +73,24 @@ Três cuidados no arquivamento, e cada um tem motivo:
 Se o move falhar **depois** de processar, o arquivo volta a ser candidato na
 rodada seguinte. Quem protege é o controle por hash — por isso o comando
 agendado usa **`--pular-processados`**.
+
+Na rota de **depósito**, o ciclo é deliberadamente mais fechado e o movimento é
+individual — uma recusa não prende os arquivos bons da mesma rodada:
+
+```text
+_deposito/ARQ.RET --comprovado no Smart--> _PROCESSADOS/AAAA-MM/
+                  --portão recusou-------> _REJEITADOS/AAAA-MM/
+                  --resposta inconclusiva
+                    após PROCESSAR--------> _INCONCLUSIVOS/AAAA-MM/
+                  --erro antes de PROCESSAR-> fica na entrada para retry
+
+cada tentativa --------------------------> _RESULTADOS/AAAA-MM-DD/*.json
+```
+
+O recibo registra os hashes, a grade, o portão e a resposta bruta. Ele não
+afirma sozinho que o DWH já refletiu a baixa; o `process-automation` só confirma
+`enviado_erp_em` quando o recibo comprova a liquidação **e** o título saiu de
+aberto e apareceu em quitado.
 
 ---
 

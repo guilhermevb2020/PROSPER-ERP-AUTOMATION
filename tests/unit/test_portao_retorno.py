@@ -43,13 +43,19 @@ sys.path.insert(0, str(RAIZ / "src" / "processors" / "web" / "robo_retorno"))
 
 from portao import (  # noqa: E402  (o sys.path tem de vir antes)
     APROVADO,
+    POR_ACAO,
+    POR_GRADE_VAZIA,
+    POR_QUANTIDADE,
     POR_SEM_CASAMENTO,
     POR_STATUS,
     POR_VALOR,
+    POR_VALOR_ARQUIVO_ILEGIVEL,
     RECUSADO,
     RESUMO,
     _num,
+    avaliar_cnab_deposito,
     avaliar_grade,
+    avaliar_resultado_deposito,
     avaliar_titulo,
     e_linha_de_resumo,
 )
@@ -272,6 +278,17 @@ def test_None_NAO_e_tratado_como_zero_quando_o_lado_do_ARQUIVO_vem_ilegivel():
             f"valor_titulo_arq={ilegivel!r} produziu {veredito}/{motivo}")
 
 
+@pytest.mark.parametrize("ilegivel", ["", None, "---"])
+def test_modo_estrito_recusa_valor_do_arquivo_ilegivel(ilegivel):
+    veredito, motivo, _ = avaliar_titulo(
+        _linha_bug548(valor_titulo_arq=ilegivel),
+        exigir_valor_arquivo=True,
+    )
+
+    assert veredito == RECUSADO
+    assert motivo == POR_VALOR_ARQUIVO_ILEGIVEL
+
+
 # ---------------------------------------------------------------------------
 # POR_SEM_CASAMENTO - o Smart nao resolveu titulo
 # ---------------------------------------------------------------------------
@@ -378,6 +395,91 @@ def test_grade_vazia_nao_estoura_e_libera__nao_ha_o_que_recusar(detalhes):
     assert grade["avaliados"] == 0
     assert grade["resumo"] == 0
     assert grade["recusados"] == []
+
+
+def test_grade_vazia_e_recusada_quando_ha_quantidade_esperada():
+    grade = avaliar_grade([], quantidade_esperada=1, quantidade_arquivo=1)
+
+    assert grade["liberado"] is False
+    assert POR_GRADE_VAZIA in grade["erros_grade"]
+
+
+@pytest.mark.parametrize("upload,arquivo", [(0, 0), (2, 1), (1, 2)])
+def test_modo_estrito_exige_mesma_quantidade_no_arquivo_upload_e_grade(
+        upload, arquivo):
+    grade = avaliar_grade(
+        [_linha_bug548(valor_titulo="6.108,23")],
+        quantidade_esperada=upload,
+        quantidade_arquivo=arquivo,
+    )
+
+    assert grade["liberado"] is False
+    assert POR_QUANTIDADE in grade["sumario"]
+
+
+def test_modo_deposito_exige_acao_liquidado_e_status_ok():
+    acao = avaliar_grade(
+        [_linha_bug548(valor_titulo="6.108,23", acao_tomada="Baixa")],
+        quantidade_esperada=1,
+        quantidade_arquivo=1,
+        exigir_acao="Liquidado",
+        exigir_status_ok=True,
+        exigir_valor_arquivo=True,
+    )
+    status = avaliar_grade(
+        [_linha_bug548(valor_titulo="6.108,23", status="PENDENTE")],
+        quantidade_esperada=1,
+        quantidade_arquivo=1,
+        exigir_acao="Liquidado",
+        exigir_status_ok=True,
+        exigir_valor_arquivo=True,
+    )
+
+    assert acao["recusados"][0]["motivo"] == POR_ACAO
+    assert status["recusados"][0]["motivo"] == POR_STATUS
+
+
+def _cnab_deposito(identificador="0" * 25):
+    cabecalho = "0" + " " * 399
+    detalhe = list("1" + " " * 399)
+    detalhe[37:62] = identificador
+    trailer = "9" + " " * 399
+    return [cabecalho, "".join(detalhe), trailer]
+
+
+def test_cnab_deposito_exige_400_posicoes_e_identificador_de_25_digitos():
+    valido = avaliar_cnab_deposito(_cnab_deposito())
+    sem_id = avaliar_cnab_deposito(_cnab_deposito(" " * 25))
+    curto = avaliar_cnab_deposito(["0" * 399, "1" * 400, "9" * 400])
+
+    assert valido == {
+        "liberado": True,
+        "quantidade": 1,
+        "erros": [],
+        "sumario": "1 detalhe(s) CNAB valido(s)",
+    }
+    assert sem_id["liberado"] is False
+    assert "identificador CNAB" in sem_id["sumario"]
+    assert curto["liberado"] is False
+    assert "399 posicoes" in curto["sumario"]
+
+
+def test_resultado_deposito_so_comprova_liquidacao_exata_sem_refinan():
+    comprovado = avaliar_resultado_deposito(
+        {"message": "OK", "liquidacao": "1", "refinan": None}, 1
+    )
+    sem_message = avaliar_resultado_deposito({"liquidacao": 1}, 1)
+    refinanciado = avaliar_resultado_deposito(
+        {"message": "OK", "liquidacao": 1, "refinan": 1}, 1
+    )
+    outro = avaliar_resultado_deposito(
+        {"message": "OK", "liquidacao": 1, "baixa": 1}, 1
+    )
+
+    assert comprovado["comprovado"] is True
+    assert sem_message["comprovado"] is False
+    assert refinanciado["comprovado"] is False
+    assert outro["comprovado"] is False
 
 
 # ---------------------------------------------------------------------------
