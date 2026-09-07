@@ -64,11 +64,13 @@ e modo seco do retorno de pagamento sem mover arquivos.
 
 ## Configuração e outras dependências
 
-Nova varredura exata de 3.728 arquivos do ERP não encontrou cópias dos segredos
+Nova varredura exata de 3.730 arquivos do ERP não encontrou cópias dos segredos
 conhecidos fora da credencial VNC materializada em `.env.guardian`. Não houve
 arquivos pulados por erro de leitura. Git, ambientes virtuais e perfis do Chrome
 ficam fora da varredura; cookies não são fonte administrativa de configuração.
-O data-hub teve 2.625 arquivos verificados, sem correspondências ou erros de leitura.
+O data-hub teve 3.253 arquivos verificados após seu deploy, sem correspondências
+ou erros de leitura. A busca foi ampliada para nomes SECRET/TOKEN/PRIVATE_KEY/ACCESS_KEY,
+além de SENHA/PASSWORD/API_KEY; considera valores conhecidos com oito ou mais caracteres.
 Esses números não representam busca universal de segredos desconhecidos.
 
 O texto contraditório do alerta de desativação foi corrigido no commit `b9367b4`
