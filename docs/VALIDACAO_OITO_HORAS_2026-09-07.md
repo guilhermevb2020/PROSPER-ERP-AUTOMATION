@@ -2,7 +2,8 @@
 
 **Em andamento.** Janela solicitada: 07/09 16:34:17 até 08/09 00:34:17,
 horário de Brasília. A rodada manual iniciou às 17:03 e abrange as 11 tarefas
-finitas habilitadas. Crédito é acompanhado na execução 2665935, sem duplicação.
+finitas habilitadas. Crédito foi acompanhado na execução 2665935, sem duplicação,
+até encerrar normalmente às 18:50:28, com exit 0, no fim do expediente.
 As rotinas desabilitadas ou aposentadas não foram reativadas.
 
 O objetivo foi reaberto após a falha de deságio do data-hub. O relatório
@@ -70,6 +71,13 @@ A remessa de cobrança agendada 2669533 também passou, às 18:16:10:
 preservou o PID 807 e alcançou o ciclo 265 na conferência das 18:13.
 
 ## Provas de continuidade e credenciais
+
+O crédito 2665935 terminou às 18:50:28 com `success`, exit 0. O último ciclo foi
+306/1000; o log registra `[janela] fim do expediente (18:50 BRT) -> robo encerrado`.
+O teto de 1.000 ciclos não exige ultrapassar a janela diária. O PID 807 foi
+preservado até essa saída normal e não foi reiniciado; o mantenedor da sessão
+PID 67 continuou ativo na conferência das 18:56. Artefato no Guardian:
+`observacao-oito-horas/credito-encerramento-normal-2665935.json`.
 
 O crédito manteve o PID 807 e avançou até o ciclo 208 na conferência das 17:23.
 O healthcheck 2668819 retornou `estado=busy` porque o Doc2You estava ativo:

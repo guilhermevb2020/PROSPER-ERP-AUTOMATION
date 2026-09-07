@@ -36,7 +36,9 @@ que a senha do fornecedor seja rotativa; a fonte administrativa fica no Guardian
 
 Nova rodada manual autorizada em andamento desde 17:03, dentro da validação de
 16:34:17 até 08/09 00:34:17. Abrange as 11 tarefas finitas habilitadas; crédito
-é acompanhado na execução 2665935, sem duplicação. O histórico abaixo registra
+foi acompanhado na execução 2665935, sem duplicação, até a saída normal às
+18:50:28: success/exit 0, ciclo 306, fim do expediente configurado. Não reiniciar
+o robô fora dessa janela para continuar a observação. O histórico abaixo registra
 a rodada anterior e não encerra o acompanhamento atual. Resultados e limites:
 `docs/VALIDACAO_OITO_HORAS_2026-09-07.md`.
 
