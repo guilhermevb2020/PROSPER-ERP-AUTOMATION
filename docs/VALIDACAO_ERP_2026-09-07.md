@@ -2,16 +2,19 @@
 
 ## Resultado
 
-**Após a limpeza e correção da recuperação: 352 testes passaram no host.** A validação anterior teve
+**Após a limpeza e correção da recuperação: 373 testes passaram no host.** A validação anterior teve
 327 testes na imagem em uso; a candidata limpa passou 331 testes antes da inclusão
 do quinto teste de sandbox. Chrome 149 abriu na candidata, com certutil presente
-e sem os arquivos .env/config/sandbox.env/.git. A candidata ainda não foi implantada.
+e sem os arquivos .env/config/sandbox.env/.git. A imagem limpa v2 foi implantada;
+a validação real posterior está em [VALIDACAO_FERIADO_2026-09-07.md](VALIDACAO_FERIADO_2026-09-07.md).
 Veja a [auditoria de credenciais](AUDITORIA_CREDENCIAIS_2026-09-07.md) para pendências.
-As 20 tarefas cadastradas no Hub foram inventariadas: 11 habilitadas e nove
+As 20 tarefas cadastradas no Hub foram inventariadas: inicialmente 11 habilitadas e nove
 desabilitadas, apontando para dez entrypoints. Todos os entrypoints existem
 e passaram na checagem de sintaxe dentro do container. Cada família abaixo
 possui testes correspondentes; horários/aliases que chamam o mesmo processador
-compartilham essa cobertura. Nenhuma tarefa desabilitada foi ativada.
+compartilham essa cobertura. Às 14:52 o `boletos_healthcheck` foi reativado: estava
+desligado pelo circuit breaker após falha de DNS do Guardian, não aposentado.
+Agora são 12 habilitadas; aliases aposentados e presets pausados foram preservados.
 
 Os testes de fluxos usam transporte simulado e arquivos temporários. Não
 emitiram boletos reais, não deram baixas financeiras, não enviaram mensagens
@@ -69,7 +72,7 @@ na pasta `auditoria/acompanhamento-erp-2026-09-07/` do access-guardian.
 | `baixar_deposito_no_erp` | Sim | Depósito |
 | `baixar_documentos_doc2you` | Sim | Doc2You |
 | `baixar_documentos_doc2you_antecipado` | Sim | Doc2You |
-| `boletos_healthcheck` | Não | Healthcheck |
+| `boletos_healthcheck` | Sim, reativada às 14:52 | Healthcheck |
 | `emitir_lote_boletos` | Sim | Emissão |
 | `emitir_lote_boletos_fim_manha` | Não | Emissão |
 | `emitir_lote_boletos_tarde` | Sim | Emissão |
