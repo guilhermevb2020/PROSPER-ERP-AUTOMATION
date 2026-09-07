@@ -215,5 +215,6 @@ Execução 2666258 de gerar_remessa_pagamento_cnab_240: success/exit 0 em 14:30,
 sessão válida e consulta de pendentes concluída, zero pagamentos. Confirma duas
 rodadas consecutivas boas (14:25 e 14:30). Retorno 2666231 de 14:28 também success.
 Crédito 2665935 continua em execução, sem novo restart. O catálogo mantém pagamento
-enabled=true; correção de texto do alerta está no commit b9367b4 do Hub e ainda
-não foi implantada no processo principal do orquestrador.
+enabled=true. A correção de texto `b9367b4`, pendente nesta conferência das
+14:30, foi publicada às 20:08 pela imagem `79bca6c` do Hub, com drain
+certificado e saúde/retomada aprovadas. ERP, data-hub e Guardian preservados.

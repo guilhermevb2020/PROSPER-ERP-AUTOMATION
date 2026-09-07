@@ -97,10 +97,11 @@ além de SENHA/PASSWORD/API_KEY; considera valores conhecidos com oito ou mais c
 Esses números não representam busca universal de segredos desconhecidos.
 
 O texto contraditório do alerta de desativação foi corrigido no commit `b9367b4`
-do Hub, mas ainda não foi implantado em seu processo principal. Reiniciar o Hub
-com tarefas longas em voo exige uma janela de drain; não confundir commit com
-deploy. As credenciais próprias `DB_HUB_PASSWORD` e `POSTGRES_PASSWORD` desse
-outro projeto ainda não estão na fonte Guardian (reconferido nesta rodada).
+do Hub e publicado às 20:08 na imagem `79bca6c`, com drain certificado e
+saúde/retomada aprovadas. ERP, data-hub e Guardian não foram reiniciados.
+As credenciais próprias do Hub entraram na fase 1 de entrega pelo Guardian às
+19:13, por ação da Gerência. Essa fase não equivale ao proxy/login efêmero
+já utilizado pelo ERP e pelo data-hub.
 
 Na varredura geral, `enriquecer_sacados` está desabilitado por falhas do motor
 `ocr-documental`. O ia-lab informa GPU reservada para treinamento desde 06/09,

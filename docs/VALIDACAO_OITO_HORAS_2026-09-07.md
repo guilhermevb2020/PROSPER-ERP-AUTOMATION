@@ -155,6 +155,26 @@ pulou o reenvio, preservando o histórico após a mudança de schema.
 
 ## Artefatos e critérios de encerramento
 
+### Conferência às 20h e publicação do aviso do Hub
+
+O healthcheck 8637 confirmou Chrome disponível e Smart logado às 20:00:12.
+Outra rotação dos logins ocorreu às 20:03:34; conexões novas dos clientes reais
+ERP/data-hub passaram às 20:04, com identidade comparada por hash. A conferência
+de cobertura às 20:04 encontrou 211 amostras, nenhuma lacuna maior que 90s,
+nenhum erro de leitura e nenhuma divergência nas 130 tentativas comparadas com
+o banco. Isso é cobertura parcial: a observação continua até 00:34:17.
+
+A correção do aviso de tarefa crítica `b9367b4` entrou no Hub na imagem
+`79bca6c` às 20:08. Drain certificado com contadores zerados; `/live` e
+`/health` retornaram 200 em manutenção, `/ready` retornou 503 e passou a 200
+após reabrir o despacho. ERP, data-hub e Guardian mantiveram seus containers.
+Portão da imagem: 772 testes passaram, seis skips previstos; ruff e ledger
+aprovados. As mensagens foram testadas offline, sem envio externo. As tarefas
+posteriores continuam sendo observadas. Provas no Guardian em
+`observacao-oito-horas/hub-publicacao-alerta/`.
+
+### Arquivos de evidência
+
 No Guardian, pasta
 `auditoria/acompanhamento-erp-2026-09-07/observacao-oito-horas/`:
 
