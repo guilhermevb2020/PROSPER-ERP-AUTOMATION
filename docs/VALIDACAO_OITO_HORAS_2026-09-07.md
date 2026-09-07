@@ -173,6 +173,12 @@ aprovados. As mensagens foram testadas offline, sem envio externo. As tarefas
 posteriores continuam sendo observadas. Provas no Guardian em
 `observacao-oito-horas/hub-publicacao-alerta/`.
 
+O healthcheck agendado 2671302 passou às 20:15:14 no Hub atualizado. Registro
+8638: `healthy`, Chrome e Smart logado, ação `nenhuma`. As 16 primeiras
+execuções agendadas do Hub após o deploy também passaram; o data-hub fez
+GET autenticado à API do Hub com apelido do Guardian e recebeu HTTP 200.
+Nenhum disparo manual adicional ou mensagem de teste foi necessário.
+
 ### Arquivos de evidência
 
 No Guardian, pasta
