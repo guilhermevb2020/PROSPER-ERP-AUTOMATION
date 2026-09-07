@@ -15,6 +15,7 @@ NAO contem logica de listar/enviar boletos. Isso fica em enviar_lote.py.
 from __future__ import annotations
 
 import os
+import re
 import sys
 import time
 from datetime import datetime
@@ -209,6 +210,70 @@ def _resolver_recaptcha_sync(site_url: str, site_key: str, timeout: int = 180) -
         return None
 
 
+def _retomada_expirada(ctx) -> bool:
+    """Reconhece a pagina explicita de expiracao devolvida pelo Smart."""
+    for pagina in ctx.pages:
+        if "smartsecurities.com.br" not in pagina.url:
+            continue
+        titulo = pagina.title().strip().casefold()
+        if titulo in ("sessão expirada", "sessao expirada"):
+            return True
+    return False
+
+
+def _retomar_usuario_reconhecido(page, email: str) -> bool:
+    """Retoma somente a identidade esperada na tela 'Usuario logado' do Smart."""
+    for frame in page.frames:
+        if "loginsec.php" not in frame.url:
+            continue
+        campos = frame.locator('input[type="text"][disabled]')
+        for i in range(campos.count()):
+            campo = campos.nth(i)
+            if not campo.is_visible() or campo.input_value().strip().casefold() != email.strip().casefold():
+                continue
+            botao = frame.locator('button[name="Entrar"]').first
+            if botao.count() and botao.is_visible():
+                botao.click(timeout=5_000)
+                return True
+    return False
+
+
+def _concluir_login(ctx, page, timeout_total_s: int) -> bool:
+    """Seleciona a empresa e confirma a sessao depois de autenticar ou retomar."""
+    # 7) Tela de selecao de empresa — clicar ACESSAR da PROSPER VETOR
+    # Procura em todos os frames; clica no primeiro 'Acessar' (PROSPER VETOR e a
+    # primeira/unica para este usuario envioboletos)
+    empresa_clicada = False
+    for tentativa in range(3):
+        for fr in page.frames:
+            try:
+                btn = fr.locator(cfg.SEL_ACESSAR_EMPRESA).first
+                if btn.count() > 0 and btn.is_visible():
+                    btn.click(timeout=5_000)
+                    empresa_clicada = True
+                    print(f"[{_now()}] [auto-login] ACESSAR empresa clicado")
+                    break
+            except Exception:
+                continue
+        if empresa_clicada:
+            break
+        esperar(2, f"aguardando tela de empresa (tent {tentativa+1}/3)")
+
+    # 8) Aguarda esta_logado virar True (ate timeout_total)
+    fim = time.time() + timeout_total_s
+    while time.time() < fim:
+        esperar(3)
+        _dispensar_seguranca(page)
+        if esta_logado(ctx):
+            print(f"[{_now()}] [auto-login] >> LOGADO COM SUCESSO")
+            fechar_pagina(page)
+            return True
+
+    print(f"[{_now()}] [auto-login] timeout aguardando esta_logado")
+    screenshot(page, f"autologin_timeout_{int(time.time())}.png")
+    return False
+
+
 def login_automatico_capsolver(ctx, timeout_total_s: int = 300) -> bool:
     """Faz login no Smart automaticamente usando CapSolver (sem intervencao humana).
 
@@ -235,10 +300,34 @@ def login_automatico_capsolver(ctx, timeout_total_s: int = 300) -> bool:
         page.goto(cfg.URL_LOGIN, wait_until="domcontentloaded", timeout=60_000)
         esperar(3, "tela de login carregando")
 
-        # 1) iframe loginsec.php
-        try:
-            iframe = frame_com(page, cfg.SEL_LOGIN_EMAIL, timeout=30)
-        except PWTimeout:
+        # Iframe e identidade reconhecida carregam de forma assincrona.
+        # Esperar os dois estados evita perder a retomada que aparece depois
+        # da primeira consulta, sem procurar #fEmail por mais 30s inutilmente.
+        iframe = None
+        prazo_formulario = time.monotonic() + 30
+        cookie_reiniciado = False
+        while time.monotonic() < prazo_formulario:
+            if _retomar_usuario_reconhecido(page, cfg.EMAIL):
+                print(f"[{_now()}] [auto-login] retomando usuario reconhecido pelo Smart")
+                esperar(5, "retomada — aguardando selecao de empresa")
+                _dispensar_seguranca(page)
+                if _retomada_expirada(ctx):
+                    if cookie_reiniciado:
+                        print(f"[{_now()}] [auto-login] retomada continuou expirada apos reiniciar cookie")
+                        return False
+                    cookie_reiniciado = True
+                    print(f"[{_now()}] [auto-login] cookie Smart expirado; reiniciando autenticacao deste perfil")
+                    ctx.clear_cookies(domain=re.compile(r"(^|\.)smartsecurities\.com\.br$"))
+                    page.goto(cfg.URL_LOGIN, wait_until="domcontentloaded", timeout=60_000)
+                    prazo_formulario = time.monotonic() + 30
+                    continue
+                return _concluir_login(ctx, page, timeout_total_s)
+            try:
+                iframe = frame_com(page, cfg.SEL_LOGIN_EMAIL, timeout=1)
+                break
+            except PWTimeout:
+                continue
+        if iframe is None:
             print(f"[{_now()}] [auto-login] iframe loginsec nao encontrado")
             return False
 
@@ -360,38 +449,8 @@ def login_automatico_capsolver(ctx, timeout_total_s: int = 300) -> bool:
         esperar(5, "pos-captcha — aguardando selecao de empresa")
         _dispensar_seguranca(page)
 
-        # 7) Tela de selecao de empresa — clicar ACESSAR da PROSPER VETOR
-        # Procura em todos os frames; clica no primeiro 'Acessar' (PROSPER VETOR e a
-        # primeira/unica para este usuario envioboletos)
-        empresa_clicada = False
-        for tentativa in range(3):
-            for fr in page.frames:
-                try:
-                    btn = fr.locator(cfg.SEL_ACESSAR_EMPRESA).first
-                    if btn.count() > 0 and btn.is_visible():
-                        btn.click(timeout=5_000)
-                        empresa_clicada = True
-                        print(f"[{_now()}] [auto-login] ACESSAR empresa clicado")
-                        break
-                except Exception:
-                    continue
-            if empresa_clicada:
-                break
-            esperar(2, f"aguardando tela de empresa (tent {tentativa+1}/3)")
+        return _concluir_login(ctx, page, timeout_total_s)
 
-        # 8) Aguarda esta_logado virar True (ate timeout_total)
-        fim = time.time() + timeout_total_s
-        while time.time() < fim:
-            esperar(3)
-            _dispensar_seguranca(page)
-            if esta_logado(ctx):
-                print(f"[{_now()}] [auto-login] >> LOGADO COM SUCESSO")
-                fechar_pagina(page)
-                return True
-
-        print(f"[{_now()}] [auto-login] timeout aguardando esta_logado")
-        screenshot(page, f"autologin_timeout_{int(time.time())}.png")
-        return False
     except Exception as exc:
         print(f"[{_now()}] [auto-login] erro inesperado: {exc}")
         screenshot(page, f"autologin_erro_{int(time.time())}.png")
