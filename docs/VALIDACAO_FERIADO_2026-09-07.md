@@ -2,6 +2,9 @@
 
 Rodada ERP: as 12 tarefas habilitadas foram alcançadas,
 11 concluídas com sucesso e o crédito em seu ciclo diário, avançando no ciclo 90.
+Esse ciclo foi observado na primeira conferência, às 15:30. Às 16:23,
+as últimas execuções das 11 tarefas finitas continuavam com sucesso; o crédito
+2665935 seguia ativo e com avanço recente de log, sem reinício.
 Horários de Brasília. Execução real iniciada às 14:42, pelo Hub,
 com o código e a imagem limpa v2 em produção. O despacho respeita idempotência;
 ausência de entrada não equivale a comprovação de escrita financeira.
