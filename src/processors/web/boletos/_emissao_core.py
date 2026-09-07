@@ -15,9 +15,11 @@ NAO depende de browser visivel; tudo via cookies/HTTP da sessao autenticada.
 
 from __future__ import annotations
 
+import os
 from urllib.parse import urlencode
 
 from src.processors.web.boletos import _emissao_config as ec
+from src.processors.web.boletos import emissao_evidencia as ev
 from src.processors.web.boletos._emissao_html import (
     fields_from_form,
     ids_dos_titulos,
@@ -171,6 +173,22 @@ def emitir_conta_http(
             "titulos": n, "ids": ids, "dry": False,
         }
     ct = (r3.headers.get("content-type") or "").lower()
+    evidencia = None
+    if ec.SALVAR_PDF:
+        try:
+            manifesto = ev.montar_manifesto(
+                conta_id=str(conta_value), conta_label=conta_label, grupo=grupo,
+                radio=cfg_grupo["radio"], classes=cfg_grupo["classes"], ids=ids,
+                content_type=ct, corpo_enviado=body2,
+                run_id=os.environ.get("HUB_RUN_ID", ""),
+            )
+            evidencia = ev.salvar(
+                r3.body(), manifesto, base_dir=ec.EVIDENCIA_DIR,
+                conta_id=str(conta_value), grupo=grupo,
+            )
+        except Exception:
+            # Falha de evidencia nao deve repetir uma emissao ja enviada ao Smart.
+            evidencia = None
     return {
         "ok": True, "dry": False, "vazio": False,
         "conta": conta_label, "grupo": grupo,
@@ -178,6 +196,7 @@ def emitir_conta_http(
         "classes": cfg_grupo["classes"],
         "radio": cfg_grupo["radio"],
         "content_type": ct,
+        "evidencia": evidencia,
         "pdf": ("pdf" in ct),
     }
 

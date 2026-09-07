@@ -237,6 +237,9 @@ def main():
                     # montar_geracao recusa grade sem o botao Gerar
                     log(f"RECUSADO: {e}")
                     return SAIU_GRADE_RECUSADA
+        except smart_sessao.SmartIndisponivel as e:
+            log(f"ERRO: {e}")
+            return SAIU_SMART_MUDO
         except smart_sessao.SemSessao as e:
             log(f"ERRO: {e}")
             return SAIU_SEM_SESSAO

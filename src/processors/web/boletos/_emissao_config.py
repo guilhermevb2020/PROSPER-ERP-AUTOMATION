@@ -85,6 +85,10 @@ DRY_RUN: bool = os.environ.get("DRY_RUN_EMISSAO", "true").strip().lower() in ("1
 # SCAN:   alias mais explicito; sempre True nao emite (read-only).
 SCAN: bool = os.environ.get("SCAN_EMISSAO", "true").strip().lower() in ("1", "true", "sim")
 
+# Evidencia local da resposta do Smart; nao dispara outra emissao.
+SALVAR_PDF: bool = os.environ.get("SALVAR_PDF_EMISSAO", "true").strip().lower() in ("1", "true", "sim")
+EVIDENCIA_DIR: str = os.environ.get("EVIDENCIA_DIR_EMISSAO", "/app/data/boletos/emitidos")
+
 # --------------------------------------------------------------------------- #
 # Pacing / robustez
 # --------------------------------------------------------------------------- #

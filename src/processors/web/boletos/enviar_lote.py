@@ -100,9 +100,21 @@ def _connect_or_launch(p):
         return ctx, ctx
 
 
+def _html_smart_validado(resposta):
+    """Uma resposta de erro ou login nao pode virar lista vazia com sucesso."""
+    from src.common.clients.smart_sessao import parece_deslogado
+
+    if resposta.status != 200:
+        raise RuntimeError(f"consulta ao Smart falhou: HTTP {resposta.status}")
+    html = resposta.body().decode("iso-8859-1", errors="replace")
+    if parece_deslogado(html):
+        raise RuntimeError("sessao do Smart expirada ou resposta vazia; consulta abortada")
+    return html
+
+
 def _ler_contas(ctx):
     r = ctx.request.get(cfg.URL_FORM_HTTP, timeout=60_000)
-    html = r.body().decode("iso-8859-1", errors="replace")
+    html = _html_smart_validado(r)
     pg = ctx.new_page()
     try:
         pg.set_content(html, timeout=20_000)
@@ -146,7 +158,7 @@ def _titulos_conta(ctx, conta_id: str, conta_lab: str):
         headers=HDR,
         timeout=120_000,
     )
-    html = r.body().decode("iso-8859-1", errors="replace")
+    html = _html_smart_validado(r)
     pg = ctx.new_page()
     try:
         pg.set_content(html, timeout=20_000)

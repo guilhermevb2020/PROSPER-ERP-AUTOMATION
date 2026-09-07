@@ -109,7 +109,7 @@ def registrar(
         return 0
 
     sql = """
-        INSERT INTO operacional.boleto_envio_log
+        INSERT INTO erp_automation.boleto_envio_log
             (id_titulo, conta_id, conta_label, modalidade, valor, sacado,
              data_emissao, status, erro, run_id, extras)
         VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)

@@ -127,8 +127,11 @@ def tratar(ctx, nome_arquivo: str, dry: bool, feitos: set) -> str:
 
     digest = hashlib.md5(dados).hexdigest()
     if digest in feitos:
-        log(f"  {nome_arquivo}: conteúdo já inserido antes (md5 {digest[:8]}) — só arquivando")
-        nuvem.mover_para(nome_arquivo, cfg.SUB_PROCESSADOS)
+        if dry:
+            log(f"  [DRY] {nome_arquivo}: conteúdo já inserido — arquivaria sem reenviar")
+        else:
+            log(f"  {nome_arquivo}: conteúdo já inserido antes (md5 {digest[:8]}) — só arquivando")
+            nuvem.mover_para(nome_arquivo, cfg.SUB_PROCESSADOS)
         return "repete"
 
     if dry:
@@ -266,6 +269,9 @@ def main():
                     return SAIU_SMART_MUDO
                 log("sessão do Smart OK (logada).")
                 return rodada(ctx, args, dry)
+        except smart_sessao.SmartIndisponivel as e:
+            log(f"ERRO: {e}")
+            return SAIU_SMART_MUDO
         except smart_sessao.SemSessao as e:
             log(f"ERRO: {e}")
             return SAIU_SEM_SESSAO

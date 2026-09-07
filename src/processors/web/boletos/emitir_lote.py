@@ -71,7 +71,7 @@ def _registrar_log(
 ) -> None:
     """Insere linha em operacional.boleto_emissao_log."""
     sql = """
-        INSERT INTO operacional.boleto_emissao_log
+        INSERT INTO erp_automation.boleto_emissao_log
             (conta_id, conta_label, grupo, classes_risco, radio_em_nome,
              qtd_titulos, qtd_apos_2pass, passada, status, erro,
              content_type, run_id, extras)

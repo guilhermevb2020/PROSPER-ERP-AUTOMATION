@@ -66,4 +66,14 @@ export DRY_RUN="${DRY_RUN:-False}"
 #    `tee` grava um LOG AO VIVO (observabilidade) alem do stdout capturado pelo hub.
 LOGROBO="/app/logs/robo_credito_$(date +%Y-%m-%d).log"
 echo "===== inicio $(date '+%F %T %Z') =====" >> "$LOGROBO"
-python /app/src/processors/web/robo_credito/robo_analise_credito_v4.py "$@" 2>&1 | tee -a "$LOGROBO"
+# BEGIN EXECUCAO_CREDITO
+# sh nao possui PIPESTATUS: preservar o retorno do Python, como no robo_retorno.
+RC_CREDITO=$(mktemp "${TMPDIR:-/tmp}/robo_credito_rc.XXXXXX") || exit 1
+trap 'rm -f "$RC_CREDITO"' EXIT
+{ python /app/src/processors/web/robo_credito/robo_analise_credito_v4.py "$@";
+  echo $? > "$RC_CREDITO";
+} 2>&1 | tee -a "$LOGROBO"
+CODIGO_CREDITO=$(cat "$RC_CREDITO" 2>/dev/null)
+case "$CODIGO_CREDITO" in ''|*[!0-9]*) CODIGO_CREDITO=1 ;; esac
+echo "===== fim $(date '+%F %T %Z') exit=$CODIGO_CREDITO =====" >> "$LOGROBO"
+exit "$CODIGO_CREDITO"
