@@ -10,7 +10,7 @@ anterior de feriado é histórico e não encerra esta observação. A imagem ERP
 `guardian-clean-20260907-v2` permanece em uso; nenhum novo reinício do ERP
 ou do crédito foi feito nesta janela.
 
-## Resultados manuais conferidos até 17:34
+## Resultados manuais conferidos até 17:59
 
 | Rotina | Execução | Resultado e limite |
 |---|---:|---|
@@ -19,9 +19,18 @@ ou do crédito foi feito nesta janela.
 | Envio | 2669015 | Modo real, 685 títulos de 22 contas já enviados; todos preservados pela idempotência, sem reenvio. |
 | Doc2You antecipado | 2669016 | Login confirmado; sem documentos, notas ou operações novas do dia. |
 | Emissão da tarde | 2669030 | Modo real, sem títulos novos; exit 0. |
-| Remessa de cobrança | 2669097 | Em execução na última conferência. |
+| Remessa de cobrança | 2669097 | Login confirmado; 51 contas consultadas, nenhuma com títulos, zero arquivos gerados. |
+| Retorno de cobrança | 2669358 | Sem retorno novo na janela e no controle de processamento; saiu antes de acessar o Smart. |
+| Depósito | 2669360 | Log real `robo_deposito_2026-09-07.log` confirma entrada sem `.RET`; sem baixa. |
+| Geração de pagamento | 2669386 | Consulta concluiu, zero pagamentos pendentes. |
+| Retorno de pagamento | 2669389 | Login confirmado; nenhum arquivo para inserir. |
+| Healthcheck | 2669491 | `estado=healthy`, exit 0 às 17:58:02. |
 
-Retornos, depósito, pagamentos e healthcheck seguem na sequência manual.
+As 11 tarefas finitas concluíram a rodada manual, com os limites acima.
+O despacho inicial do healthcheck recebeu HTTP 503 às 17:51:56: o Hub estava
+temporariamente em `lifecycle=maintenance`. Não chegou a iniciar o robô.
+Após confirmar `running` no lifecycle, o executor local retomou somente essa
+tarefa, sem repetir as dez anteriores. O incidente foi preservado no JSON.
 Os pagamentos agendados também estão sendo observados: 2668796 e 2668824
 confirmaram login e consulta, sem arquivos de retorno ou pagamentos pendentes.
 Saída sem entrada não comprova baixa nem geração financeira nova.
@@ -31,7 +40,8 @@ Saída sem entrada não comprova baixa nem geração financeira nova.
 O crédito manteve o PID 807 e avançou até o ciclo 208 na conferência das 17:23.
 O healthcheck 2668819 retornou `estado=busy` porque o Doc2You estava ativo:
 isso comprova respeito à tarefa em curso, sem novo teste de autenticação.
-A sequência manual inclui outro healthcheck após os demais robôs.
+A verificação manual posterior, 2669491, confirmou `estado=healthy`.
+Às 17:59, os PIDs 807 (crédito) e 67 (mantenedor) permaneciam ativos.
 
 O Guardian girou os logins dos dois projetos na janela 17:25:52–17:26:53.
 Novas conexões às 17:28 pelos módulos reais das aplicações funcionaram com
