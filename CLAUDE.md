@@ -42,6 +42,12 @@ o robô fora dessa janela para continuar a observação. O histórico abaixo reg
 a rodada anterior e não encerra o acompanhamento atual. Resultados e limites:
 `docs/VALIDACAO_OITO_HORAS_2026-09-07.md`.
 
+Rodada manual: 11 tarefas finitas conferidas. Emissão adicional 2670656
+recuperou sessão expirada via CapSolver e concluiu às 19:21:39, 55 contas vazias.
+O healthcheck efetivo usa 7h–18h (padrões do módulo são sobrescritos pelo Hub);
+`needs_login_fora_janela` com exit 0 não significa sessão saudável. O mantenedor
+loga ao iniciar; emissão e healthcheck fazem a recuperação posterior.
+
 Às 18:13, retorno de pagamento 2669741 falhou por
 `ERROR_CAPTCHA_SOLVE_FAILED`; retentativa 2669760 recuperou às 18:15:45.
 O solver compartilhado ganhou uma segunda tentativa de desafio, limitada ao

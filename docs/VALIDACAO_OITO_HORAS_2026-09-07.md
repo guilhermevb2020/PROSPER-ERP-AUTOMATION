@@ -6,6 +6,11 @@ finitas habilitadas. Crédito foi acompanhado na execução 2665935, sem duplica
 até encerrar normalmente às 18:50:28, com exit 0, no fim do expediente.
 As rotinas desabilitadas ou aposentadas não foram reativadas.
 
+As 11 tarefas finitas da rodada manual estão conferidas. Uma emissão adicional,
+2670656, comprovou a recuperação de sessão às 19:21:39, conforme o registro
+abaixo. A conferência conjunta confirmou também as 18 tarefas finitas do
+data-hub; isso não encerra a observação de oito horas.
+
 O objetivo foi reaberto após a falha de deságio do data-hub. O relatório
 anterior de feriado é histórico e não encerra esta observação. A imagem ERP
 `guardian-clean-20260907-v2` permanece em uso; nenhum novo reinício do ERP
@@ -71,6 +76,31 @@ A remessa de cobrança agendada 2669533 também passou, às 18:16:10:
 preservou o PID 807 e alcançou o ciclo 265 na conferência das 18:13.
 
 ## Provas de continuidade e credenciais
+
+### Sessão expirada fora da janela e recuperação pela emissão
+
+O healthcheck 2670616 terminou às 19:15:05 com exit 0, mas registrou
+`chrome_ok=true`, `logado=false`, `needs_login_fora_janela` (registro 8634).
+A janela efetiva passada pelo Hub é 7h–18h; os valores 9h–12h no módulo
+são apenas padrões, sobrescritos nessa execução. Esse estado não deve ser
+rotulado como sessão saudável só porque a task terminou com sucesso.
+
+O mantenedor faz login ao iniciar e mantém o Chrome; seu loop não refaz login
+quando a sessão expira. O healthcheck trata a recuperação dentro da janela,
+e a emissão tem seu próprio caminho de recuperação. Para comprová-lo, a
+emissão 2670656 foi executada pelo Hub às 19:17:38, sem outro robô ERP ativo,
+sem alterar a janela nem os controles de idempotência. Detectou a sessão caída,
+chamou o CapSolver com o código atualizado (`desafio 1/2`), confirmou login
+às 19:18:25 e concluiu às 19:21:39 com exit 0. Consultou 55 contas, zero
+títulos novos. O banco confirma 55 registros `vazio` e soma zero no lote.
+Artefato no Guardian: `observacao-oito-horas/prova-recuperacao-emissao-19h.json`.
+
+O healthcheck agendado seguinte, 2670808, confirmou `healthy`, Chrome disponível
+e Smart logado às 19:30:07 (registro 8635), sem ação adicional. O observador
+passa a registrar também esse estado operacional e a hora da verificação,
+separados do exit code da task.
+
+### Crédito e identidades do banco
 
 O crédito 2665935 terminou às 18:50:28 com `success`, exit 0. O último ciclo foi
 306/1000; o log registra `[janela] fim do expediente (18:50 BRT) -> robo encerrado`.
