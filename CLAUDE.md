@@ -13,6 +13,9 @@ finalizador usam a identidade propria GSMARTPWD3; CapSolver proprio por apelido.
 A imagem guardian-clean-20260907-v2 esta implantada, a imagem antiga foi removida.
 VNC continua entregue pelo Guardian como material de execucao. Nunca misturar
 identidades nem reintroduzir senhas reais nos arquivos dos robos.
+Reconferência de 16:32:55: 3.735 arquivos; só VNC esperado, sem erros de leitura.
+Login do banco: 1h/graca 10min; capability: 4h/graca 5min. Apelido não significa
+que a senha do fornecedor seja rotativa; a fonte administrativa fica no Guardian.
 
 ## Estado verificado em 07/09/2026
 
@@ -365,4 +368,3 @@ schema versionado do lado de quem escreve.
 Mapa completo: registro
 `2026-08-03-quem-escreve-no-banco-o-mapa-que-nunca-existiu` no PostgreSQL do Learn
 (`learn contexto "quem escreve no banco"`).
-

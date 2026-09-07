@@ -28,6 +28,19 @@ A única entrega de senha real esperada no ERP é o VNC, gerado pelo Guardian.
 
 ## Evidência da varredura
 
+Reconferência às 16:32:55: **3.735 arquivos**, apenas as duas chaves VNC
+esperadas em `.env.guardian`, nenhum arquivo pulado por erro de leitura.
+Artefato no Guardian: `scan-erp-reconferencia.json`, na pasta de acompanhamento.
+A busca usa os segredos conhecidos da fonte e variantes raw/base64/URL; exclui
+Git, ambientes virtuais, perfis do Chrome e links simbólicos.
+
+O banco usa login efêmero de 1h, com graça de 10min, e capability de 4h, com
+graça de 5min. O passfile é material temporário em `/run/guardian/`.
+As senhas/chaves dos fornecedores podem continuar estáticas dentro da fonte
+cifrada: quem recebe apelidos é o ERP. Portanto o padrão não significa que
+todo segredo do fornecedor tenha rotação automática. VNC e sessões privadas
+continuam sendo exceções de materialização necessárias à execução.
+
 O scan final está em `scan_exato-final.json`. Os três literais anteriormente
 presentes em sandbox.env e robo_finalizar.env foram retirados. Ao ampliar a
 busca para senhas menores, encontramos VNC em três logs antigos e os limpamos.
