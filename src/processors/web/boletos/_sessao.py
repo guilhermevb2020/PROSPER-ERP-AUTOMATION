@@ -133,11 +133,57 @@ def _dispensar_seguranca(page) -> bool:
 # ============================================================================ #
 # Login AUTOMATICO via CapSolver
 # ============================================================================ #
-# Reusa CapSolverAPI ja em producao (src/common/captcha/captcha_solver.py).
-# Como o solver e async e nosso codigo e sync, usamos asyncio.run.
+# Usa a API HTTP sincrona para nao disputar o event loop do Playwright.
 # Site key do reCAPTCHA do login do Smart (mesma usada pelos outros
 # processadores em src/processors/web/envio_boleto_*).
 SITE_KEY_LOGIN_SMART = "6Le-JHwUAAAAAGZJWerkysOyQeo-Ehm7704vfT1q"
+
+
+class _CapSolverHTTPPermanente(RuntimeError):
+    pass
+
+
+def _capsolver_post(url, payload, etapa, *, tentativas=3, deadline=None):
+    """Tolera falhas de transporte sem esconder HTTP nem registrar credenciais."""
+    import requests
+
+    for tentativa in range(1, tentativas + 1):
+        restante = 30 if deadline is None else min(30, deadline - time.monotonic())
+        if restante <= 0:
+            return None
+        transitorio = True
+        try:
+            resposta = requests.post(url, json=payload, timeout=restante)
+            if resposta.status_code != 200:
+                motivo = f"HTTP {resposta.status_code}"
+                transitorio = resposta.status_code in (408, 429) or 500 <= resposta.status_code < 600
+            else:
+                try:
+                    dados = resposta.json()
+                except ValueError:
+                    dados = None
+                if isinstance(dados, dict) and isinstance(dados.get("errorId"), int):
+                    return dados
+                motivo = "resposta JSON ausente ou invalida"
+        except requests.RequestException as exc:
+            motivo = type(exc).__name__
+        print(f"[{_now()}] CapSolver {etapa}: {motivo} (tentativa {tentativa}/{tentativas})")
+        if not transitorio:
+            raise _CapSolverHTTPPermanente(motivo)
+        if tentativa == tentativas:
+            return None
+        pausa = 2 * tentativa
+        if deadline is not None:
+            pausa = min(pausa, max(0, deadline - time.monotonic()))
+        time.sleep(pausa)
+    return None
+
+
+def _capsolver_erro(dados, etapa):
+    # Nao imprimir errorDescription/corpo: o fornecedor pode ecoar o clientKey.
+    codigo = str(dados.get("errorCode", ""))
+    codigo = codigo if re.fullmatch(r"[A-Z_]{1,80}", codigo) else "nao informado"
+    print(f"[{_now()}] CapSolver {etapa}: errorId={dados['errorId']} errorCode={codigo}")
 
 
 def _resolver_recaptcha_sync(site_url: str, site_key: str, timeout: int = 180) -> str | None:
@@ -151,8 +197,6 @@ def _resolver_recaptcha_sync(site_url: str, site_key: str, timeout: int = 180) -
 
     Retorna o token g-recaptcha-response ou None se falhar.
     """
-    import requests
-
     api_key = os.getenv("CAPSOLVER_API_KEY", "").strip()
     if not api_key:
         print(f"[{_now()}] CAPSOLVER_API_KEY nao configurada — pulando solver")
@@ -171,42 +215,41 @@ def _resolver_recaptcha_sync(site_url: str, site_key: str, timeout: int = 180) -
                 "websiteKey": site_key,
             },
         }
-        r = requests.post(create_url, json=payload, timeout=30)
-        data = r.json() if r.status_code == 200 else {}
+        data = _capsolver_post(create_url, payload, "createTask")
+        if data is None:
+            return None
         if data.get("errorId") != 0:
-            print(f"[{_now()}] CapSolver createTask falhou: {data.get('errorDescription', data)}")
+            _capsolver_erro(data, "createTask")
             return None
         task_id = data.get("taskId")
         if not task_id:
-            print(f"[{_now()}] CapSolver nao retornou taskId: {data}")
+            print(f"[{_now()}] CapSolver nao retornou taskId")
             return None
         print(f"[{_now()}] CapSolver taskId={task_id}, aguardando resolucao (max {timeout}s)")
 
         # 2) Poll resultado
-        deadline = time.time() + timeout
-        while time.time() < deadline:
-            time.sleep(2)
-            try:
-                rr = requests.post(poll_url, json={"clientKey": api_key, "taskId": task_id}, timeout=30)
-                dd = rr.json() if rr.status_code == 200 else {}
-            except Exception as exc:
-                print(f"[{_now()}] CapSolver poll falhou (segue): {exc}")
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            time.sleep(min(2, max(0, deadline - time.monotonic())))
+            dd = _capsolver_post(poll_url, {"clientKey": api_key, "taskId": task_id},
+                                 "getTaskResult", tentativas=1, deadline=deadline)
+            if dd is None:
                 continue
             if dd.get("errorId") != 0:
-                print(f"[{_now()}] CapSolver poll erro: {dd.get('errorDescription', dd)}")
+                _capsolver_erro(dd, "getTaskResult")
                 return None
             status = dd.get("status")
             if status == "ready":
                 token = (dd.get("solution") or {}).get("gRecaptchaResponse")
                 if token:
                     return token
-                print(f"[{_now()}] CapSolver ready mas sem token: {dd}")
+                print(f"[{_now()}] CapSolver ready mas sem token")
                 return None
             # status == 'processing' -> continua
         print(f"[{_now()}] CapSolver timeout ({timeout}s) sem resposta ready")
         return None
     except Exception as exc:
-        print(f"[{_now()}] CapSolver excecao: {exc}")
+        print(f"[{_now()}] CapSolver excecao: {type(exc).__name__}")
         return None
 
 
