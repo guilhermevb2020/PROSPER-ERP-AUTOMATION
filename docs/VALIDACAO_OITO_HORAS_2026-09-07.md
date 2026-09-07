@@ -179,6 +179,15 @@ execuções agendadas do Hub após o deploy também passaram; o data-hub fez
 GET autenticado à API do Hub com apelido do Guardian e recebeu HTTP 200.
 Nenhum disparo manual adicional ou mensagem de teste foi necessário.
 
+Às 20:25 foram reconferidas integrações cuja prova anterior precedia a
+recriação externa do Guardian às 19:13: Nextcloud `PROPFIND` 207, Evolution
+`GET` 200, CapSolver principal e sandbox `getBalance` 200/errorId 0, SMTP
+`EHLO` 250 com senha vazia. Apelidos confirmados, sem login Smart ou envio de
+mensagens/documentos. O worker confirmou quatro trocas de apelido na mesma
+janela. Artefato `transporte-apos-recreate-guardian-2025.json` no Guardian.
+O healthcheck agendado das 20:30 também passou: registro 8639, `healthy`,
+Chrome e Smart logado, sem ação de recuperação.
+
 ### Arquivos de evidência
 
 No Guardian, pasta
