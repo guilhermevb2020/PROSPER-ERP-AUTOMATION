@@ -54,8 +54,20 @@ Falhas de transporte no polling continuam consultando a mesma task.
 incluindo recuperação, esgotamento, prazo compartilhado e privacidade dos logs.
 A fonte é montada em `/app/src`: a publicação por commit alcança os próximos
 processos sem recriar o ERP nem encerrar crédito/mantenedor. A instância longa
-já carregada mantém seu módulo até o encerramento normal. Prova operacional
-posterior à publicação ainda pendente nesta revisão.
+já carregada mantém seu módulo até o encerramento normal.
+
+O commit `d244857` foi aplicado às 18:18:37; hash do arquivo igual no host e
+container. A geração 2669857 concluiu às 18:20:20 reutilizando sessão, sem solver.
+O retorno 2669905 concluiu às 18:24:25: o log contém o marcador novo
+`desafio 1/2`, token recebido e login confirmado. Não havia arquivo para inserir.
+Não ocorreu falha do fornecedor nessa execução; o ramo de segunda tentativa
+permanece comprovado pelos testes automatizados. Artefatos no Guardian:
+`incidente-capsolver-2669741.json` e
+`retorno-pos-correcao-capsolver-2669905.json`, em `observacao-oito-horas/`.
+
+A remessa de cobrança agendada 2669533 também passou, às 18:16:10:
+51 contas consultadas, zero com títulos e zero arquivos novos. O crédito
+preservou o PID 807 e alcançou o ciclo 265 na conferência das 18:13.
 
 ## Provas de continuidade e credenciais
 

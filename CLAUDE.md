@@ -45,7 +45,10 @@ a rodada anterior e não encerra o acompanhamento atual. Resultados e limites:
 O solver compartilhado ganhou uma segunda tentativa de desafio, limitada ao
 mesmo prazo total, sem repetir erros de chave/saldo. 36 testes isolados sem
 rede aprovados; publicação alcança novos processos pelo bind de `/app/src`,
-sem reiniciar ERP/crédito. Não confundir os 11 sucessos manuais com ausência
+sem reiniciar ERP/crédito. Commit `d244857` aplicado às 18:18:37; retorno
+2669905 usou o solver novo, confirmou login e concluiu às 18:24:25, sem arquivo
+de entrada. Não precisou da segunda resolução; esse ramo tem prova automatizada.
+Não confundir os 11 sucessos manuais com ausência
 de falhas posteriores; acompanhar cada tentativa até 00:34:17.
 
 Consulte [a matriz de validação](docs/VALIDACAO_ERP_2026-09-07.md) antes de
