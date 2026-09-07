@@ -28,11 +28,25 @@ A única entrega de senha real esperada no ERP é o VNC, gerado pelo Guardian.
 
 ## Evidência da varredura
 
-Reconferência às 16:32:55: **3.735 arquivos**, apenas as duas chaves VNC
-esperadas em `.env.guardian`, nenhum arquivo pulado por erro de leitura.
-Artefato no Guardian: `scan-erp-reconferencia.json`, na pasta de acompanhamento.
-A busca usa os segredos conhecidos da fonte e variantes raw/base64/URL; exclui
-Git, ambientes virtuais, perfis do Chrome e links simbólicos.
+Reconferência iniciada às 18:49:10: **3.737 arquivos**, apenas as duas chaves VNC
+esperadas em `.env.guardian`, nenhum arquivo pulado. Artefato no Guardian:
+`observacao-oito-horas/scan-erp-automation-completo-184910.json`.
+A leitura de arquivos privados usou um container sem rede, com montagens
+somente leitura. A primeira passagem com UID 1001 apontou arquivos ilegíveis;
+esse resultado parcial permanece registrado e não foi tratado como aprovação.
+
+A busca usa segredos conhecidos da fonte com pelo menos oito caracteres e
+variantes raw/base64/URL. Exclui Git, ambientes virtuais, diretórios chamados
+`perfil_chrome` e links simbólicos. A inspeção de compactados tem profundidade
+máxima de dois níveis e limites de 20 MiB para entradas/payloads descompactados.
+Na árvore desta rodada, os ZIPs e o tar.gz encontrados tinham menos de 20 MiB.
+Não é prova de ausência de segredos desconhecidos ou fora desse escopo.
+
+Os auditores foram corrigidos para registrar erros de leitura internos, detectar
+segredos longos entre blocos e distinguir gzip de texto de tar.gz. Sete verificações
+com arquivos sintéticos passaram em cada auditor, incluindo corrupção de ZIP/gzip
+e arquivo sem permissão. Prova: `observacao-oito-horas/auditores-regressao.json`.
+A reconferência anterior de 16:32 permanece em `scan-erp-reconferencia.json`.
 
 O banco usa login efêmero de 1h, com graça de 10min, e capability de 4h, com
 graça de 5min. O passfile é material temporário em `/run/guardian/`.

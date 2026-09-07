@@ -89,6 +89,13 @@ exatamente ao login anunciado pelo worker para cada projeto. Prova em
 `conferir_banco_rotativo.py`, no Guardian, usa transações somente leitura e
 não imprime valores de credenciais.
 
+A varredura de credenciais iniciada às 18:49 leu 3.737 arquivos do ERP:
+somente VNC esperado em `.env.guardian`, nenhum arquivo pulado. O data-hub
+teve 3.278 arquivos lidos, sem correspondências e sem arquivos pulados.
+Escopo e limites em `AUDITORIA_CREDENCIAIS_2026-09-07.md`. OpenBao e Infisical
+continuam sem containers ou imagens; só restam os avisos de aposentadoria,
+com recuperação antiga cifrada no Guardian.
+
 Na conferência do envio, a view `operacional.boleto_envio_log` e a tabela
 `erp_automation.boleto_envio_log` retornaram as mesmas 685 linhas e 685 IDs
 distintos para a data de emissão 04/09. O robô consultou os 685 boletos e
