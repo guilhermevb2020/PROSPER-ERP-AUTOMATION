@@ -26,6 +26,7 @@ set -u
 # crontab do proprio `operacional2` — que nao tem docker e nao vai ter. Tudo
 # abaixo pendura daqui; nenhum caminho /app sobrou solto.
 RAIZ="${RAIZ_PAG:-/app}"
+. "$RAIZ/src/common/smart_financeiro_lock.sh"
 cd "$RAIZ" || exit 1
 LOG="$RAIZ/logs/vnc"
 mkdir -p "$LOG"

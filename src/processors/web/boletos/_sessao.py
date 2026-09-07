@@ -105,28 +105,20 @@ def _dispensar_seguranca(page) -> bool:
         return False
     for fr in page.frames:
         for sel in ("button:has-text('PROSSEGUIR')",
-                    "input[value='PROSSEGUIR']",
+                    "input[value='prosseguir' i]",
                     "a:has-text('PROSSEGUIR')",
                     "button:has-text('Prosseguir')"):
             try:
                 b = fr.locator(sel)
-                if b.count() > 0 and b.first.is_visible():
+                if b.count() > 0 and b.first.is_visible() and b.first.is_enabled():
                     b.first.click(timeout=4_000)
                     print(f"[{_now()}] modal 'Procedimento de seguranca' -> PROSSEGUIR")
                     return True
             except Exception:
                 continue
-        try:
-            ok = fr.evaluate("""()=>{
-                const b=[...document.querySelectorAll('button,input[type=button],input[type=submit],a')]
-                  .find(e=>((e.innerText||e.value||'').trim().toLowerCase())==='prosseguir');
-                if(b){b.click();return true;} return false;
-            }""")
-            if ok:
-                print(f"[{_now()}] modal 'Procedimento de seguranca' -> PROSSEGUIR (JS)")
-                return True
-        except Exception:
-            continue
+        # O Smart desabilita Prosseguir durante a verificacao por AJAX.
+        # HTMLElement.click() nesse estado nao faz nada: nao registrar sucesso
+        # nem forcar o estado do botao. O proximo ciclo aguarda a resposta do site.
     return False
 
 

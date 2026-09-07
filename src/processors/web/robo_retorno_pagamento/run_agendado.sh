@@ -7,6 +7,7 @@
 # O robo sobe o proprio Chrome, loga via CapSolver, insere cada .RET pendente
 # em Processar Retorno e FECHA. Um login por run — mesmo desenho dos outros.
 set -u
+. /app/src/common/smart_financeiro_lock.sh
 cd /app || exit 1
 LOG=/app/logs/vnc
 mkdir -p "$LOG"
