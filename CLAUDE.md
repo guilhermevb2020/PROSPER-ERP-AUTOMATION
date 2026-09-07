@@ -1,5 +1,20 @@
 # PROSPER-ERP-AUTOMATION - Diretrizes para Claude Code
 
+## Em um minuto: as credenciais deste projeto (07/09/2026)
+
+Este container **não carrega o `shared.env` e não tem senha de banco**. Tudo vem do
+`access-guardian`: o `.env.guardian` é gerado, nunca editado à mão; o banco
+é `DB_HOST=guardian` com senha vazia e login efêmero pelo worker; as integrações são
+**apelidos** que o proxy troca na saída (`GSMARTPWD1`/`GSMARTPWD2`/`GSMARTPWD3` para o Smart,
+`__GUARDIAN_…__` para CapSolver, Evolution e Nextcloud; SMTP pelo broker, senha vazia).
+Só VNC tem entrega de senha real para execução. A página inteira, com os comandos de operar e o molde para
+migrar os outros projetos: [`docs/CREDENCIAIS_GUARDIAN.md`](docs/CREDENCIAIS_GUARDIAN.md).
+
+Cinco regras que valem sempre: conferir o ambiente efetivo por nomes e classificação,
+sem exibir valores; chave nova entra na fonte e no `gerar:` da política, depois `guardian gerar
+erp-automation`; recriar só na janela 19:05–07:30; nada de senha real em `config/*.env`,
+código, log ou commit; nunca `dev_user` nem `POSTGRES_PASSWORD` do `shared.env`.
+
 ## Credenciais: fonte única no Access Guardian
 
 Credenciais core pertencem à fonte cifrada do Access Guardian. O ERP consome
@@ -19,6 +34,12 @@ que a senha do fornecedor seja rotativa; a fonte administrativa fica no Guardian
 
 ## Estado verificado em 07/09/2026
 
+Nova rodada manual autorizada em andamento desde 17:03, dentro da validação de
+16:34:17 até 08/09 00:34:17. Abrange as 11 tarefas finitas habilitadas; crédito
+é acompanhado na execução 2665935, sem duplicação. O histórico abaixo registra
+a rodada anterior e não encerra o acompanhamento atual. Resultados e limites:
+`docs/VALIDACAO_OITO_HORAS_2026-09-07.md`.
+
 Consulte [a matriz de validação](docs/VALIDACAO_ERP_2026-09-07.md) antes de
 repetir testes operacionais: 382 testes no host; 20 tarefas inventariadas, das
 quais 12 habilitadas foram alcançadas na rodada real de feriado (11 concluídas
@@ -31,7 +52,7 @@ Geração e retorno de pagamento usam uma trava financeira comum antes do Chrome
 arquivo enquanto houver uso. A falha do aviso de segurança às 16:03 recuperou
 na retentativa; retorno e geração concluíram novamente às 16:14 e 16:16.
 
-A rodada real posterior (12:25–13:15) confirmou 683 documentos enviados,
+A rodada real das 12:25–13:15 confirmou 683 documentos enviados,
 registro no banco e remessa CNAB400 de 14 títulos entregue ao Nextcloud.
 Emissão/envio executaram em modo real sem novos títulos; pagamentos logaram
 sem entrada pendente. Retorno e depósito também executaram, sem arquivos novos.
