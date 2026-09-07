@@ -1,6 +1,8 @@
 # Validação após limpeza e recreate — 07/09/2026
 
-Em andamento. Horários de Brasília. Rodada real iniciada às 14:42, pelo Hub,
+Rodada ERP conferida às 15:30: as 12 tarefas habilitadas foram alcançadas,
+11 concluídas com sucesso e o crédito em seu ciclo diário, avançando no ciclo 90.
+Horários de Brasília. Execução real iniciada às 14:42, pelo Hub,
 com o código e a imagem limpa v2 em produção. O despacho respeita idempotência;
 ausência de entrada não equivale a comprovação de escrita financeira.
 
@@ -31,19 +33,34 @@ no ERP; as novas execuções já o carregam, sem recreate do container.
 | Rotina | Execução | Evidência |
 |---|---:|---|
 | Emissão | 2666432 | Success, modo real, zero títulos novos. |
-| Envio | 2666498 | Success, modo real; conferência de duplicidade em andamento. |
-| Doc2You | 2666501 | Em execução. |
-| Pagamento | 2666484, 2666571, 2666646 | Success; consulta sem pagamentos pendentes. |
-| Retorno de pagamento | 2666539, 2666617 | Success, login confirmado; entrada sem arquivos. |
-| Retorno de cobrança agendado | 2666578 | Success, sem retorno bancário novo. |
-| Healthcheck | 2666621 | Success; registrou `busy` porque Doc2You estava ativo. |
-| Crédito | 2665935 | Ciclo diário em andamento desde 14:08; não duplicado. |
+| Emissão da tarde | 2667139 | Success, modo real; 55 contas sem títulos novos, zero falhas. |
+| Envio | 2666498 | Success, modo real; 685 títulos de 22 contas já enviados foram preservados, zero reenvios. |
+| Doc2You | 2666501 | Success; 683 listados/enviados, zero erros. Registro 61 em `erp_automation.doc2you_execucao`; 683 respostas HTTP 204 do Nextcloud. |
+| Doc2You antecipado | 2666827 | Success, login confirmado; zero documentos disponíveis. |
+| Remessa de cobrança | 2666828 | Success, 51 contas consultadas; nenhuma nova remessa necessária. |
+| Pagamento | 2667112 | Success às 15:25; consulta sem pagamentos pendentes. |
+| Retorno de pagamento | 2667160 | Success às 15:28, login confirmado; entrada sem arquivos. |
+| Retorno de cobrança | 2667101 | Success, sem retorno bancário novo. |
+| Depósito | 2667102 | Success, nenhum `.RET` na entrada; sem baixa. |
+| Healthcheck | 2667122, 2667175, 2667183 | Primeiro recuperou a sessão por login automático; depois da emissão confirmou `healthy`, `chrome_ok=true`, `logado=true` às 15:29 e 15:30. |
+| Crédito | 2665935 | Ciclo diário desde 14:08; ciclo 90 observado às 15:30, sem duplicar o processo. |
 
-Doc2You antecipado, remessa de cobrança e depósito permanecem na sequência de
-validação. A sessão principal será conferida novamente ao término. Os estados
+Na rodada anterior houve escrita financeira real: remessa 26236, de 14 títulos.
+O envio 373 em `financeiro.cnab_remessa_enviada` confirma recebimento pela API do
+banco às 14:00:08, com protocolo e hash igual ao controle do ERP. O campo
+`registro_confirmado_em` ainda está vazio: registro dos títulos depende do retorno
+bancário. Não confundir recebimento do arquivo com registro confirmado.
+
+Saídas sem entrada não provam baixa nem geração de pagamentos. O crédito não
+foi encerrado para fabricar uma conclusão da tarefa diária. Os estados
 individuais, incluindo tentativas malsucedidas, são preservados no Guardian em
 `auditoria/acompanhamento-erp-2026-09-07/validacao-feriado-erp-real.json` e
 `conferencia-feriado.json`.
+
+As correções anteriores de validação também foram versionadas em `9f5d4a0`:
+escrita dos logs no schema ERP, evidências da emissão, recusa de HTML de login no
+envio, preservação do exit code do crédito, classificação de indisponibilidade
+e modo seco do retorno de pagamento sem mover arquivos.
 
 ## Configuração e outras dependências
 

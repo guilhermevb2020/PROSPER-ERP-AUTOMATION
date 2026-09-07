@@ -17,8 +17,11 @@ identidades nem reintroduzir senhas reais nos arquivos dos robos.
 ## Estado verificado em 07/09/2026
 
 Consulte [a matriz de validação](docs/VALIDACAO_ERP_2026-09-07.md) antes de
-repetir testes operacionais: 352 testes no host; 342 na imagem limpa antes dos seis testes novos de retomada, 20 tarefas
-inventariadas. O Smart tem sessão única por identidade; novos logins podem
+repetir testes operacionais: 373 testes no host; 20 tarefas inventariadas, das
+quais 12 habilitadas foram alcançadas na rodada real de feriado (11 concluídas
+e crédito em execução). Sessão principal saudável às 15:30, após recuperação
+automática e emissão da tarde. Veja `docs/VALIDACAO_FERIADO_2026-09-07.md`.
+O Smart tem sessão única por identidade; novos logins podem
 interromper outro robô. Testes de regressão usam serviços simulados.
 
 A rodada real posterior (12:25–13:15) confirmou 683 documentos enviados,
@@ -358,6 +361,5 @@ schema versionado do lado de quem escreve.
 Mapa completo: registro
 `2026-08-03-quem-escreve-no-banco-o-mapa-que-nunca-existiu` no PostgreSQL do Learn
 (`learn contexto "quem escreve no banco"`).
-
 
 

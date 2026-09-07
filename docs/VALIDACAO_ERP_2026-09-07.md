@@ -46,8 +46,10 @@ A pausa de manutenção do Hub foi resolvida e a sequência retomada pela API.
 
 A remessa 26236 contém 14 títulos em CNAB400, 30 registros e 12.060 bytes.
 Foi conferida no controle local (um registro, tamanho e MD5 corretos) e baixada
-novamente do Nextcloud: conteúdo idêntico ao arquivo local. Isso prova a geração
-e a entrega ao Nextcloud; não comprova aceite/processamento pelo banco.
+novamente do Nextcloud: conteúdo idêntico ao arquivo local. Na conferência posterior,
+o envio 373 em `financeiro.cnab_remessa_enviada` confirmou recebimento pela API do
+banco às 14:00:08, com protocolo e mesmo hash. Ainda não há confirmação de registro
+dos títulos pelo retorno bancário (`registro_confirmado_em` vazio).
 
 O disparo manual do retorno às 13:09:51 recebeu HTTP 503. `/ready` confirmou
 `lifecycle=maintenance`, `reason=manual`, persistente desde 13:08:45, enquanto
