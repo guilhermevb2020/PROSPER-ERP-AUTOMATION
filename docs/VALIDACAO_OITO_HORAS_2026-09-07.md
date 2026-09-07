@@ -97,6 +97,20 @@ exatamente ao login anunciado pelo worker para cada projeto. Prova em
 `conferir_banco_rotativo.py`, no Guardian, usa transações somente leitura e
 não imprime valores de credenciais.
 
+O giro seguinte dos logins ocorreu às 19:07:19. Conexões novas nos dois
+projetos passaram às 19:07:53, com hash de `session_user` idêntico ao da
+identidade anunciada pelo worker. A conferência temporária
+`acompanhar_rotacoes_oito_horas.py` acompanha cada login novo até 00:34:17,
+sem escrever nos serviços. Resultados, inclusive divergências ou erros de
+leitura, ficam em `observacao-oito-horas/rotacoes-verificadas.json` e nos
+respectivos arquivos JSONL do Guardian.
+
+O Doc2You antecipado agendado 2670468 concluiu às 19:01:22, exit 0. O log
+confirma `logado. SSO Doc2You`; listados, enviados e erros ficaram em zero,
+assim como documentos complementares, notas e XMLs novos. Comprova login,
+consulta e conclusão sem entrada nova, sem envio adicional. Prova:
+`observacao-oito-horas/doc2you-antecipado-agendado-2670468.json`, no Guardian.
+
 A varredura de credenciais iniciada às 18:49 leu 3.737 arquivos do ERP:
 somente VNC esperado em `.env.guardian`, nenhum arquivo pulado. O data-hub
 teve 3.278 arquivos lidos, sem correspondências e sem arquivos pulados.
