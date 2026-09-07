@@ -77,3 +77,12 @@ A task continua enabled=true e criticality=critical no catálogo. O alerta que d
 Crédito 2665935 segue em execução desde 14:08:14, processo e avanço de log conferidos.
 As falhas 137 da tentativa anterior e de /tmp ausente são consequência do recreate;
 a recuperação não apaga esses registros. Commit da correção Smart: 2381603.
+
+### Segunda rodada confirmada — 14:30
+
+Execução 2666258 de gerar_remessa_pagamento_cnab_240: success/exit 0 em 14:30,
+sessão válida e consulta de pendentes concluída, zero pagamentos. Confirma duas
+rodadas consecutivas boas (14:25 e 14:30). Retorno 2666231 de 14:28 também success.
+Crédito 2665935 continua em execução, sem novo restart. O catálogo mantém pagamento
+enabled=true; correção de texto do alerta está no commit b9367b4 do Hub e ainda
+não foi implantada no processo principal do orquestrador.
