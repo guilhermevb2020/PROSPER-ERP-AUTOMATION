@@ -128,6 +128,23 @@ def sessao_logada() -> bool:
         return False
 
 
+def robo_smart_ativo() -> str | None:
+    """Evita relogin da identidade compartilhada enquanto outro robo a usa."""
+    for nome, padrao in (
+        ("envio de boletos", r"src[.]processors[.]web[.]boletos[.]enviar_lote"),
+        ("emissao de boletos", r"src[.]processors[.]web[.]boletos[.]emitir_lote"),
+        ("Doc2You", r"src[.]processors[.]web[.]doc2you[.]baixar_dia"),
+        ("remessa de cobranca", r"/robo_remessa/robo_remessa[.]py"),
+        ("retorno de cobranca/deposito", r"/robo_retorno/robo_retorno[.]py"),
+    ):
+        resultado = subprocess.run(["pgrep", "-f", padrao], capture_output=True, timeout=3)
+        if resultado.returncode == 0:
+            return nome
+        if resultado.returncode != 1:
+            raise RuntimeError("nao foi possivel conferir processos Smart ativos")
+    return None
+
+
 # ----------------------------------------------------------------------------- #
 # Religar Chrome (auto-recovery)
 # ----------------------------------------------------------------------------- #
@@ -176,7 +193,7 @@ def estado_anterior(conn) -> str | None:
 def registrar(conn, *, chrome_ok_: bool, logado: bool, estado: str, acao: str, detalhe: str | None) -> None:
     with conn.cursor() as cur:
         cur.execute("""
-            INSERT INTO operacional.boleto_sessao_healthcheck
+            INSERT INTO erp_automation.boleto_sessao_healthcheck
                 (chrome_ok, logado, estado, acao, detalhe)
             VALUES (%s, %s, %s, %s, %s)
         """, (chrome_ok_, logado, estado, acao, detalhe))
@@ -192,7 +209,7 @@ def notificar_humano(motivo: str) -> bool:
         f"⚠️ Robô de boletos precisa de login manual no Smart.\n\n"
         f"Motivo: {motivo}\n"
         f"Acesse https://vnc.prospereinvest.com.br/vnc.html (login do Authelia; "
-        f"a senha do VNC esta em config/boletos.env no servidor) e refaça o login.\n\n"
+        f"a credencial do VNC e administrada pelo Access Guardian) e refaça o login.\n\n"
         f"Enquanto não logar, o envio diário das 10h não vai rodar."
     )
 
@@ -230,6 +247,16 @@ def main():
     anterior = estado_anterior(conn)
 
     ok_chrome = chrome_ok()
+    ativo = robo_smart_ativo()
+    if ativo:
+        # A sessao e unica por identidade mesmo em perfis Chrome diferentes.
+        # Nao afirmar que esta logada: esta verificacao foi adiada.
+        registrar(conn, chrome_ok_=ok_chrome, logado=False, estado="busy",
+                  acao="verificacao_adiada",
+                  detalhe=f"{ativo} em andamento; sessao nao aferida, recuperacao adiada")
+        _log(f"estado=busy ({ativo}; sem relogin ou reinicio de Chrome)")
+        conn.close()
+        return
     if not ok_chrome:
         # CHROME_DOWN — auto-religa
         estado = "chrome_down"
@@ -246,31 +273,6 @@ def main():
             acao = acao + "+notificou"
         registrar(conn, chrome_ok_=False, logado=False, estado=estado, acao=acao, detalhe=detalhe)
         _log(f"estado={estado} acao={acao}")
-        conn.close()
-        return
-
-    # Chrome OK; checar se enviar_lote esta rodando (evita falso-positivo)
-    enviando = False
-    try:
-        r = subprocess.run(
-            ["pgrep", "-f", "src.processors.web.boletos.enviar_lote"],
-            capture_output=True, timeout=3,
-        )
-        enviando = r.returncode == 0
-    except Exception:
-        pass
-
-    if enviando:
-        # Nao testa esta_logado durante envio em andamento — o Chrome esta
-        # ocupado com POSTs longos e o GET de checagem fica enfileirado,
-        # dando falso False. Tratamos como healthy_busy (Chrome ok, envio rodando).
-        registrar(
-            conn, chrome_ok_=True, logado=True,
-            estado="healthy_busy",
-            acao="nenhuma",
-            detalhe="enviar_lote em andamento; esta_logado pulado para evitar falso-positivo",
-        )
-        _log("estado=healthy_busy (envio em curso, skip esta_logado)")
         conn.close()
         return
 
