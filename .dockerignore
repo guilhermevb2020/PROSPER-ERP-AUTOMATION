@@ -1,0 +1,29 @@
+# Criado em 06/09/2026 porque o build FALHAVA: o contexto incluia
+# data/boletos/perfil_chrome/Default, que o container cria como root, e o remetente do
+# build nao consegue le-lo. A imagem era de 04/06/2026 — anterior a esses arquivos —,
+# entao o build estava quebrado em silencio desde entao.
+#
+# Tudo o que sai daqui e BIND-MOUNT no compose: no runtime o conteudo da imagem seria
+# coberto pelo diretorio do host de qualquer jeito. Copiar era desperdicio, nao seguranca.
+# Efeito medido: contexto de 2,3 GB para ~100 MB.
+data/
+logs/
+temp/
+.venv-sandbox/
+.venv/
+.git/
+__pycache__/
+*.pyc
+
+# Credenciais e cópias privadas nunca entram em uma camada de imagem.
+.env*
+!.env.example
+config/*.env
+!config/*.example.env
+config/credentials.csv
+backups/
+.cache/
+.claude/
+.vnc/
+*.age
+*.pgpass

@@ -1,5 +1,47 @@
 # PROSPER-ERP-AUTOMATION - Diretrizes para Claude Code
 
+## Credenciais: fonte única no Access Guardian
+
+Credenciais core pertencem à fonte cifrada do Access Guardian. O ERP consome
+apelidos, identidade efêmera do banco e relay SMTP; não cadastrar senha real
+em configuração, código, documentação ou backup local. Material de sessão e
+VNC entregue para execução não constitui uma segunda fonte de administração.
+
+A [auditoria de credenciais](docs/AUDITORIA_CREDENCIAIS_2026-09-07.md) registra
+limpeza de configuracoes, logs, traces e historico Git local/GitHub. Sandbox e
+finalizador usam a identidade propria GSMARTPWD3; CapSolver proprio por apelido.
+A imagem guardian-clean-20260907-v2 esta implantada, a imagem antiga foi removida.
+VNC continua entregue pelo Guardian como material de execucao. Nunca misturar
+identidades nem reintroduzir senhas reais nos arquivos dos robos.
+
+## Estado verificado em 07/09/2026
+
+Consulte [a matriz de validação](docs/VALIDACAO_ERP_2026-09-07.md) antes de
+repetir testes operacionais: 352 testes no host; 342 na imagem limpa antes dos seis testes novos de retomada, 20 tarefas
+inventariadas. O Smart tem sessão única por identidade; novos logins podem
+interromper outro robô. Testes de regressão usam serviços simulados.
+
+A rodada real posterior (12:25–13:15) confirmou 683 documentos enviados,
+registro no banco e remessa CNAB400 de 14 títulos entregue ao Nextcloud.
+Emissão/envio executaram em modo real sem novos títulos; pagamentos logaram
+sem entrada pendente. Retorno e depósito também executaram, sem arquivos novos.
+Consulte a matriz para os IDs e limites: isso não comprova baixas sem entrada.
+A manutenção manual do Hub pausou o despacho e foi liberada externamente;
+a sequência terminou após a retomada. O mantenedor normal do Chrome foi
+restaurado com login automático e keepalive válido. Crédito segue o ciclo diário.
+
+O ERP usa o Guardian para banco e integrações. A conta financeira usa
+`PAGAMENTO_SENHA=GSMARTPWD2` no ambiente; não restaurar a senha real em
+`config/robo_pagamento.env`. O valor da fonte foi corrigido para respeitar os
+11 caracteres efetivamente enviados pelo campo antes da migração. Logins de
+pagamento confirmados após a correção. Credenciais nunca devem ser exibidas.
+
+`pytest` coleta somente a suíte automatizada definida em `pytest.ini`.
+Scripts manuais de email e browser em `tests/` têm efeitos externos ao importar.
+Dependências de teste: `requirements-test.txt`. PDFs de emissão são guardados
+em `/app/data/boletos/emitidos`, com manifesto; não versionar esses documentos.
+
+
 ## 🔴 REGRAS PRINCIPAIS (SEMPRE RESPEITAR)
 
 ### 1. SEMPRE USAR AGENTES ESPECIALIZADOS PARA TAREFAS
@@ -285,29 +327,37 @@ PROSPER-ERP-AUTOMATION/
 **Python**: 3.12+
 **Playwright**: Latest
 
-## Banco — a role deste projeto
+## Banco — estado atual
 
-`app_erp_automation`, credencial em `APP_DB_USER`/`APP_DB_PASSWORD` do `.env`. **Criada
-em 03/08/2026, ainda NÃO em uso** — a troca da conexão é passo deliberado.
+O ERP conecta pelo proxy do access-guardian. A identidade efetiva verificada é
+`app_erp_automation`, com `session_user` efêmero `gdh_erp_automation_...`.
+As variáveis de senha de banco do container ficam vazias; o proxy usa a
+capability/passfile. A descrição antiga de conexão como superusuário ficou
+obsoleta após a migração.
 
-⚠️ **Hoje este container tem `DB_USER=prospere`, que é SUPERUSUÁRIO.** Superusuário
-ignora qualquer permissão do banco. Sair disso é o motivo da role existir.
+Emissão/envio escrevem em `erp_automation.boleto_emissao_log` e
+`erp_automation.boleto_envio_log`. A leitura legada de
+`operacional.boleto_envio_log` usa view de compatibilidade. Não alterar schemas
+ou permissões baseado apenas em nomes antigos deste documento.
 
-Ela **não é superusuário**, e por ora herda `dev_user` (andaime) para a troca não mudar
-comportamento nenhum. O aperto vem depois, guiado pelo **log de DDL** — ligado em
-03/08/2026, registra usuário, IP e aplicação de todo `CREATE`/`ALTER`/`DROP`/`GRANT`.
+# hub orchestration
+
+leia a documantecacao da api do hub-orchestration   para acessar via api
+
+
+voce tem os dados em .env
 
 ⛔ **Credencial nunca em arquivo versionado.**
 
-**O que este projeto escreve, medido em 03/08:** `operacional.boleto_envio_log` /
+**Registro histórico (03/08; não usar como estado atual):** `operacional.boleto_envio_log` /
 `boleto_emissao_log` / `boleto_sessao_healthcheck`, e `stg.doc*` / `stg.robo_analise_*`.
 ⚠️ A tabela `operacional.boleto_envio_log` foi **criada pela migration 079 do
 `process-automation`** e é escrita daqui — dependência cross-repo real, sem contrato de
 schema versionado do lado de quem escreve.
 
-Mapa completo:
-`automation/process-automation/docs/ADR/diagnostico/2026-08-03-quem-escreve-no-banco-o-mapa-que-nunca-existiu.md`
-
+Mapa completo: registro
+`2026-08-03-quem-escreve-no-banco-o-mapa-que-nunca-existiu` no PostgreSQL do Learn
+(`learn contexto "quem escreve no banco"`).
 
 
 

@@ -78,3 +78,11 @@ data/sandbox/
 
 # venv do host para rodar o sandbox dos robos (scripts/sandbox/)
 .venv-sandbox/
+
+# Guardian é a fonte de credenciais; artefatos locais não são versionáveis.
+.env*
+!.env.example
+*.age
+*.pgpass
+backups/
+.cache/

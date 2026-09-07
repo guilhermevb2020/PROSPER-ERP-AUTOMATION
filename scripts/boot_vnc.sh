@@ -25,6 +25,41 @@ set -uo pipefail
 LOG_DIR=/app/logs/vnc
 mkdir -p "$LOG_DIR"
 
+# ---------------------------------------------------------------------------
+# CA do access-guardian na base NSS do Chrome.
+#
+# O Chrome NAO usa SSL_CERT_FILE: ele tem a propria base (NSS). Sem a CA aqui, todo
+# HTTPS que passar pelo tunel do guardian daria erro de certificado — e as sete tasks
+# que logam no Smart parariam. As tasks entram por `docker exec`, que NAO herda o
+# ambiente deste script; a base NSS resolve isso porque e ARQUIVO, nao variavel.
+#
+# ⛔ Instalar o pacote inteiro aqui seria errado: o `certutil -A` pega o PRIMEIRO
+# certificado do arquivo, e em 06/09/2026 isso instalou uma raiz publica espanhola no
+# lugar da nossa. Por isso o worker publica `guardian-ca.crt` — so a nossa.
+#
+# ⚠️ O certutil deveria vir da IMAGEM (o Dockerfile ja o pede), mas em 06/09/2026 a imagem
+# do erp NAO pode ser reconstruida: `playwright` esta instalado no container e NAO esta no
+# requirements.txt, entao `playwright install chromium` falha com exit 127 num build limpo.
+# Enquanto isso nao for consertado, instalamos aqui na partida. E lento e depende de rede;
+# quando a imagem voltar a construir, esta instalacao vira no-op.
+GUARDIAN_CA=/run/guardian/guardian-ca.crt
+if [ -f "$GUARDIAN_CA" ] && ! command -v certutil >/dev/null 2>&1; then
+    echo "[boot_vnc] certutil ausente na imagem; instalando libnss3-tools…"
+    apt-get update -qq >/dev/null 2>&1 && apt-get install -y -qq libnss3-tools >/dev/null 2>&1 || true
+fi
+if [ -f "$GUARDIAN_CA" ] && command -v certutil >/dev/null 2>&1; then
+    mkdir -p /root/.pki/nssdb
+    [ -f /root/.pki/nssdb/cert9.db ] || certutil -d sql:/root/.pki/nssdb -N --empty-password >/dev/null 2>&1
+    certutil -d sql:/root/.pki/nssdb -D -n guardian-local >/dev/null 2>&1
+    if certutil -d sql:/root/.pki/nssdb -A -t "C,," -n guardian-local -i "$GUARDIAN_CA" 2>/dev/null; then
+        echo "[boot_vnc] CA do access-guardian instalada na base NSS do Chrome"
+    else
+        echo "[boot_vnc] AVISO: nao consegui instalar a CA do guardian; HTTPS pelo tunel vai falhar" >&2
+    fi
+elif [ -f "$GUARDIAN_CA" ]; then
+    echo "[boot_vnc] AVISO: certutil ausente (libnss3-tools); a CA do guardian nao foi instalada" >&2
+fi
+
 DISPLAY_NUM="${DISPLAY_NUM:-99}"
 SCREEN_GEOMETRY="${SCREEN_GEOMETRY:-1920x1080x24}"
 VNC_PORT="${VNC_PORT:-5900}"
@@ -118,7 +153,10 @@ fi
 # -------------------------------------------------------------------------- #
 # Limpa lock do perfil Chrome se nao tiver Chrome vivo (crash sujo do ultimo run)
 if ! pgrep -f "remote-debugging-port=9222" >/dev/null 2>&1; then
-    if [ -e "$PERFIL_DIR/SingletonLock" ] || [ -e "$PERFIL_DIR/SingletonCookie" ]; then
+    # Locks do Chrome sao symlinks; -e ignora os que ficaram quebrados no recreate.
+    if [ -e "$PERFIL_DIR/SingletonLock" ] || [ -L "$PERFIL_DIR/SingletonLock" ] || \
+       [ -e "$PERFIL_DIR/SingletonCookie" ] || [ -L "$PERFIL_DIR/SingletonCookie" ] || \
+       [ -e "$PERFIL_DIR/SingletonSocket" ] || [ -L "$PERFIL_DIR/SingletonSocket" ]; then
         log "removendo locks orfaos do perfil Chrome"
         rm -f "$PERFIL_DIR/SingletonLock" \
               "$PERFIL_DIR/SingletonCookie" \

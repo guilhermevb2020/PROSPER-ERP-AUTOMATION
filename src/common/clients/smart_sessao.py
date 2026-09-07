@@ -43,6 +43,10 @@ class SemSessao(RuntimeError):
     """Abriu o Chrome, mas nao ficou logado no Smart."""
 
 
+class SmartIndisponivel(RuntimeError):
+    """Nao foi possivel confirmar a sessao; nao implica credencial recusada."""
+
+
 def parece_deslogado(html) -> bool:
     """True se a resposta do Smart e, na verdade, 'voce nao esta logado'.
 
@@ -92,28 +96,46 @@ def sessao_viva(ctx, cfg, tentativas: int = 3, timeout_ms: int = 45_000, log=pri
     TIMEOUT NAO E DESLOGADO — e a distincao que evita o falso alarme mais comum
     aqui: o Smart fica lento logo depois de processar algo pesado, o ping de 20s
     estoura e o robo anuncia "sessao nao esta logada" com a sessao perfeita.
-    So declara deslogado quando A RESPOSTA diz isso; None = nao consegui falar.
+    So declara deslogado quando A RESPOSTA diz isso; None = consulta inconclusiva
+    (timeout, falha de transporte, HTTP diferente de 200 ou resposta vazia).
     """
     ultimo = None
     for tentativa in range(1, tentativas + 1):
         try:
             r = ctx.request.get(cfg.URL_PING, timeout=timeout_ms)
             corpo = r.body().decode("iso-8859-1", errors="replace")
-            return "deslogado" if parece_deslogado(corpo) else "ok"
         except Exception as e:
-            ultimo = e
-            log(f"  (ping da sessao falhou, tentativa {tentativa}/{tentativas}: "
-                f"{type(e).__name__})")
+            # O detalhe da excecao pode conter cabecalhos/cookies da requisicao.
+            ultimo = type(e).__name__
+        else:
+            if r.status != 200:
+                ultimo = f"HTTP {r.status}"
+            elif not corpo.strip():
+                ultimo = "resposta vazia"
+            else:
+                return "deslogado" if parece_deslogado(corpo) else "ok"
+        log(f"  (ping da sessao inconclusivo, tentativa {tentativa}/{tentativas}: "
+            f"{ultimo})")
+        if tentativa < tentativas:
             time.sleep(3)
     log(f"  ultimo erro do ping: {ultimo}")
     return None
 
 
 def login(ctx, cfg, timeout_total_s: int = 300, log=print) -> bool:
-    """Garante sessao logada. NUNCA bloqueia esperando teclado."""
-    if esta_logado(ctx, cfg):
+    """Garante sessao logada; consulta inconclusiva levanta SmartIndisponivel.
+
+    Nao confundir transporte com autenticacao: um timeout nao justifica novo
+    login (que pode invalidar outra sessao da conta), nem invalida o login feito.
+    """
+    estado = sessao_viva(ctx, cfg, log=log)
+    if estado == "ok":
         log("  sessao ja valida -> sem novo login")
         return True
+    if estado is None:
+        raise SmartIndisponivel(
+            "nao consegui confirmar a sessao do Smart apos as tentativas de ping; "
+            "login nao foi iniciado. Veja o diagnostico do ping acima.")
 
     faltando = [n for n, v in (("EMAIL", cfg.EMAIL), ("SENHA", cfg.SENHA))
                 if not (v or "").strip()]
@@ -137,13 +159,19 @@ def login(ctx, cfg, timeout_total_s: int = 300, log=print) -> bool:
         log(f"  [login] ERRO: {e}")
         return False
 
-    # confirma com a NOSSA heuristica (a que enxerga o expira.php)
-    if ok and esta_logado(ctx, cfg):
-        log("  login OK")
-        return True
+    # Em 07/09 o login confirmou sucesso, mas o ping seguinte falhou 20s depois
+    # e virou exit=2 (esta_logado() ocultava a causa). Repetir so a leitura.
     if ok:
-        log("  [login] o auto-login disse OK mas o ping da tela do robo nao "
-            "confirmou (usuario sem acesso? janela de horario do Smart?)")
+        estado = sessao_viva(ctx, cfg, log=log)
+        if estado == "ok":
+            log("  login OK")
+            return True
+        if estado is None:
+            raise SmartIndisponivel(
+                "auto-login concluiu, mas a tela do Smart nao pode ser validada "
+                "apos as tentativas de ping; isto nao confirma sessao expirada.")
+        log("  [login] o auto-login disse OK mas a tela do robo respondeu "
+            "sessao expirada/login (usuario sem acesso? janela de horario do Smart?)")
     else:
         log("  [login] auto-login FALHOU")
     return False
@@ -203,8 +231,8 @@ def anexar(p, cfg, log=print):
 def sessao(p, cfg, usar_cdp: bool = False, logar: bool = True, log=print):
     """Contexto logado. Fecha o Chrome APENAS quando foi este modulo que o abriu.
 
-    Levanta SemNavegador/SemSessao: o robo agendado precisa MORRER com erro, e
-    nao seguir reportando "nada a fazer".
+    Levanta SemNavegador/SemSessao/SmartIndisponivel: o robo agendado precisa
+    MORRER com erro, e nao seguir reportando "nada a fazer".
     """
     proprio = not usar_cdp
     ctx = abrir_chrome(p, cfg, log) if proprio else anexar(p, cfg, log)

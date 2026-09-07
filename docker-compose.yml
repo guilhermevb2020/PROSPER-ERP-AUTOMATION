@@ -1,13 +1,17 @@
 services:
   erp-automation:
+    # Imagem sem camadas de credenciais/estado legado; validada antes do recreate.
+    image: erp-automation-erp-automation:guardian-clean-20260907-v2
     build:
       context: .
       dockerfile: Dockerfile
     container_name: erp-automation
     restart: unless-stopped
     env_file:
-      - /home/prospere/docker/shared.env
+      # .env.guardian: gerado pelo access-guardian (infrastructure/access-guardian),
+      # 47 chaves, so o que este codigo le. Substituiu o shared.env em 04/09/2026.
       - .env
+      - .env.guardian
     ports:
       - "6092:6092"
       - "5900:5900"   # x11vnc nativo (clientes RealVNC, TigerVNC, etc.)
@@ -35,9 +39,12 @@ services:
       # com MOVER_PROCESSADOS_RET=False (a idempotencia dele e o MD5 do conteudo,
       # nao a pasta).
       - /home/prospere/docker/app/nextcloud/data/__groupfolders/4/files/CNAB:/app/data/cnab_nextcloud:ro
+      # access-guardian, fase 3 (06/09/2026): a PASTA com o .pgpass da capability e o
+      # guardian-bundle.crt. Pasta e nao arquivo: o worker troca o inode a cada rotacao.
+      - /home/prospere/docker/infrastructure/access-guardian/runtime/erp-automation:/run/guardian:ro
     environment:
       - DISPLAY=:99
-      # VNC_PASSWORD vem do `.env` via env_file (fora do git). Nao reintroduzir
+      # VNC_PASSWORD e entregue pelo Guardian via .env.guardian. Nao reintroduzir
       # aqui: `environment:` sobrescreve `env_file:` e o valor iria pro repo.
       #
       # Role PROPRIA deste projeto desde 03/08/2026. Antes daqui `DB_USER` valia
@@ -57,11 +64,11 @@ services:
       # `trs.operacoes_desagio`) em leitura e escrita, e as 19 sequencias de
       # `int`/`operacional`/`stg`/`trs`.
       #
-      # ROLLBACK: comentar as 4 linhas abaixo e `docker compose up -d`.
-      - DB_USER=${APP_DB_USER}
-      - DB_PASSWORD=${APP_DB_PASSWORD}
-      - POSTGRES_USER=${APP_DB_USER}
-      - POSTGRES_PASSWORD=${APP_DB_PASSWORD}
+      # Desde 04/09/2026 DB_USER/DB_PASSWORD/POSTGRES_USER/POSTGRES_PASSWORD chegam pelo
+      # .env.guardian, com identidade efemera e senha vazia; as 4 linhas
+      # `DB_USER=${APP_DB_USER}` etc. sairam daqui porque `environment:` sobrescreveria
+      # o env_file com o valor do .env. Recuperacao preserva o Guardian como fonte;
+      # nao restaurar shared.env nem senhas reais no projeto.
       #
       # ⛔ ONDE ESTE PROJETO GRAVA O LASTRO — mudou em 20/08/2026, na virada do
       # setor LASTRO para group folder próprio (decisão da Gerência, 15/08/2026).
@@ -83,7 +90,8 @@ services:
       - DOC2YOU_COMPL_NC_DEST=LASTRO/entrada
       - ROBO_CREDITO_NC_DEST=LASTRO/entrada
     networks:
-      - prospere-network
+      - prospere-network     # FICA: nextcloud, evolution-api e postgres sao alcancados por nome
+      - kg_erp-automation    # o worker: DB_HOST/POSTGRES_HOST=guardian e HTTP_PROXY=guardian
     shm_size: '2gb'
     command: ["/app/scripts/boot_vnc.sh"]
     healthcheck:
@@ -96,3 +104,5 @@ services:
 networks:
   prospere-network:
     external: true
+  kg_erp-automation:
+    external: true   # criada pelo compose de infrastructure/access-guardian

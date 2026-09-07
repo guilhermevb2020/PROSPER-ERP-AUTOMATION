@@ -35,3 +35,21 @@ colorama==0.4.6
 
 # API Flask para controle remoto
 Flask==3.0.0
+
+# =============================================================================
+# Web Automation (Playwright) - o que os robos USAM hoje
+# -----------------------------------------------------------------------------
+# Medido em 07/09/2026: o cabecalho acima e da era Nodriver+Selenium (commit 7f8902b,
+# out/2025), mas os sete robos que logam no Smart usam PLAYWRIGHT — e tudo o que essa
+# migracao precisou foi instalado a mao no container e nunca declarado. O build limpo
+# morria em `playwright install chromium` com exit 127, e a imagem em producao (de
+# 04/06/2026) nao podia ser reconstruida. Versoes = as instaladas no container que roda.
+# =============================================================================
+playwright==1.60.0
+playwright-stealth==2.0.3      # src/common/browser/stealth_integration.py (import preguicoso)
+# Banco (boletos/_db.py, robo_credito/config.py, SQLAlchemy em common/)
+psycopg2-binary==2.9.10
+SQLAlchemy==2.0.36
+# Config e templates (config_loader, notificacoes)
+PyYAML==6.0.3
+Jinja2==3.1.2

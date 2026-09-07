@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import contextlib
 import os
+import subprocess
 from pathlib import Path
 
 RAIZ = Path(__file__).resolve().parents[2]
@@ -28,6 +29,43 @@ class SandboxSemCredencial(RuntimeError):
 
 class SandboxSemSessao(RuntimeError):
     """Subiu o Chrome mas nao ficou logado no Smart."""
+
+
+def _guardian(cfg: dict[str, str]) -> dict[str, str]:
+    """Configura transporte e CA sem entregar a senha do cofre ao Python."""
+    if RAIZ == Path("/app"):
+        proxy = os.environ.get("HTTPS_PROXY", "http://guardian:3128")
+        bundle = Path("/run/guardian/guardian-bundle.crt")
+        browser_home = ""
+    else:
+        proxy = cfg.get("SANDBOX_GUARDIAN_PROXY", "")
+        if not proxy:
+            try:
+                import ipaddress
+                result = subprocess.run(
+                    ["docker", "inspect", "access-guardian-worker", "--format",
+                     '{{(index .NetworkSettings.Networks "kg_erp-automation").IPAddress}}'],
+                    capture_output=True, text=True, check=True, timeout=10)
+                address = str(ipaddress.ip_address(result.stdout.strip()))
+                proxy = f"http://{address}:3128"
+            except (OSError, ValueError, subprocess.SubprocessError) as exc:
+                raise SandboxSemCredencial("Guardian indisponivel para o sandbox") from exc
+        bundle = RAIZ.parents[1] / "infrastructure/access-guardian/runtime/erp-automation/guardian-bundle.crt"
+        browser_home = str(RAIZ / f"data/sandbox/guardian_home_{os.getuid()}")
+        if not (Path(browser_home) / ".pki/nssdb/cert9.db").is_file():
+            raise SandboxSemCredencial("CA do Guardian ausente no perfil privado do sandbox")
+    if not bundle.is_file():
+        raise SandboxSemCredencial("Bundle de CA do Guardian indisponivel")
+    for name in ("HTTP_PROXY", "HTTPS_PROXY", "http_proxy", "https_proxy"):
+        os.environ[name] = proxy
+    os.environ["NO_PROXY"] = "localhost,127.0.0.1,::1"
+    os.environ["no_proxy"] = os.environ["NO_PROXY"]
+    os.environ["REQUESTS_CA_BUNDLE"] = str(bundle)
+    os.environ["SSL_CERT_FILE"] = str(bundle)
+    os.environ["SANDBOX_GUARDIAN_PROXY"] = proxy
+    if browser_home:
+        os.environ["SANDBOX_GUARDIAN_BROWSER_HOME"] = browser_home
+    return {"proxy": proxy, "bundle": str(bundle)}
 
 
 def _ler_env_file(caminho: str) -> dict[str, str]:
@@ -66,6 +104,12 @@ def carregar_env(log=print) -> dict[str, str]:
     if faltando:
         raise SandboxSemCredencial(f"faltam em {ENV_SANDBOX}: {', '.join(faltando)}")
 
+    # Apelidos da identidade propria, publicados apenas depois da importacao.
+    if senha == "GSMARTPWD3":
+        if capsolver != "__GUARDIAN_SANDBOX_CAPSOLVER_API_KEY__":
+            raise SandboxSemCredencial("Sandbox deve usar sua chave CapSolver pelo Guardian")
+        _guardian(cfg)
+
     # data/ do HOST — sem isto o boletos._config tenta /app/data, que nao existe.
     data_dir_host = cfg.get("SANDBOX_DATA_DIR", str(RAIZ / "data" / "boletos"))
     perfil = cfg.get("SANDBOX_PERFIL", str(RAIZ / "data" / "sandbox" / "perfil_chrome"))
@@ -95,7 +139,11 @@ def carregar_env(log=print) -> dict[str, str]:
         "BOLETO_ENV_FILE": ENV_SANDBOX,
     }
     for k, v in publicar.items():
-        os.environ.setdefault(k, v)  # nao sobrescreve o que ja veio de fora
+        if k in ("BOLETO_EMAIL", "BOLETO_SENHA", "CAPSOLVER_API_KEY"):
+            # Dentro do container, nao herdar a identidade de producao.
+            os.environ[k] = v
+        else:
+            os.environ.setdefault(k, v)
 
     # Display / VNC / gravacao (depuracao visual)
     # SANDBOX_HEADLESS=false so faz sentido se houver display (Xvfb do vnc.sh).
@@ -104,7 +152,9 @@ def carregar_env(log=print) -> dict[str, str]:
     headless = cfg.get("SANDBOX_HEADLESS", "true").strip().lower() not in ("0", "false", "nao", "no")
     display = cfg.get("SANDBOX_DISPLAY", "").strip()
     trace_dir = cfg.get("SANDBOX_TRACE_DIR", str(RAIZ / "data" / "sandbox" / "trace"))
-    gravar = cfg.get("SANDBOX_GRAVAR", "true").strip().lower() not in ("0", "false", "nao", "no")
+    gravar = cfg.get("SANDBOX_GRAVAR", "false").strip().lower() not in ("0", "false", "nao", "no")
+    if gravar and senha != "GSMARTPWD3":
+        raise SandboxSemCredencial("Trace exige apelidos Guardian; senha real nao pode ser gravada")
     if display:
         os.environ["DISPLAY"] = display  # o Chrome herda o DISPLAY do processo
 
@@ -135,12 +185,29 @@ def abrir_chrome(p, perfil: str, headless: bool = True, log=print,
     depuracao visual que funciona sem X no host — assiste-se depois em vez de
     ao vivo por VNC.
     """
+    # ⚠️ --window-size e OBRIGATORIO em headless. `--start-maximized` depende de
+    # window manager e NAO tem efeito sem X: o Chrome cai no default 800x600.
+    # Com `no_viewport=True` o viewport E a janela, entao a pagina inteira
+    # renderiza em 800px de largura — abaixo do breakpoint `md` (768px) de
+    # Tailwind DENTRO dos frames do Smart. Telas responsivas escondem controles
+    # (`class="hidden md:flex"`): o elemento existe no DOM, mas nunca fica
+    # clicavel, e o clique morre por timeout sem dizer o porque.
+    # Medido em 01/09/2026: `#btnPagamento` da grade de pagamento, invisivel a
+    # 800x600 e clicavel a 1920x1080 — que e o tamanho do Xvfb do container.
+    janela = os.environ.get("SANDBOX_JANELA", "1920,1080").strip()
     kwargs = dict(
         user_data_dir=perfil,
         headless=headless,
-        args=["--no-sandbox", "--disable-dev-shm-usage", "--start-maximized"],
+        args=["--no-sandbox", "--disable-dev-shm-usage",
+              f"--window-size={janela}", "--start-maximized"],
         no_viewport=True,
     )
+    proxy = os.environ.get("SANDBOX_GUARDIAN_PROXY", "")
+    if proxy:
+        kwargs["proxy"] = {"server": proxy, "bypass": "localhost,127.0.0.1"}
+        browser_home = os.environ.get("SANDBOX_GUARDIAN_BROWSER_HOME")
+        if browser_home:
+            kwargs["env"] = {**os.environ, "HOME": browser_home}
     if gravar_video_em:
         kwargs["record_video_dir"] = gravar_video_em
         kwargs["record_video_size"] = {"width": 1280, "height": 800}
