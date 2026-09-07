@@ -35,6 +35,28 @@ Os pagamentos agendados também estão sendo observados: 2668796 e 2668824
 confirmaram login e consulta, sem arquivos de retorno ou pagamentos pendentes.
 Saída sem entrada não comprova baixa nem geração financeira nova.
 
+## Incidente do CapSolver às 18:13 e recuperação
+
+A execução agendada 2669741 falhou com exit 2 às 18:13:41. O login alcançou
+o CapSolver, que respondeu `ERROR_CAPTCHA_SOLVE_FAILED` ao consultar o desafio,
+sem entregar token. A tentativa 2 do mesmo run, 2669760, concluiu com success
+às 18:15:45, antes da alteração abaixo. Não atribuir essa recuperação ao código
+novo nem apagar a tentativa que falhou. As 11 execuções manuais anteriores
+continuam válidas; não significam ausência de incidentes posteriores.
+
+O solver compartilhado passa a criar uma segunda task somente quando o desafio
+retorna exatamente `ERROR_CAPTCHA_SOLVE_FAILED`. Aguarda 5s, conserva o mesmo
+prazo total (180s, agora incluindo criação) e limita a duas tasks. Chave inválida,
+saldo insuficiente e erros desconhecidos continuam encerrando imediatamente.
+Falhas de transporte no polling continuam consultando a mesma task.
+
+36 testes de solver/sessão passaram em container isolado, com rede desativada,
+incluindo recuperação, esgotamento, prazo compartilhado e privacidade dos logs.
+A fonte é montada em `/app/src`: a publicação por commit alcança os próximos
+processos sem recriar o ERP nem encerrar crédito/mantenedor. A instância longa
+já carregada mantém seu módulo até o encerramento normal. Prova operacional
+posterior à publicação ainda pendente nesta revisão.
+
 ## Provas de continuidade e credenciais
 
 O crédito manteve o PID 807 e avançou até o ciclo 208 na conferência das 17:23.

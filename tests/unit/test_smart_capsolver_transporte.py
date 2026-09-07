@@ -73,3 +73,58 @@ def test_poll_respeita_prazo_mesmo_com_falhas(monkeypatch, clock):
     assert clock[0] == 5
     assert post.call_count == 3
     assert post.call_args_list[-1].kwargs["timeout"] == 1
+
+
+def test_desafio_nao_resolvido_cria_uma_nova_task_e_recupera(monkeypatch, clock, capsys):
+    post = Mock(side_effect=[
+        response(body={"errorId": 0, "taskId": "primeira"}),
+        response(body={"errorId": 1, "errorCode": "ERROR_CAPTCHA_SOLVE_FAILED",
+                       "errorDescription": "secret-test-key"}),
+        response(body={"errorId": 0, "taskId": "segunda"}),
+        response(body={"errorId": 0, "status": "ready",
+                       "solution": {"gRecaptchaResponse": "token-novo"}}),
+    ])
+    monkeypatch.setattr(requests, "post", post)
+    assert sessao._resolver_recaptcha_sync("https://example.invalid", "site") == "token-novo"
+    assert [c.args[0].rsplit("/", 1)[-1] for c in post.call_args_list] == [
+        "createTask", "getTaskResult", "createTask", "getTaskResult"]
+    assert post.call_args_list[-1].kwargs["json"]["taskId"] == "segunda"
+    assert clock[0] == 9
+    output = capsys.readouterr().out
+    assert "nova tentativa em 5s" in output
+    assert "secret-test-key" not in output and "token-novo" not in output
+
+
+def test_falha_de_resolucao_repetida_para_apos_duas_tasks(monkeypatch, clock):
+    post = Mock(side_effect=lambda url, **kwargs:
+                response(body={"errorId": 0, "taskId": "task"}) if url.endswith("createTask")
+                else response(body={"errorId": 1, "errorCode": "ERROR_CAPTCHA_SOLVE_FAILED"}))
+    monkeypatch.setattr(requests, "post", post)
+    assert sessao._resolver_recaptcha_sync("https://example.invalid", "site") is None
+    assert post.call_count == 4
+
+
+@pytest.mark.parametrize("codigo", ["ERROR_ZERO_BALANCE", "ERROR_KEY_DOES_NOT_EXIST",
+                                   "ERROR_UNRECOGNIZED", "ERROR_TASK_NOT_SUPPORTED"])
+def test_falhas_nao_classificadas_como_resolucao_nao_criam_outra_task(monkeypatch, clock, codigo):
+    post = Mock(side_effect=[
+        response(body={"errorId": 0, "taskId": "task"}),
+        response(body={"errorId": 1, "errorCode": codigo}),
+    ])
+    monkeypatch.setattr(requests, "post", post)
+    assert sessao._resolver_recaptcha_sync("https://example.invalid", "site") is None
+    assert post.call_count == 2
+
+
+def test_prazo_compartilhado_nao_reinicia_apos_falha_de_desafio(monkeypatch, clock):
+    def post(url, **kwargs):
+        if url.endswith("createTask"):
+            clock[0] += 4
+            return response(body={"errorId": 0, "taskId": "task"})
+        return response(body={"errorId": 1, "errorCode": "ERROR_CAPTCHA_SOLVE_FAILED"})
+    mocked = Mock(side_effect=post)
+    monkeypatch.setattr(requests, "post", mocked)
+    assert sessao._resolver_recaptcha_sync("https://example.invalid", "site", timeout=10) is None
+    assert mocked.call_count == 2
+    assert mocked.call_args_list[0].kwargs["timeout"] == 10
+    assert clock[0] == 6

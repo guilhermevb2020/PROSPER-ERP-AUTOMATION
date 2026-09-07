@@ -207,37 +207,56 @@ def _resolver_recaptcha_sync(site_url: str, site_key: str, timeout: int = 180) -
                 "websiteKey": site_key,
             },
         }
-        data = _capsolver_post(create_url, payload, "createTask")
-        if data is None:
-            return None
-        if data.get("errorId") != 0:
-            _capsolver_erro(data, "createTask")
-            return None
-        task_id = data.get("taskId")
-        if not task_id:
-            print(f"[{_now()}] CapSolver nao retornou taskId")
-            return None
-        print(f"[{_now()}] CapSolver taskId={task_id}, aguardando resolucao (max {timeout}s)")
-
-        # 2) Poll resultado
+        # Um desafio pode falhar no fornecedor sem invalidar a credencial.
+        # Duas tasks no máximo compartilham o mesmo prazo, inclusive o create.
         deadline = time.monotonic() + timeout
-        while time.monotonic() < deadline:
-            time.sleep(min(2, max(0, deadline - time.monotonic())))
-            dd = _capsolver_post(poll_url, {"clientKey": api_key, "taskId": task_id},
-                                 "getTaskResult", tentativas=1, deadline=deadline)
-            if dd is None:
-                continue
-            if dd.get("errorId") != 0:
-                _capsolver_erro(dd, "getTaskResult")
+        for desafio in range(1, 3):
+            if time.monotonic() >= deadline:
+                break
+            data = _capsolver_post(create_url, payload, "createTask", deadline=deadline)
+            if data is None:
                 return None
-            status = dd.get("status")
-            if status == "ready":
-                token = (dd.get("solution") or {}).get("gRecaptchaResponse")
-                if token:
-                    return token
-                print(f"[{_now()}] CapSolver ready mas sem token")
+            if data.get("errorId") != 0:
+                _capsolver_erro(data, "createTask")
                 return None
-            # status == 'processing' -> continua
+            task_id = data.get("taskId")
+            if not task_id:
+                print(f"[{_now()}] CapSolver nao retornou taskId")
+                return None
+            print(f"[{_now()}] CapSolver taskId={task_id}, aguardando resolucao "
+                  f"(desafio {desafio}/2, prazo total {timeout}s)")
+
+            repetir_desafio = False
+            while time.monotonic() < deadline:
+                time.sleep(min(2, max(0, deadline - time.monotonic())))
+                dd = _capsolver_post(poll_url, {"clientKey": api_key, "taskId": task_id},
+                                     "getTaskResult", tentativas=1, deadline=deadline)
+                if dd is None:
+                    continue
+                if dd.get("errorId") != 0:
+                    _capsolver_erro(dd, "getTaskResult")
+                    repetir_desafio = dd.get("errorCode") == "ERROR_CAPTCHA_SOLVE_FAILED"
+                    if not repetir_desafio:
+                        return None
+                    break
+                if dd.get("status") == "ready":
+                    token = (dd.get("solution") or {}).get("gRecaptchaResponse")
+                    if token:
+                        return token
+                    print(f"[{_now()}] CapSolver ready mas sem token")
+                    return None
+                # status == 'processing' -> continua na mesma task.
+            if not repetir_desafio:
+                break
+            if desafio == 2:
+                print(f"[{_now()}] CapSolver falhou ao resolver os dois desafios")
+                return None
+            restante = deadline - time.monotonic()
+            if restante <= 5:
+                break
+            print(f"[{_now()}] CapSolver desafio nao resolvido; nova tentativa em 5s "
+                  "dentro do prazo original")
+            time.sleep(5)
         print(f"[{_now()}] CapSolver timeout ({timeout}s) sem resposta ready")
         return None
     except Exception as exc:

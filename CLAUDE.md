@@ -40,6 +40,14 @@ Nova rodada manual autorizada em andamento desde 17:03, dentro da validação de
 a rodada anterior e não encerra o acompanhamento atual. Resultados e limites:
 `docs/VALIDACAO_OITO_HORAS_2026-09-07.md`.
 
+Às 18:13, retorno de pagamento 2669741 falhou por
+`ERROR_CAPTCHA_SOLVE_FAILED`; retentativa 2669760 recuperou às 18:15:45.
+O solver compartilhado ganhou uma segunda tentativa de desafio, limitada ao
+mesmo prazo total, sem repetir erros de chave/saldo. 36 testes isolados sem
+rede aprovados; publicação alcança novos processos pelo bind de `/app/src`,
+sem reiniciar ERP/crédito. Não confundir os 11 sucessos manuais com ausência
+de falhas posteriores; acompanhar cada tentativa até 00:34:17.
+
 Consulte [a matriz de validação](docs/VALIDACAO_ERP_2026-09-07.md) antes de
 repetir testes operacionais: 382 testes no host; 20 tarefas inventariadas, das
 quais 12 habilitadas foram alcançadas na rodada real de feriado (11 concluídas
