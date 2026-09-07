@@ -2,7 +2,7 @@
 
 ## Resultado
 
-**Após a limpeza e correção da recuperação: 373 testes passaram no host.** A validação anterior teve
+**Após a limpeza e correção da recuperação: 382 testes passaram no host.** A validação anterior teve
 327 testes na imagem em uso; a candidata limpa passou 331 testes antes da inclusão
 do quinto teste de sandbox. Chrome 149 abriu na candidata, com certutil presente
 e sem os arquivos .env/config/sandbox.env/.git. A imagem limpa v2 foi implantada;

@@ -17,12 +17,16 @@ identidades nem reintroduzir senhas reais nos arquivos dos robos.
 ## Estado verificado em 07/09/2026
 
 Consulte [a matriz de validação](docs/VALIDACAO_ERP_2026-09-07.md) antes de
-repetir testes operacionais: 373 testes no host; 20 tarefas inventariadas, das
+repetir testes operacionais: 382 testes no host; 20 tarefas inventariadas, das
 quais 12 habilitadas foram alcançadas na rodada real de feriado (11 concluídas
 e crédito em execução). Sessão principal saudável às 15:30, após recuperação
 automática e emissão da tarde. Veja `docs/VALIDACAO_FERIADO_2026-09-07.md`.
 O Smart tem sessão única por identidade; novos logins podem
 interromper outro robô. Testes de regressão usam serviços simulados.
+Geração e retorno de pagamento usam uma trava financeira comum antes do Chrome
+(`src/common/smart_financeiro_lock.sh`). Não remover a trava nem apagar seu
+arquivo enquanto houver uso. A falha do aviso de segurança às 16:03 recuperou
+na retentativa; retorno e geração concluíram novamente às 16:14 e 16:16.
 
 A rodada real posterior (12:25–13:15) confirmou 683 documentos enviados,
 registro no banco e remessa CNAB400 de 14 títulos entregue ao Nextcloud.
@@ -92,7 +96,7 @@ em `/app/data/boletos/emitidos`, com manifesto; não versionar esses documentos.
 **Regra**: Processadores específicos **SEMPRE** vão em `src/processors/web/`
 
 #### Outras Pastas Importantes:
-- `config/` → Configurações (`processors.yaml`, `credentials.csv`)
+- `config/` → Configurações operacionais (`processors.yaml`), sem senhas reais
 - `data/raw_inputs/` → Arquivos CSV baixados
 - `data/screenshots/` → Screenshots das execuções
 - `logs/` → Logs de execução (com timestamp no nome)
@@ -213,7 +217,7 @@ pytest
 ### Configuração e Credenciais
 - ✅ Usar `ConfigLoader` de `src/common/config_loader.py`
 - ✅ Carregar configurações de `config/processors.yaml`
-- ✅ Carregar credenciais de `config/credentials.csv`
+- ✅ Consumir credenciais exclusivamente pela entrega do Access Guardian
 - ✅ Respeitar política de rotação de credenciais configurada
 
 ### CAPTCHA
@@ -361,5 +365,4 @@ schema versionado do lado de quem escreve.
 Mapa completo: registro
 `2026-08-03-quem-escreve-no-banco-o-mapa-que-nunca-existiu` no PostgreSQL do Learn
 (`learn contexto "quem escreve no banco"`).
-
 

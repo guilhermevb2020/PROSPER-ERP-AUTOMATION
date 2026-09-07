@@ -1,12 +1,29 @@
 # Validação após limpeza e recreate — 07/09/2026
 
-Rodada ERP conferida às 15:30: as 12 tarefas habilitadas foram alcançadas,
+Rodada ERP: as 12 tarefas habilitadas foram alcançadas,
 11 concluídas com sucesso e o crédito em seu ciclo diário, avançando no ciclo 90.
 Horários de Brasília. Execução real iniciada às 14:42, pelo Hub,
 com o código e a imagem limpa v2 em produção. O despacho respeita idempotência;
 ausência de entrada não equivale a comprovação de escrita financeira.
 
+Atualização às 16:17: o retorno de pagamento 2667714 falhou às 16:09,
+após ficar no aviso de revalidação de e-mail do Smart. A retentativa 2667826
+concluiu às 16:11:54. A execução 2667863, já com a correção abaixo, clicou
+Prosseguir pelo controle habilitado, confirmou login e concluiu às 16:14:23.
+Pagamento 2667891 concluiu às 16:16:07. Ambas consultaram a entrada real,
+sem pagamentos/arquivos pendentes. A falha original permanece no histórico.
+
 ## Correções encontradas nesta rodada
+
+- `f457b2a`: geração e retorno de pagamento agora compartilham uma trava
+  `flock` antes de tocar nos perfis do Chrome. A espera é limitada a 300 s,
+  com exit 6 se excedida; o descritor não é herdado por Xvfb/noVNC/Chrome.
+  O botão desabilitado do aviso de segurança não é mais registrado como
+  clicado por JavaScript. A inspeção confirmou o estado desabilitado, mas
+  não estabeleceu a causa da resposta pendente do site na primeira falha.
+  Houve sobreposição às 16:05, com geração reutilizando a sessão; isso
+  comprova a lacuna de exclusão, não um novo login concorrente nessa rodada.
+  Não foi enviado e-mail de revalidação nem alterado o estado do botão.
 
 - `cdaf991`: o Guardian registrou EOF ao acessar CapSolver às 14:41. O ERP
   ocultava HTTP diferente de 200 como `{}` e abandonava o login. O cliente
@@ -23,7 +40,10 @@ ausência de entrada não equivale a comprovação de escrita financeira.
   `busy` com verificação adiada, sem afirmar que a sessão foi autenticada.
   Isso evita interromper uma rotina por novo login da identidade compartilhada.
 
-Validação automatizada: 373 testes no host. Na imagem efetiva de produção,
+Validação automatizada atualizada: 382 testes no host, usando o ambiente
+`.venv-sandbox` com as dependências de teste de `/tmp/erp-validation-20260907-deps`.
+Os 57 testes de sessão/transporte/travas/modal também passaram na imagem
+efetiva, em container descartável sem rede. Na validação anterior,
 35 testes de transporte/sessão e 18 de healthcheck passaram em containers
 descartáveis sem rede e sem credenciais de produção. Código em `src/` é montado
 no ERP; as novas execuções já o carregam, sem recreate do container.
