@@ -82,6 +82,13 @@ Novas conexões às 17:28 pelos módulos reais das aplicações funcionaram com
 `current_user=app_erp_automation` e `app_data_hub`, ambas com `session_user`
 efêmero. Nenhuma senha ou passfile foi exibido.
 
+Outra rotação ocorreu às 18:16:49. Novas conexões pelos mesmos clientes às
+18:29 passaram; a identidade de `session_user`, comparada por hash, corresponde
+exatamente ao login anunciado pelo worker para cada projeto. Prova em
+`banco-conexoes-20260907-182916.json`. O conferidor reutilizável
+`conferir_banco_rotativo.py`, no Guardian, usa transações somente leitura e
+não imprime valores de credenciais.
+
 Na conferência do envio, a view `operacional.boleto_envio_log` e a tabela
 `erp_automation.boleto_envio_log` retornaram as mesmas 685 linhas e 685 IDs
 distintos para a data de emissão 04/09. O robô consultou os 685 boletos e

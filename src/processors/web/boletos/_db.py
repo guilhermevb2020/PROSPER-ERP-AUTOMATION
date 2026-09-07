@@ -2,10 +2,12 @@
 """
 Conexao Postgres compartilhada do robo de boletos.
 
-Usa env vars POSTGRES_* ja presentes no container erp-automation:
-    POSTGRES_HOST / POSTGRES_USER / POSTGRES_PASSWORD / POSTGRES_DB / POSTGRES_PORT
+Usa os aliases POSTGRES_* gerados pelo Access Guardian para o container.
+Em producao, POSTGRES_HOST=guardian, usuario do projeto e senha vazia;
+o worker estabelece a conexao ao banco com um login efemero.
 
-Persiste em operacional.boleto_envio_log (migration 079 do process-automation).
+Escreve em erp_automation.boleto_envio_log. A leitura de idempotencia preserva
+operacional.boleto_envio_log, view de compatibilidade sobre a mesma tabela.
 """
 
 from __future__ import annotations
