@@ -316,6 +316,22 @@ def baixar_id(ctx, fid):
     return nome or f"remessa_{fid}.REM", dados
 
 
+# Sufixo que `processar` poe no nome quando dois .REM de conteudo DIFERENTE caem
+# na pasta local com o MESMO nome: duas contas geraram o mesmo sequencial no
+# mesmo dia, e a pasta e plana. Ele existe SO para o disco. No Nextcloud o
+# caminho ja separa por empresa, e o nome tem de continuar o que o Smart deu
+# (`CB<ddmm><seq7>.REM`): o `enviar_remessa_400` (process-automation) le o
+# sequencial dos 7 ultimos digitos do NOME e recusa o arquivo quando nao bate
+# com o header. Foi o que segurou a remessa da WJ MOREIRA em 08/09/2026
+# (`CB08090000011_dup212306.REM` -> "sequencial do nome 1212306 difere").
+_SUFIXO_DUP = re.compile(r"_dup\d{6}(?=\.REM$)", re.I)
+
+
+def nome_para_nuvem(nome_local: str) -> str:
+    """Nome com que o .REM sobe ao Nextcloud: o do Smart, sem o `_dup` do disco."""
+    return _SUFIXO_DUP.sub("", nome_local)
+
+
 def processar(ctx, itens, forcar=False):
     """Baixa, valida e salva cada item ({'id':..., 'rotulo':...}). Retorna quantos salvou."""
     controle = ler_controle()
@@ -369,8 +385,10 @@ def processar(ctx, itens, forcar=False):
         # controle continuam sendo a fonte de verdade da idempotencia. Falha
         # aqui e AVISO, nao falha de rodada - o arquivo ja esta salvo, e a
         # proxima subida o alcanca (`--subir-pendentes`).
+        # Sobe com o nome do Smart (`nome`), NAO com o do disco: o `_dup` e
+        # desambiguacao da pasta local, e com ele no nome o banco recusa.
         if cfg.ENVIAR_NEXTCLOUD:
-            ok_nc, alvo_nc, detalhe_nc = nuvem.enviar(dados, os.path.basename(destino))
+            ok_nc, alvo_nc, detalhe_nc = nuvem.enviar(dados, nome)
             if ok_nc:
                 enviados_nc += 1
                 log(f"     -> Nextcloud: {alvo_nc}")
@@ -581,7 +599,8 @@ def subir_pendentes(limite=0):
 
     Seguro de repetir: o caminho no Nextcloud e derivado do CONTEUDO (data de
     geracao e cedente saem do header do proprio arquivo), entao subir duas vezes
-    sobrescreve o mesmo destino em vez de criar duplicata.
+    sobrescreve o mesmo destino em vez de criar duplicata. O sufixo `_dup` que a
+    pasta local usa para desempatar nome repetido NAO sobe (`nome_para_nuvem`).
     """
     if not nuvem.disponivel():
         log("ERRO: sem credencial do Nextcloud (/app/config/nextcloud.env).")
@@ -607,7 +626,7 @@ def subir_pendentes(limite=0):
             falhou += 1
             log(f"  {nome}: nao li o arquivo ({e})")
             continue
-        enviado, alvo, detalhe = nuvem.enviar(dados, nome)
+        enviado, alvo, detalhe = nuvem.enviar(dados, nome_para_nuvem(nome))
         if enviado:
             ok += 1
             log(f"  OK   {nome} -> {alvo}")

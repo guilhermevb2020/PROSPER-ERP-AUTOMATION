@@ -166,6 +166,17 @@ banco, para a pergunta *"saiu tudo hoje?"* se responder abrindo uma pasta só.
 Consequência prática: remessa rebaixada dias depois cai na pasta do dia em que foi
 **gerada**, e subir duas vezes sobrescreve o mesmo destino em vez de duplicar.
 
+**O `_dup` do disco não sobe.** A pasta local é plana, então quando duas contas geram
+o mesmo sequencial no mesmo dia o segundo arquivo é salvo como
+`CB<ddmm><seq7>_dup<HHMMSS>.REM` para não sobrescrever o primeiro — e o controle guarda
+esse nome, porque é o que está no disco. No Nextcloud o caminho já separa por empresa,
+e o nome vai **como o Smart o deu** (`nome_para_nuvem`, nas duas pernas: rodada e
+`--subir-pendentes`). Motivo medido em 08/09/2026: a WJ MOREIRA e a MP PROSPERE geraram
+`CB08090000011.REM` no mesmo dia; a da WJ subiu como `CB08090000011_dup212306.REM` e o
+`enviar_remessa_400` (process-automation), que lê o sequencial dos 7 últimos dígitos do
+nome, descartou-a — *"sequencial do nome (1212306) difere do header (0000011)"* — até
+alguém renomear à mão. Gate: `tests/integration/test_remessa_cobranca_simulada.py`.
+
 ⛔ **O destino é env (`REMESSA_NC_DEST`), nunca fixo no fonte.** Quando essa árvore
 mudou em 13/08, caminho embutido em código fez 67 `.RET` sumirem em silêncio
 (BUG-566, 282 liquidações, R$ 1.084.030,81). `ENVIAR_NEXTCLOUD_REM=false` desliga o
