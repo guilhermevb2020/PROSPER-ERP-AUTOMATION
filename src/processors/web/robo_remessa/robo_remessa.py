@@ -38,6 +38,7 @@ Uso:
     # manual, dentro do container
     python /app/src/processors/web/robo_remessa/robo_remessa.py --gerar --todas-contas
     python .../robo_remessa.py --gerar --conta tigrao --pra-valer
+    python .../robo_remessa.py --gerar --conta tigrao --simular    # so olha a fila
     python .../robo_remessa.py --listar --conta cast --dias 30
     python .../robo_remessa.py --contas
     python .../robo_remessa.py --ids 25521 25522
@@ -675,8 +676,12 @@ def montar_parser():
                          f"'{cfg.PREFIXO_CONTAS}*'")
     ap.add_argument("--carteira", default=cfg.CARTEIRA_PADRAO,
                     help=f"carteira usada na geracao (padrao {cfg.CARTEIRA_PADRAO})")
-    ap.add_argument("--pra-valer", action="store_true",
-                    help="desliga o DRY_RUN: GERA DE VERDADE no Smart")
+    valer = ap.add_mutually_exclusive_group()
+    valer.add_argument("--pra-valer", action="store_true",
+                       help="desliga o DRY_RUN: GERA DE VERDADE no Smart")
+    valer.add_argument("--simular", action="store_true",
+                       help="forca o DRY_RUN mesmo com DRY_RUN_REM=false no ambiente "
+                            "(no container o robo_remessa.env desliga o dry-run)")
     # --- nextcloud ---
     ap.add_argument("--subir-pendentes", action="store_true",
                     help="sobe para o Nextcloud os .REM que JA estao na pasta "
@@ -706,8 +711,11 @@ def executar(ctx, args):
         return SAIU_OK
 
     if args.gerar:
-        # --pra-valer manda; sem ele vale o DRY_RUN_REM do ambiente (default True)
-        return rodada_geracao(ctx, args, dry=cfg.DRY_RUN and not args.pra_valer)
+        # --pra-valer manda; --simular forca a simulacao; sem os dois vale o
+        # DRY_RUN_REM do ambiente. ATENCAO: no container o robo_remessa.env poe
+        # DRY_RUN_REM=false (e o que a rodada agendada usa), entao `--gerar` SEM
+        # flag nenhuma GERA DE VERDADE ali — medido em 08/09/2026.
+        return rodada_geracao(ctx, args, dry=(cfg.DRY_RUN or args.simular) and not args.pra_valer)
 
     if args.ids:
         log(f"ids informados: {args.ids}")

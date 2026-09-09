@@ -126,3 +126,32 @@ def test_subir_pendentes_sobe_o_dup_com_o_nome_do_smart(robo, monkeypatch):
     assert r.subir_pendentes() == r.SAIU_OK
     enviados = [(c.args[0], c.args[1]) for c in r.nuvem.enviar.call_args_list]
     assert enviados == [(CNAB, 'CB08090000011.REM'), (CNAB_OUTRO, 'CB08090000011.REM')]
+
+
+def _args(r, *extra):
+    return r.montar_parser().parse_args(['--gerar', '--conta', '1', *extra])
+
+
+def test_simular_forca_dry_run_mesmo_com_dry_run_desligado_no_ambiente(robo, monkeypatch):
+    """No container o robo_remessa.env poe DRY_RUN_REM=false: `--gerar` sem flag gera de
+    verdade. `--simular` e a saida para olhar a fila sem consumir sequencial."""
+    r, ctx = robo
+    monkeypatch.setattr(r.cfg, 'DRY_RUN', False)
+    monkeypatch.setattr(r, 'resolver_conta', Mock(return_value=('1', 'Conta sintetica')))
+    assert r.executar(ctx, _args(r, '--simular')) == r.SAIU_OK
+    ctx.request.post.assert_not_called()
+    r.nuvem.enviar.assert_not_called()
+
+
+def test_sem_flag_com_dry_run_desligado_gera_de_verdade(robo, monkeypatch):
+    r, ctx = robo
+    monkeypatch.setattr(r.cfg, 'DRY_RUN', False)
+    monkeypatch.setattr(r, 'resolver_conta', Mock(return_value=('1', 'Conta sintetica')))
+    assert r.executar(ctx, _args(r)) == r.SAIU_OK
+    ctx.request.post.assert_called_once()
+
+
+def test_pra_valer_e_simular_nao_convivem(robo):
+    r, _ = robo
+    with pytest.raises(SystemExit):
+        _args(r, '--pra-valer', '--simular')

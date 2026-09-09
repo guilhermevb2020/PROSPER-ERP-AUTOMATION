@@ -199,6 +199,12 @@ constante lá.
 
 ## Armadilhas de operação
 
+**`--gerar` sem flag, dentro do container, é PRA VALER.** O `robo_remessa.env` de
+produção tem `DRY_RUN_REM=false` e o módulo o carrega via dotenv, então o padrão
+`DRY_RUN=True` do fonte não vale ali. Chamada direta para olhar a fila leva `--simular`,
+que força a simulação; `--pra-valer` e `--simular` não convivem. Medido em 08/09/2026:
+uma "simulação" sem a flag rodou de verdade e só não gerou porque a fila estava vazia.
+
 **Janela de horário do usuário no Smart.** O Smart só aceita o login dentro do
 horário de acesso cadastrado no usuário. Rodando às 18:00, a janela dele tem de
 cobrir as 18:00 — senão o `dologin.php` responde `2|Usuário com acesso
