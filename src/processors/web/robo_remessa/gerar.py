@@ -29,6 +29,7 @@ POST que o proprio Smart recusaria:
 SEGURANCA: `gerar()` so dispara o POST final se dry_run=False. Em dry_run ele
 devolve exatamente o que MANDARIA, p/ conferencia.
 """
+import base64
 import html as _html
 import re
 import urllib.parse
@@ -265,7 +266,20 @@ def gerar(ctx, form, dry_run=True, timeout=180_000):
         cfg.SMART_BASE + "/financeiro/confirmardadosremessa.php", data=corpo,
         headers={"content-type": "application/x-www-form-urlencoded"},
         timeout=timeout)
-    texto = r.body().decode("iso-8859-1", errors="replace")
+    dados = r.body()
+    texto = dados.decode("iso-8859-1", errors="replace")
+    # O BB também responde com o próprio CNAB. Guardar os bytes completos
+    # permite relacionar o download ao POST sem repetir a geração. Cabeçalhos
+    # de sessão (Set-Cookie etc.) nunca entram nessa evidência.
+    evidencia = {}
+    if form["resumo"].get("numBanco") == "001":
+        headers = getattr(r, "headers", {})
+        evidencia["resposta_http"] = {
+            "status": r.status, "url": r.url,
+            "content_type": headers.get("content-type", ""),
+            "content_disposition": headers.get("content-disposition", ""),
+            "body_base64": base64.b64encode(dados).decode("ascii"),
+        }
 
     # o resultado pode vir na URL final (redirect seguido) ou no corpo
     ids, erros = _ids_do_resultado(r.url or "")
@@ -279,6 +293,6 @@ def gerar(ctx, form, dry_run=True, timeout=180_000):
         # proxima tentativa dira "nada a fazer" porque os titulos ja sairam.
         return {"ok": False, "enviado": True,
                 "motivo": f"POST foi (status={r.status}) mas nao li o resultado",
-                "corpo": corpo, "ids": [], "erros": [], "html": texto[:1500]}
+                "corpo": corpo, "ids": [], "erros": [], "html": texto[:1500], **evidencia}
     return {"ok": True, "enviado": True, "motivo": "gerado", "corpo": corpo,
-            "ids": ids, "erros": erros or []}
+            "ids": ids, "erros": erros or [], **evidencia}

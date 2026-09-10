@@ -3,9 +3,11 @@
 import importlib
 import json
 import sys
+from datetime import datetime
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
+from zoneinfo import ZoneInfo
 
 import pytest
 
@@ -31,6 +33,7 @@ def origem(monkeypatch, tmp_path):
         dados = ("\r\n".join(["".join(header), "7".ljust(400), "9".ljust(400)])
                  + "\r\n").encode()
         monkeypatch.setattr(robo.ger, "filtrar", Mock(return_value=form))
+        gerar_real = robo.ger.gerar
         monkeypatch.setattr(robo.ger, "gerar", Mock(return_value={
             "ok": True, "enviado": True, "ids": [("1", 42)], "erros": []}))
         monkeypatch.setattr(robo, "baixar_id", Mock(return_value=("teste.REM", dados)))
@@ -39,7 +42,7 @@ def origem(monkeypatch, tmp_path):
         kwargs = dict(conta="395", carteira="17", convenio="1234567", ambiente="producao",
                       pasta=str(tmp_path / "origem"), dry_run=False)
         yield SimpleNamespace(bb=bb, robo=robo, kwargs=kwargs, ctx=object(), dados=dados,
-                              pasta=tmp_path / "origem")
+                              pasta=tmp_path / "origem", gerar_real=gerar_real)
 
 
 def rodar(o, **alteracoes):
@@ -225,3 +228,88 @@ def test_cli_bb_nao_aceita_reenvio_historico(origem):
         "--bb-api-ambiente", "producao", "--ids", "42", "--pra-valer"])
     assert o.robo.executar(o.ctx, args) == o.robo.SAIU_RODADA_INCOMPLETA
     o.robo.ger.gerar.assert_not_called()
+
+
+def preparar_resposta_direta(o):
+    agora = datetime.now(ZoneInfo("America/Sao_Paulo"))
+    header = list(o.dados.decode().splitlines()[0])
+    header[94:100] = agora.strftime("%d%m%y")
+    detalhes = []
+    for tid in (101, 102):
+        linha = list("7".ljust(400))
+        linha[48:63] = f"{tid:015d}"
+        detalhes.append("".join(linha))
+    dados = ("\r\n".join(["".join(header), detalhes[0], "5".ljust(400), detalhes[1], "9".ljust(400)])
+             + "\r\n").encode("latin-1")
+    form = o.robo.ger.filtrar.return_value.replace("prazo1", "titulo1").replace(
+        "</form>", '<input type="checkbox" name="titulo2" id="prazo" value="102" checked></form>')
+    o.robo.ger.filtrar.return_value = form
+    item = {"id": 42, "cc": "395", "arquivo": "teste.REM", "data": agora.strftime("%d/%m/%Y %H:%M")}
+    o.robo.listar_remessas.return_value = [item]
+    o.robo.baixar_id.return_value = ("teste.REM", dados)
+    response = SimpleNamespace(status=200, url="https://smart.invalid/financeiro/mandarremessa.php?file=42",
+                               headers={"content-type": "application/octet-stream", "set-cookie": "NAO_SALVAR"},
+                               body=lambda: dados)
+    o.ctx = SimpleNamespace(request=SimpleNamespace(post=Mock(return_value=response)))
+    o.robo.ger.gerar.side_effect = o.gerar_real
+    return dados
+
+
+def test_cnab_direto_preserva_resposta_e_retoma_upload_sem_novo_post(origem):
+    o = origem
+    dados = preparar_resposta_direta(o)
+    o.robo.nuvem.enviar.return_value = (False, "", "indisponível")
+    with pytest.raises(o.bb.OrigemBBInconclusiva):
+        rodar(o)
+    resposta, = o.pasta.rglob("resultado.json")
+    original = resposta.read_bytes()
+    assert len(json.loads(original)["resposta_http"]["body_base64"]) > 1500
+    assert b"NAO_SALVAR" not in original
+    o.robo.nuvem.enviar.return_value = (True, "CNAB/teste.REM", "OK")
+    assert rodar(o)["ids"] == [42]
+    assert resposta.read_bytes() == original
+    assert (resposta.parent / "42.REM").read_bytes() == dados
+    o.ctx.request.post.assert_called_once()
+    o.robo.baixar_id.assert_called_once()
+
+
+@pytest.mark.parametrize("falha", ["bytes", "duplicado", "conta", "data", "titulos"])
+def test_cnab_direto_nao_libera_download_sem_prova(origem, falha):
+    o = origem
+    dados = preparar_resposta_direta(o)
+    if falha == "bytes":
+        o.robo.baixar_id.return_value = ("teste.REM", dados.replace(b"000000000000102", b"000000000000103"))
+    elif falha == "duplicado":
+        o.robo.listar_remessas.return_value.append({**o.robo.listar_remessas.return_value[0], "id": 43})
+    elif falha in ("conta", "data"):
+        o.robo.listar_remessas.return_value[0]["cc" if falha == "conta" else "data"] = (
+            "396" if falha == "conta" else "01/01/2020 00:00")
+    else:
+        o.robo.ger.filtrar.return_value = o.robo.ger.filtrar.return_value.replace('value="102"', 'value="103"')
+    with pytest.raises(o.bb.OrigemBBInconclusiva):
+        rodar(o)
+    o.robo.nuvem.enviar.assert_not_called()
+    assert not list(o.pasta.rglob("pronta.json"))
+
+
+def test_prefixo_legado_so_retoma_id_explicito_sem_alterar_resultado(origem):
+    o = origem
+    dados = preparar_resposta_direta(o)
+    real = o.gerar_real
+
+    def legado(*args, **kwargs):
+        res = real(*args, **kwargs)
+        res.pop("resposta_http")
+        return res
+
+    o.robo.ger.gerar.side_effect = legado
+    with pytest.raises(o.bb.OrigemBBInconclusiva):
+        rodar(o)
+    o.robo.listar_remessas.assert_not_called()
+    resposta, = o.pasta.rglob("resultado.json")
+    original = resposta.read_bytes()
+    assert o.bb.recuperar_download_direto(o.robo, o.ctx, pasta=resposta.parent, smart_id=42)["ids"] == [42]
+    assert resposta.read_bytes() == original
+    assert (resposta.parent / "42.REM").read_bytes() == dados
+    assert json.loads((resposta.parent / "download_direto.json").read_text())["metodo"] == "legado_conferido"
+    o.ctx.request.post.assert_called_once()

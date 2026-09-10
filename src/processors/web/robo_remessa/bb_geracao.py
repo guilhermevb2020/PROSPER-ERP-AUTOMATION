@@ -13,13 +13,15 @@ O consumidor ainda precisa validar/traduzir o CNAB integral e reservar no banco.
 
 from __future__ import annotations
 
+import base64
 import fcntl
 import hashlib
 import json
 import os
 import tempfile
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
+from urllib.parse import parse_qs
 from uuid import uuid4
 from zoneinfo import ZoneInfo
 
@@ -79,10 +81,12 @@ def _entregar(robo, ctx, pasta: Path, intencao: dict) -> dict:
     if not resposta.exists():
         raise OrigemBBInconclusiva("intenção sem resposta salva; não repetir a geração")
     resultado = _ler(resposta)
+    pares = (_ids(resultado) if resultado.get("ids") else
+             _download_direto(robo, ctx, pasta, intencao, resultado))
     arquivos = []
     # Um erro parcial continua visível. Os IDs confirmados podem ser baixados,
     # mas não liberamos o lote para envio até esclarecer o resultado completo.
-    for tipo, fid in _ids(resultado):
+    for tipo, fid in pares:
         metadados = pasta / f"{fid}.json"
         local = pasta / f"{fid}.REM"
         if metadados.exists():
@@ -121,6 +125,106 @@ def _entregar(robo, ctx, pasta: Path, intencao: dict) -> dict:
     _json(pasta / "pronta.json", manifesto)
     return {"estado": "pronta", "geracao": pasta.name,
             "ids": [item["id"] for item in arquivos], "arquivos": len(arquivos)}
+
+
+def _conferir_direto(robo, intencao, resultado, item, dados, *, legado):
+    """Confere o download contra a resposta, o formulário e a listagem Smart."""
+    if (resultado.get("enviado") is not True or resultado.get("ok") is not False
+            or resultado.get("ids") != [] or resultado.get("erros") != []
+            or resultado.get("corpo") != intencao["corpo"]):
+        raise OrigemBBInconclusiva("resposta não comprova POST de download direto")
+    if legado:
+        prefixo = resultado.get("html", "").encode("latin-1")
+        if ("resposta_http" in resultado or len(prefixo) != 1500
+                or resultado.get("motivo") != "POST foi (status=200) mas nao li o resultado"
+                or not dados.startswith(prefixo)):
+            raise OrigemBBInconclusiva("prefixo legado não corresponde ao download")
+    else:
+        http = resultado.get("resposta_http", {})
+        original = base64.b64decode(http.get("body_base64", ""), validate=True)
+        if http.get("status") != 200 or original != dados:
+            raise OrigemBBInconclusiva("download difere da resposta integral do POST")
+    valido, motivo, quantidade = robo.validar_cnab(dados)
+    if not valido or quantidade <= 0:
+        raise OrigemBBInconclusiva(f"download direto inválido: {motivo}")
+    linhas = dados.decode("latin-1").splitlines()
+    iniciada = datetime.fromisoformat(intencao["iniciada_em"])
+    data_lista = datetime.strptime(item["data"], "%d/%m/%Y %H:%M").replace(tzinfo=iniciada.tzinfo)
+    if (iniciada.tzinfo is None or item.get("cc") != intencao["conta_smart"]
+            or not iniciada.replace(second=0, microsecond=0) <= data_lista <= iniciada + timedelta(minutes=5)
+            or linhas[0][94:100] != iniciada.strftime("%d%m%y")
+            or linhas[0][76:79] != "001" or linhas[0][129:136] != intencao["convenio"]):
+        raise OrigemBBInconclusiva("download fora da conta/data/convênio da geração")
+    campos = parse_qs(intencao["corpo"])
+    selecionados = sorted(v for k, vs in campos.items() if k.startswith("titulo") for v in vs)
+    controles = sorted(str(int(l[48:63])) for l in linhas if l.startswith("7"))
+    if legado and (not selecionados or intencao["resumo"].get("instrucoes")):
+        raise OrigemBBInconclusiva("recuperação legada exige seleção explícita de todos os títulos")
+    if selecionados and (selecionados != controles
+                         or len(selecionados) != intencao["resumo"]["titulos_marcados"]):
+        raise OrigemBBInconclusiva("download não contém exatamente os títulos selecionados")
+    return quantidade
+
+
+def _download_direto(robo, ctx, pasta, intencao, resultado, *, id_legado=None):
+    """Relaciona bytes integrais a um único ID; prefixo exige recuperação explícita."""
+    prova_path = pasta / "download_direto.json"
+    if prova_path.exists():
+        prova = _ler(prova_path)
+        item = prova["listagem"]
+        dados = (pasta / f"{item['id']}.REM").read_bytes()
+        if (prova.get("versao") != 1 or prova.get("metodo") not in ("integral", "legado_conferido")
+                or prova["sha256"] != hashlib.sha256(dados).hexdigest()):
+            raise OrigemBBInconclusiva("prova de download direto divergente")
+        _conferir_direto(robo, intencao, resultado, item, dados,
+                        legado=prova["metodo"] == "legado_conferido")
+        return [("download_direto", item["id"])]
+    http = resultado.get("resposta_http", {})
+    original = base64.b64decode(http.get("body_base64", ""), validate=True)
+    if id_legado is None and (http.get("status") != 200 or not original.startswith(b"01REMESSA")):
+        raise OrigemBBInconclusiva("geração sem confirmação dos IDs; conferir no Smart")
+    if id_legado is not None and (type(id_legado) is not int or id_legado <= 0):
+        raise OrigemBBInconclusiva("ID explícito inválido")
+    dia = datetime.fromisoformat(intencao["iniciada_em"]).date().isoformat()
+    candidatos = robo.listar_remessas(ctx, intencao["conta_smart"], dia, dia)
+    encontrados = []
+    for item in candidatos:
+        if item.get("cc") != intencao["conta_smart"] or (id_legado is not None and item["id"] != id_legado):
+            continue
+        nome, dados = robo.baixar_id(ctx, item["id"])
+        if dados is None:
+            raise OrigemBBInconclusiva("download pendente ao relacionar resposta integral")
+        if id_legado is None and dados != original:
+            continue
+        if nome != item["arquivo"] or Path(nome).name != nome or not nome.upper().endswith(".REM"):
+            raise OrigemBBInconclusiva("nome do download diverge da listagem")
+        quantidade = _conferir_direto(robo, intencao, resultado, item, dados, legado=id_legado is not None)
+        encontrados.append((item, dados, quantidade))
+    if len(encontrados) != 1:
+        raise OrigemBBInconclusiva("resposta direta sem um único arquivo correspondente no Smart")
+    item, dados, quantidade = encontrados[0]
+    fid = item["id"]
+    meta = {"id": fid, "tipo": "download_direto", "nome": item["arquivo"],
+            "sha256": hashlib.sha256(dados).hexdigest(), "bytes": len(dados), "titulos": quantidade}
+    _publicar(pasta / f"{fid}.REM", dados)
+    _json(pasta / f"{fid}.json", meta)
+    _json(prova_path, {"versao": 1, "metodo": "legado_conferido" if id_legado is not None else "integral",
+                      "listagem": item, "sha256": meta["sha256"]})
+    return [("download_direto", fid)]
+
+
+def recuperar_download_direto(robo, ctx, *, pasta: Path, smart_id: int) -> dict:
+    """Retoma um POST legado pelo ID conferido, sob a trava financeira do chamador.
+
+    Não gera remessa. Preserva resultado.json original e registra a conferência
+    em download_direto.json antes da entrega normal. Exige prefixo de 1500 bytes,
+    mesma conta/data e o conjunto integral de títulos do formulário original.
+    """
+    with (pasta.parent / ".lock").open("a") as trava:
+        fcntl.flock(trava, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        intencao, resultado = _ler(pasta / "intencao.json"), _ler(pasta / "resultado.json")
+        _download_direto(robo, ctx, pasta, intencao, resultado, id_legado=smart_id)
+        return _entregar(robo, ctx, pasta, intencao)
 
 
 def executar(robo, ctx, *, conta: str, carteira: str, convenio: str,

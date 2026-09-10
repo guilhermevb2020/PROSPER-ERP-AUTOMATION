@@ -129,6 +129,23 @@ resposta salva, retoma apenas os downloads/uploads pendentes, sem novo POST de
 geração. Erros parciais do Smart preservam os arquivos, mas impedem publicar o
 manifesto. Uma carteira não ultrapassa pendência de outra na mesma conta.
 
+Desde a correção de 10/09/2026, o modo BB também preserva em `resultado.json`
+a resposta HTTP integral, URL final e cabeçalhos de conteúdo (sem cookies).
+Se a resposta for o próprio CNAB, relaciona seus bytes a um único download da
+conta/data da geração. Grava `download_direto.json` com o ID da listagem e o
+hash antes de publicar `pronta.json`. Arquivos diferentes ou ambíguos não são
+liberados. A retomada revalida a prova salva e não repete o POST.
+
+Para uma resposta legada truncada, a recuperação é explícita por
+`bb_geracao.recuperar_download_direto(robo, ctx, pasta=..., smart_id=...)`, sob a
+trava financeira. Exige os 1500 bytes originais, conta, data/hora da geração e
+o conjunto completo de títulos selecionados. Mantém o resultado original;
+a prova adicional usa `metodo=legado_conferido`. Sem essa conferência, o wrapper
+continua bloqueando nova geração. Não serve para importar remessa histórica.
+
+Regressão dessa correção: 73 testes de origem BB, ciclo de remessa e wrapper
+aprovados, com Smart e Nextcloud simulados e persistência real em disco.
+
 No process-automation, `cnab/bb_origem.py` confere intenção, resposta, IDs,
 conta, convênio, carteira, data, hashes e bytes; traduz o lote inteiro antes de
 `preparar_origem_bb` chamar o controle persistente de remessas. O consumidor e
