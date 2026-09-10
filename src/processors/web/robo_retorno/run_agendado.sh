@@ -8,6 +8,7 @@
 # O robo sobe o proprio Chrome, loga via CapSolver, percorre as contas, baixa os
 # .REM e FECHA. Um login por run — mesmo desenho do doc2you.
 set -u
+. /app/src/common/smart_financeiro_lock.sh
 cd /app || exit 1
 LOG=/app/logs/vnc
 mkdir -p "$LOG"
@@ -105,8 +106,10 @@ PASTAS_RET="/tmp/robo_retorno_pastas.$$"
 if [ "$TEM_PASTA" -eq 0 ]; then
     # ⚠️ `-maxdepth`/`-mtime` limitam a varredura; sem eles seriam 534 arquivos.
     # A entrada classica entra junto: quem largar um `.RET` la continua atendido.
-    { find "$ARVORE_RET" -type f -name '*.RET' -mtime -"$DIAS_RET" 2>/dev/null
-      find "$ENTRADA_RET" -maxdepth 1 -type f -name '*.RET' 2>/dev/null
+    # O BB entrega .ret e o MoneyPlus .RET. Preserve os nomes: o Smart os usa
+    # no controle de processamento. A descoberta aceita ambas as extensoes.
+    { find "$ARVORE_RET" -type f -iname '*.ret' -mtime -"$DIAS_RET" 2>/dev/null
+      find "$ENTRADA_RET" -maxdepth 1 -type f -iname '*.ret' 2>/dev/null
     } | while IFS= read -r _f; do
         [ -n "$_f" ] || continue
         _h=$(tr -d '\r' < "$_f" | md5sum | cut -d' ' -f1)

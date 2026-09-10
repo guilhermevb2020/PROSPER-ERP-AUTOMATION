@@ -144,8 +144,11 @@ def validar_cnab(dados: bytes):
     fora = [i for i, linha in enumerate(linhas) if len(linha) != 400]
     if fora:
         return False, f"{len(fora)} linha(s) fora dos 400 chars (1a: linha {fora[0] + 1})", 0
-    # registros tipo 1 = titulos (o tipo 2 e complemento de multa/instrucao)
-    titulos = sum(1 for linha in linhas if linha.startswith("1"))
+    # BB usa tipo 7 para convenio de sete posicoes e tipo 1 no layout antigo.
+    # Tipo 5 do BB e complemento (multa etc.), nao outro titulo. No MoneyPlus
+    # permanece tipo 1; o complemento tipo 2 tambem nao entra na contagem.
+    tipos_titulo = ("1", "7") if linhas[0][76:79] == "001" else ("1",)
+    titulos = sum(1 for linha in linhas if linha.startswith(tipos_titulo))
     return True, f"CNAB-400 ok ({len(linhas)} registros)", titulos
 
 
@@ -676,6 +679,12 @@ def montar_parser():
                          f"'{cfg.PREFIXO_CONTAS}*'")
     ap.add_argument("--carteira", default=cfg.CARTEIRA_PADRAO,
                     help=f"carteira usada na geracao (padrao {cfg.CARTEIRA_PADRAO})")
+    ap.add_argument("--bb-api-convenio",
+                    help="com --gerar: preserva a origem das remessas novas deste convenio BB")
+    ap.add_argument("--bb-api-ambiente", choices=("producao", "homologacao"),
+                    help="ambiente bancario de destino, obrigatorio com --bb-api-convenio")
+    ap.add_argument("--bb-api-origem",
+                    help="caixa de saida persistente; padrao PASTA_REMESSAS/bb_api")
     valer = ap.add_mutually_exclusive_group()
     valer.add_argument("--pra-valer", action="store_true",
                        help="desliga o DRY_RUN: GERA DE VERDADE no Smart")
@@ -702,6 +711,28 @@ def executar(ctx, args):
     """O que fazer com um contexto ja logado. Retorna o exit code."""
     log(f"pasta de destino: {cfg.PASTA_REMESSAS}")
     log(f"controle        : {cfg.ARQ_CONTROLE}")
+
+    if args.bb_api_convenio or args.bb_api_ambiente or args.bb_api_origem:
+        import bb_geracao
+
+        if (not args.gerar or not args.bb_api_convenio or not args.bb_api_ambiente
+                or args.todas_contas or args.forcar or args.ids or args.resultado
+                or args.da_tela or args.vigiar or args.listar or args.contas
+                or args.subir_pendentes or args.de or args.ate):
+            log("ERRO: BB API exige --gerar, convenio, ambiente e conta/carteira exatas; "
+                "nao combina com listagem, historico, datas ou --forcar")
+            return SAIU_RODADA_INCOMPLETA
+        try:
+            resultado = bb_geracao.executar(
+                sys.modules[__name__], ctx, conta=args.conta, carteira=args.carteira,
+                convenio=args.bb_api_convenio, ambiente=args.bb_api_ambiente,
+                pasta=args.bb_api_origem or os.path.join(cfg.PASTA_REMESSAS, "bb_api"),
+                dry_run=not args.pra_valer)
+        except (bb_geracao.OrigemBBInconclusiva, OSError, ValueError) as exc:
+            log(f"BB API pendente: {exc}")
+            return SAIU_RODADA_INCOMPLETA
+        log(f"BB API origem: {json.dumps(resultado, ensure_ascii=False)}")
+        return SAIU_OK
 
     if args.contas:
         contas = listar_contas(ctx)
@@ -800,7 +831,8 @@ def main():
 
     # Este modo le o DISCO: nao precisa de Smart nem de Chrome. Sai antes de
     # gastar um login (e a janela de horario do usuario no Smart).
-    if args.subir_pendentes:
+    if args.subir_pendentes and not (args.bb_api_convenio or args.bb_api_ambiente
+                                   or args.bb_api_origem):
         return subir_pendentes(args.limite)
 
     with sync_playwright() as p:

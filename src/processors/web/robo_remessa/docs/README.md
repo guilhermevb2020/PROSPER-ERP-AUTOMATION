@@ -89,6 +89,60 @@ docker exec -e PYTHONPATH=/app erp-automation \
 `DRY_RUN_REM=false` no `.env`) ele monta o POST, mostra o que faria e não envia
 nada. Gerar **consome sequencial e tira título da fila — não é reversível.**
 
+### Origem das remessas novas do BB — preparação de 09/09/2026
+
+O modo `--bb-api-convenio` usa `bb_geracao.py` para preservar a origem antes do
+envio bancário. Exige `--gerar`, `--bb-api-ambiente` e conta/carteira numéricas
+exatas. **Só gera com `--pra-valer`**, mesmo se `DRY_RUN_REM=false`. Sem essa
+flag, consulta a fila sem gravar intenção nem chamar a geração.
+
+Parâmetros específicos:
+
+- `--bb-api-convenio`: convênio BB com sete posições.
+- `--bb-api-ambiente`: `producao` ou `homologacao`, sem padrão implícito.
+- `--bb-api-origem`: pasta persistente da caixa de saída; padrão
+  `PASTA_REMESSAS/bb_api`. A implantação deve garantir que o consumidor do
+  process-automation consiga ler a mesma pasta.
+
+Não combina com `--ids`, `--resultado`, `--da-tela`, `--listar`, `--contas`,
+`--todas-contas`, `--forcar`, `--vigiar`, `--subir-pendentes`, `--de` ou `--ate`.
+O caminho comum de sessão continua exigindo a trava financeira antes do Chrome.
+O wrapper específico `run_bb.sh` liga esses argumentos à conta 395, convênio
+3770013, ambiente produção e carteira 17 (`BB_REMESSA_CARTEIRA` aceita 11/17/18).
+Sem argumento ou com `--simular`, faz prévia; só `--pra-valer` gera. Usa Chrome
+headless e a trava financeira comum, também acrescentada ao wrapper MoneyPlus
+antes de tocar no perfil. Ainda sem publicação/agendamento.
+
+O wrapper BB usa explicitamente a caixa compartilhada
+`/app/data/retornos_a_processar/bb_api/origens`, montada nos dois containers.
+
+A estrutura é `<pasta>/<ambiente>/<convenio>/<conta Smart>/<UUID>/`:
+`intencao.json` precede o POST; `resultado.json` preserva sua resposta;
+`<ID>.REM` e `<ID>.json` guardam download e identidade. Após entregar os arquivos
+pelo uploader Nextcloud existente, `pronta.json` disponibiliza o lote ao
+consumidor. Isso significa origem preparada, não instruções aceitas pelo banco.
+
+As evidências são publicadas completas, com sincronização em disco e sem
+sobrescrever versões diferentes. Uma intenção sem resposta bloqueia a próxima
+geração nessa conta; não usa o histórico para adivinhar seus IDs. Havendo
+resposta salva, retoma apenas os downloads/uploads pendentes, sem novo POST de
+geração. Erros parciais do Smart preservam os arquivos, mas impedem publicar o
+manifesto. Uma carteira não ultrapassa pendência de outra na mesma conta.
+
+No process-automation, `cnab/bb_origem.py` confere intenção, resposta, IDs,
+conta, convênio, carteira, data, hashes e bytes; traduz o lote inteiro antes de
+`preparar_origem_bb` chamar o controle persistente de remessas. O consumidor e
+o gerador foram ensaiados juntos em processos separados, com HTTP simulado.
+Os jobs consumidores de envio/confirmação foram preparados e testados no PA.
+Ainda faltam publicação/agendamento e uma geração real nova. A entrega de retorno
+com recibos está descrita em [BB_API.md](../../robo_retorno/docs/BB_API.md).
+
+Verificação desta alteração: 41 testes de geração e origem BB passaram em
+container efêmero; incluem timeout, resposta sem IDs, falha de persistência,
+download inválido, upload interrompido e retomada sem nova geração. Ruff E9/F
+passou nos arquivos desta alteração. Nenhuma chamada bancária real foi feita
+por esse modo nesta validação.
+
 ### Códigos de saída
 
 O hub marca a execução pelo exit code.

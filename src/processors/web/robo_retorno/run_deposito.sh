@@ -23,6 +23,7 @@
 # porque os dois usam o MESMO perfil do Chrome, e o `run_agendado.sh` mata o perfil na
 # largada — sobrepor as duas rodadas mata uma delas no meio.
 set -u
+. /app/src/common/smart_financeiro_lock.sh
 cd /app || exit 1
 LOG=/app/logs/vnc
 mkdir -p "$LOG"

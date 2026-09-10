@@ -8,6 +8,7 @@
 # O robo sobe o proprio Chrome, loga via CapSolver, percorre as contas, baixa os
 # .REM e FECHA. Um login por run — mesmo desenho do doc2you.
 set -u
+. /app/src/common/smart_financeiro_lock.sh
 cd /app || exit 1
 LOG=/app/logs/vnc
 mkdir -p "$LOG"

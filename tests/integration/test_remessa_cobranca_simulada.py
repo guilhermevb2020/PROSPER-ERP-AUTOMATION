@@ -62,6 +62,25 @@ def test_dry_run_nao_gera_baixa_ou_envia(robo):
     r.nuvem.enviar.assert_not_called()
 
 
+@pytest.mark.parametrize('banco, tipos, esperado', [
+    ('001', ['7', '5', '7', '7'], 3),
+    ('001', ['1', '5', '1'], 2),
+    ('274', ['1', '2', '1'], 2),
+])
+def test_download_conta_instrucoes_sem_contar_complementos(robo, banco, tipos, esperado):
+    r, ctx = robo
+    header = list('01REMESSA'.ljust(400))
+    header[76:79] = banco
+    linhas = [''.join(header), *(tipo.ljust(400) for tipo in tipos), '9'.ljust(400)]
+    dados = ('\r\n'.join(linhas) + '\r\n').encode('latin-1')
+    r.baixar_id.return_value = ('teste.REM', dados)
+
+    assert r.processar(ctx, [{'id': 42}]) == 1
+    assert r.ler_controle()['42']['titulos'] == str(esperado)
+    assert (Path(r.cfg.PASTA_REMESSAS) / 'teste.REM').read_bytes() == dados
+    r.nuvem.enviar.assert_called_once_with(dados, 'teste.REM')
+
+
 @pytest.mark.parametrize('dados', [b'<html>login</html>', b'', b'01REMESSA\n1\n9'])
 def test_download_invalido_nao_vira_remessa(robo, dados):
     r, ctx = robo

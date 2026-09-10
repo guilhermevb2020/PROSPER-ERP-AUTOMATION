@@ -53,6 +53,7 @@ if _AQUI not in sys.path:
 from playwright.sync_api import sync_playwright  # noqa: E402
 
 import artefatos                                   # noqa: E402
+import bb_entrega                                  # noqa: E402
 import retorno as ret                             # noqa: E402
 import retorno_config as cfg                      # noqa: E402
 from src.common.clients import smart_sessao       # noqa: E402
@@ -288,15 +289,21 @@ def rodada(ctx, args, dry):
         caminho = os.path.join(args.pasta, nome)
         if not os.path.exists(caminho):
             log(f"  [{i}/{len(alvos)}] {nome}: nao encontrado")
+            if args.conta_bb_api is not None:
+                return SAIU_COM_PENDENCIA
             continue
         try:
-            res = ret.processar(
-                ctx, caminho, dry_run=dry,
-                pular_se_processado=args.pular_processados,
-                aceitar_conta_desconhecida=args.aceitar_conta_desconhecida,
-                hashes_ja_feitos=hashes_feitos,
-                usar_portao=args.portao,
-                modo_deposito=args.deposito)
+            if args.conta_bb_api is not None:
+                res = bb_entrega.processar(ctx, caminho, conta=args.conta_bb_api,
+                                          pasta_recibos=args.recibos_dir, dry_run=dry)
+            else:
+                res = ret.processar(
+                    ctx, caminho, dry_run=dry,
+                    pular_se_processado=args.pular_processados,
+                    aceitar_conta_desconhecida=args.aceitar_conta_desconhecida,
+                    hashes_ja_feitos=hashes_feitos,
+                    usar_portao=args.portao,
+                    modo_deposito=args.deposito)
         except ret.ErroRetorno as e:
             res = {"arquivo": nome, "nome_smart": ret.nome_limpo(caminho),
                    "conta": None, "titulos": 0, "ja_processado": False,
@@ -346,7 +353,7 @@ def rodada(ctx, args, dry):
         linha["divergencias"] = "; ".join(res.get("divergencias") or [])
         # o controle vem ANTES de mover: se o move falhar, o registro ja existe
         gravar_controle(linha)
-        if args.deposito:
+        if args.deposito or args.conta_bb_api is not None:
             categoria = artefatos.categoria_do_resultado(res)
             if categoria and not dry:
                 try:
@@ -359,7 +366,7 @@ def rodada(ctx, args, dry):
                 except OSError as e:
                     res["artefato_erro"] = f"nao consegui mover para {categoria}: {e}"
                     log(f"            ERRO DE ARTEFATO: {res['artefato_erro']}")
-            if args.recibos_dir:
+            if args.recibos_dir and args.conta_bb_api is None:
                 try:
                     recibo = artefatos.gravar_recibo_atomico(args.recibos_dir, res)
                     res["recibo_em"] = recibo
@@ -422,7 +429,7 @@ def rodada(ctx, args, dry):
         log("(DRY_RUN: nada foi processado. Use --pra-valer quando quiser valer.)")
 
     # Sai != 0 quando a rodada ficou incompleta ou algo pede gente.
-    if abortou or (not dry and com_erro):
+    if abortou or ((not dry or args.conta_bb_api is not None) and com_erro):
         return SAIU_COM_PENDENCIA
     return SAIU_OK
 
@@ -458,8 +465,10 @@ def montar_parser():
     ap.add_argument("--deposito", action="store_true",
                     help="modo estrito da baixa por deposito: CNAB/grade/resultado "
                          "precisam fechar exatamente")
+    ap.add_argument("--conta-bb-api", type=int,
+                    help="conta Smart exata do retorno BB API; exige recibos duráveis")
     ap.add_argument("--recibos-dir",
-                    help="grava recibos JSON auditaveis (usado no modo deposito)")
+                    help="grava recibos JSON auditaveis (deposito ou BB API)")
     return ap
 
 
@@ -476,7 +485,15 @@ def main():
         if not args.recibos_dir:
             log("ERRO: --deposito exige --recibos-dir no volume compartilhado.")
             return SAIU_PASTA_INVALIDA
-    dry = cfg.DRY_RUN and not args.pra_valer
+    if args.conta_bb_api is not None:
+        if (args.conta_bb_api <= 0 or args.deposito or not args.recibos_dir
+                or args.aceitar_conta_desconhecida or (args.limite is not None and args.limite <= 0)):
+            log("ERRO: BB API exige conta positiva, recibos, limite positivo e conta conhecida; sem depósito.")
+            return SAIU_PASTA_INVALIDA
+        if args.arquivo and (os.path.basename(args.arquivo) != args.arquivo or "\\" in args.arquivo):
+            log("ERRO: --arquivo BB deve ser nome dentro da pasta de entrada.")
+            return SAIU_PASTA_INVALIDA
+    dry = not args.pra_valer if args.conta_bb_api is not None else cfg.DRY_RUN and not args.pra_valer
 
     if not os.path.isdir(args.pasta):
         log(f"ERRO: pasta nao existe: {args.pasta}")

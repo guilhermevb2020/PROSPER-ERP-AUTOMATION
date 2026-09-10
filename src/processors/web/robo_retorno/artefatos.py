@@ -72,7 +72,7 @@ def _conteudo_recibo(resultado):
     return recibo
 
 
-def gravar_recibo_atomico(pasta_resultados, resultado):
+def gravar_recibo_atomico(pasta_resultados, resultado, *, schema=SCHEMA_RECIBO, metadados=None):
     """Grava um JSON por tentativa, completo ou invisivel; nunca sobrescreve."""
     destino_dir = Path(pasta_resultados) / datetime.now(TZ_SP).strftime("%Y-%m-%d")
     destino_dir.mkdir(parents=True, exist_ok=True)
@@ -80,9 +80,11 @@ def gravar_recibo_atomico(pasta_resultados, resultado):
     base = Path(str(resultado.get("arquivo") or "arquivo")).stem
     instante = datetime.now(TZ_SP).strftime("%Y%m%dT%H%M%S%f")
     destino = destino_dir / f"{base}_{sha}_{instante}.json"
-    dados = json.dumps(
-        _conteudo_recibo(resultado), ensure_ascii=False, sort_keys=True, indent=2
-    ).encode("utf-8") + b"\n"
+    recibo = _conteudo_recibo(resultado)
+    recibo["schema"] = schema
+    if metadados is not None:
+        recibo["metadados"] = metadados
+    dados = json.dumps(recibo, ensure_ascii=False, sort_keys=True, indent=2).encode("utf-8") + b"\n"
 
     temporario = None
     try:
@@ -97,11 +99,14 @@ def gravar_recibo_atomico(pasta_resultados, resultado):
         os.link(temporario, destino)
         temporario.unlink()
         temporario = None
-        descritor = os.open(destino_dir, os.O_RDONLY)
-        try:
-            os.fsync(descritor)
-        finally:
-            os.close(descritor)
+        # A primeira tentativa pode criar toda a árvore. Sincronizar só a
+        # folha não garante que seus diretórios ancestrais sobrevivam à queda.
+        for diretorio in (destino_dir, *destino_dir.parents):
+            descritor = os.open(diretorio, os.O_RDONLY)
+            try:
+                os.fsync(descritor)
+            finally:
+                os.close(descritor)
         return str(destino)
     finally:
         if temporario is not None:

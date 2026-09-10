@@ -35,6 +35,7 @@ import os
 import re
 import urllib.parse
 
+import bb_api
 import portao
 import retorno_config as cfg
 # so o `parece_deslogado` interessa aqui — e ele agora e compartilhado
@@ -180,17 +181,23 @@ MAPA_ACAO_CONTADOR = {
 }
 
 
-def conferir_divergencias(acoes, ocorrencias):
+def conferir_divergencias(acoes, ocorrencias, banco_compe=None):
     """Compara previsto (grade) x registrado (contador). Retorna lista de avisos.
 
     NAO e erro fatal - so registro. Visto em 31/07/2026: dois arquivos com 6
     titulos "Entrada Rejeitada" cada na grade e contador 4 e 3. Reprocessar deu
     o MESMO numero, entao nao e "so conta quem mudou de estado" - a causa segue
     desconhecida. Por decisao do usuario o robo segue e apenas registra.
+
+    No retorno BB, Liquidado corresponde a liquidacao, nao refinan. Conferido
+    no processamento real de 09/09/2026: uma linha 06, liquidacao=1. O mapa
+    legado permanece para os demais bancos.
     """
     avisos = []
     for acao, qtd in (acoes or {}).items():
         chave = MAPA_ACAO_CONTADOR.get(_normalizar(acao))
+        if banco_compe == "001" and _normalizar(acao) == "liquidado":
+            chave = "liquidacao"
         if not chave:
             continue
         registrado = (ocorrencias or {}).get(chave)
@@ -285,7 +292,8 @@ def soltar_trava(ctx, nome):
 # --------------------------------------------------------------------------- #
 def processar(ctx, caminho, dry_run=True, pular_se_processado=False,
               aceitar_conta_desconhecida=False, hashes_ja_feitos=None,
-              usar_portao=False, modo_deposito=False):
+              usar_portao=False, modo_deposito=False, conta_bb_api=None,
+              registrar_bb=None):
     """Roda a sequencia inteira para um .RET. Retorna dict com o resultado.
 
     dry_run=True para no passo 6 (upload): valida banco/conta e mostra quantos
@@ -317,7 +325,19 @@ def processar(ctx, caminho, dry_run=True, pular_se_processado=False,
     o arquivo sintetico com identificador/hash, faz o portao fechar arquivo,
     upload e grade, e so considera processado quando a resposta prova exatamente
     `liquidacao=quantidade`, sem `refinan` nem outro resultado.
+
+    conta_bb_api: ID positivo da conta Smart esperada para o retorno reconstruído
+    BB. Liga conferência de ocorrências/valores e dos contadores finais; não pode
+    ser combinado com depósito. Resposta inconclusiva nunca prova processamento.
+
+    registrar_bb: callback do controle durável BB, chamado com (etapa, saída).
+    Persiste intenção após o portão e antes do passo irreversível; persiste o
+    resultado antes de consultas auxiliares. Falha de persistência interrompe.
     """
+    if conta_bb_api is not None and (modo_deposito or type(conta_bb_api) is not int or conta_bb_api <= 0):
+        raise ValueError("conta BB API inválida ou modo depósito simultâneo")
+    if registrar_bb is not None and (conta_bb_api is None or not callable(registrar_bb)):
+        raise ValueError("registro de etapas exige modo BB API e callback")
     nome = nome_limpo(caminho)
     conteudo = ler_arquivo(caminho)
     normalizado = conteudo.encode("iso-8859-1", "replace")
@@ -336,6 +356,9 @@ def processar(ctx, caminho, dry_run=True, pular_se_processado=False,
         return saida
     if len(linhas) > LIMITE_LINHAS:
         saida["motivo"] = f"{len(linhas)} linhas (limite {LIMITE_LINHAS})"
+        return saida
+    if conta_bb_api is not None and (linhas[0][76:79] != "001" or len(linhas) < 3):
+        saida.update(estado_final="recusado_portao", motivo="retorno BB API sem envelope do banco 001")
         return saida
 
     arquivo_deposito = None
@@ -380,8 +403,10 @@ def processar(ctx, caminho, dry_run=True, pular_se_processado=False,
 
     try:
         saida["conta"] = validar_banco_conta(ctx, conteudo)
+        if conta_bb_api is not None and str(saida["conta"]) != str(conta_bb_api):
+            raise ErroRetorno("conta Smart diverge da conta BB API esperada")
     except ErroRetorno as e:
-        if "conta nao cadastrada" in str(e) and aceitar_conta_desconhecida:
+        if "conta nao cadastrada" in str(e) and aceitar_conta_desconhecida and conta_bb_api is None:
             saida["conta"] = None       # a tela seguiria sem conta
             saida["motivo"] = "conta nao cadastrada (seguindo por opcao)"
         else:
@@ -397,7 +422,14 @@ def processar(ctx, caminho, dry_run=True, pular_se_processado=False,
         saida["criticas"] = dados.get("criticas") or []
         saida["data_hora"] = dados.get("dataHora")
         saida["valor_total"] = dados.get("valorTotalTitulos")
-        if usar_portao or modo_deposito:
+        if conta_bb_api is not None:
+            veredito = bb_api.avaliar_grade(linhas, saida["detalhes"], saida["titulos"])
+            saida["portao"] = veredito
+            if not veredito["liberado"]:
+                saida["estado_final"] = "recusado_portao"
+                saida["motivo"] = f"RECUSADO PELO PORTAO BB: {veredito['sumario']}"
+                return saida
+        elif usar_portao or modo_deposito:
             veredito = portao.avaliar_grade(
                 saida["detalhes"],
                 exigir_status_ok=modo_deposito,
@@ -419,11 +451,13 @@ def processar(ctx, caminho, dry_run=True, pular_se_processado=False,
             saida["motivo"] = "DRY_RUN (upload e portao validados, sem processar)"
             return saida
 
+        if registrar_bb is not None:
+            registrar_bb("intencao", saida)
         saida["passo_irreversivel_chamado"] = True
         try:
             resultado = processar_arquivo(ctx, nome, dados)
         except Exception as exc:
-            if not modo_deposito:
+            if not modo_deposito and conta_bb_api is None:
                 raise
             saida["estado_final"] = "inconclusivo"
             saida["inconclusivo"] = True
@@ -431,12 +465,25 @@ def processar(ctx, caminho, dry_run=True, pular_se_processado=False,
                 "RESULTADO INCONCLUSIVO APOS PROCESSAR_ARQUIVO: "
                 f"{type(exc).__name__}: {str(exc)[:160]}"
             )
+            if registrar_bb is not None:
+                registrar_bb("resultado", saida)
             return saida
 
         saida["resposta_processamento"] = resultado
         # conferencia do que o Smart FEZ (contador por tipo de ocorrencia)
-        saida["ocorrencias"] = resumo_processamento(resultado)
-        if modo_deposito:
+        saida["ocorrencias"] = (
+            {} if conta_bb_api is not None and not isinstance(resultado, dict)
+            else resumo_processamento(resultado)
+        )
+        if conta_bb_api is not None:
+            confirmacao = bb_api.avaliar_resultado(resultado, saida["portao"]["contadores_esperados"])
+            saida["confirmacao_smart"] = confirmacao
+            saida["processado"] = confirmacao["comprovado"]
+            saida["inconclusivo"] = not confirmacao["comprovado"]
+            saida["estado_final"] = "processado_smart" if confirmacao["comprovado"] else "inconclusivo"
+            saida["motivo"] = "OK" if confirmacao["comprovado"] else confirmacao["sumario"]
+            saida["divergencias"] = confirmacao["erros"]
+        elif modo_deposito:
             confirmacao = portao.avaliar_resultado_deposito(
                 resultado, saida["titulos"]
             )
@@ -455,8 +502,11 @@ def processar(ctx, caminho, dry_run=True, pular_se_processado=False,
             saida["processado"] = (resultado.get("message") or "OK") == "OK"
             saida["motivo"] = resultado.get("message") or "OK"
             saida["divergencias"] = conferir_divergencias(
-                saida.get("acoes"), saida["ocorrencias"]
+                saida.get("acoes"), saida["ocorrencias"],
+                banco_compe=linhas[0][76:79],
             )
+        if registrar_bb is not None:
+            registrar_bb("resultado", saida)
         try:
             saida["criticas"] = verificar_criticas(ctx, nome, dados)
         except ErroRetorno:
