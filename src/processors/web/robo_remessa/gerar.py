@@ -119,6 +119,11 @@ def ler_form(pagina, nome_form="ConfirmarDadosConta"):
     instrucoes_box = {}
 
     for tag in re.findall(r"<input\b[^>]*>", pagina, re.I):
+        # Controles disabled não são enviados pelo navegador. No BB existem
+        # dois qtdDias com o mesmo nome: o desabilitado não pode sobrescrever
+        # o ativo nem virar qtdDias= (o servidor interpreta a presença).
+        if re.search(r"\sdisabled(?:\s|=|/?>)", tag, re.I):
+            continue
         nome = _atr(tag, "name")
         if not nome:
             continue

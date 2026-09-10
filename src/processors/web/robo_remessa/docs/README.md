@@ -143,8 +143,13 @@ o conjunto completo de títulos selecionados. Mantém o resultado original;
 a prova adicional usa `metodo=legado_conferido`. Sem essa conferência, o wrapper
 continua bloqueando nova geração. Não serve para importar remessa histórica.
 
-Regressão dessa correção: 73 testes de origem BB, ciclo de remessa e wrapper
+Regressão dessas correções: 75 testes de origem BB, ciclo de remessa e wrapper
 aprovados, com Smart e Nextcloud simulados e persistência real em disco.
+O leitor também exclui inputs `disabled`, como o FormData do navegador.
+Conferência offline em Chrome com o formulário BB real mostrou o robô antigo
+enviando `qtdDias=` apesar de os dois campos de prazo estarem desabilitados;
+o navegador omite esse campo. O campo ativo, quando existe, é preservado e não
+pode ser sobrescrito por outro desabilitado de mesmo nome.
 
 No process-automation, `cnab/bb_origem.py` confere intenção, resposta, IDs,
 conta, convênio, carteira, data, hashes e bytes; traduz o lote inteiro antes de

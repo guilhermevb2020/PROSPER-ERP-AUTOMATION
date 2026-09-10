@@ -174,3 +174,19 @@ def test_pra_valer_e_simular_nao_convivem(robo):
     r, _ = robo
     with pytest.raises(SystemExit):
         _args(r, '--pra-valer', '--simular')
+
+
+@pytest.mark.parametrize('prazo_ativo', [None, '10'])
+def test_campos_disabled_nao_vao_no_post_nem_sobrescrevem_prazo_ativo(robo, prazo_ativo):
+    r, _ = robo
+    ativo = '' if prazo_ativo is None else f'<input name="qtdDias" id="qtdDias1" value="{prazo_ativo}">'
+    form = FORM.replace('</form>', ativo + '''
+      <input name="qtdDias" id="qtdDias3" disabled value="">
+      <input type="checkbox" id="prazo" name="titulo3" value="103" checked disabled="disabled">
+      <input name="desabilitado" value="nunca" DISABLED></form>''')
+    corpo = parse_qs(r.ger.montar_post(r.ger.ler_form(form)), keep_blank_values=True)
+    assert 'titulo3' not in corpo and 'desabilitado' not in corpo
+    if prazo_ativo is None:
+        assert 'qtdDias' not in corpo
+    else:
+        assert corpo['qtdDias'] == [prazo_ativo]
