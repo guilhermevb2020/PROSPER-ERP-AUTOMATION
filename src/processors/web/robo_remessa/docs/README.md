@@ -136,6 +136,13 @@ conta/data da geração. Grava `download_direto.json` com o ID da listagem e o
 hash antes de publicar `pronta.json`. Arquivos diferentes ou ambíguos não são
 liberados. A retomada revalida a prova salva e não repete o POST.
 
+Remessa BB pode reunir entradas, baixas e alterações no mesmo arquivo. A
+conferência da resposta direta compara os controles das entradas (comando 01)
+com os checkboxes `tituloN` e os demais controles com o campo `instrucoes` do
+POST, conferido também contra o resumo. Os grupos devem corresponder por inteiro,
+sem títulos extras ou ausentes; complemento tipo 5 não é outra entrada. Remessas
+somente de alterações usam a mesma conferência, sem exigir títulos novos.
+
 Para uma resposta legada truncada, a recuperação é explícita por
 `bb_geracao.recuperar_download_direto(robo, ctx, pasta=..., smart_id=...)`, sob a
 trava financeira. Exige os 1500 bytes originais, conta, data/hora da geração e

@@ -157,11 +157,18 @@ def _conferir_direto(robo, intencao, resultado, item, dados, *, legado):
         raise OrigemBBInconclusiva("download fora da conta/data/convênio da geração")
     campos = parse_qs(intencao["corpo"])
     selecionados = sorted(v for k, vs in campos.items() if k.startswith("titulo") for v in vs)
-    controles = sorted(str(int(l[48:63])) for l in linhas if l.startswith("7"))
+    listas = campos.get("instrucoes", [""])
+    if listas != [intencao["resumo"].get("instrucoes", "")]:
+        raise OrigemBBInconclusiva("instruções do POST divergem do resumo")
+    instrucoes = sorted(v for v in listas[0].split("@") if v)
+    # Entradas vêm dos checkboxes tituloN; baixas e alterações vêm do campo
+    # instrucoes. Tipo 5 é complemento, não outro título selecionado.
+    entradas = sorted(str(int(l[48:63])) for l in linhas if l.startswith("7") and l[108:110] == "01")
+    alteracoes = sorted(str(int(l[48:63])) for l in linhas if l.startswith("7") and l[108:110] != "01")
     if legado and (not selecionados or intencao["resumo"].get("instrucoes")):
         raise OrigemBBInconclusiva("recuperação legada exige seleção explícita de todos os títulos")
-    if selecionados and (selecionados != controles
-                         or len(selecionados) != intencao["resumo"]["titulos_marcados"]):
+    if (selecionados != entradas or instrucoes != alteracoes
+            or len(selecionados) != intencao["resumo"]["titulos_marcados"]):
         raise OrigemBBInconclusiva("download não contém exatamente os títulos selecionados")
     return quantidade
 

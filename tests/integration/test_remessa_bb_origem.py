@@ -230,19 +230,27 @@ def test_cli_bb_nao_aceita_reenvio_historico(origem):
     o.robo.ger.gerar.assert_not_called()
 
 
-def preparar_resposta_direta(o):
+def preparar_resposta_direta(o, comandos=("01", "01")):
     agora = datetime.now(ZoneInfo("America/Sao_Paulo"))
     header = list(o.dados.decode().splitlines()[0])
     header[94:100] = agora.strftime("%d%m%y")
     detalhes = []
-    for tid in (101, 102):
+    for tid, comando in zip((101, 102), comandos, strict=True):
         linha = list("7".ljust(400))
         linha[48:63] = f"{tid:015d}"
+        linha[108:110] = comando
         detalhes.append("".join(linha))
     dados = ("\r\n".join(["".join(header), detalhes[0], "5".ljust(400), detalhes[1], "9".ljust(400)])
              + "\r\n").encode("latin-1")
     form = o.robo.ger.filtrar.return_value.replace("prazo1", "titulo1").replace(
         "</form>", '<input type="checkbox" name="titulo2" id="prazo" value="102" checked></form>')
+    instrucoes = ""
+    for indice, comando in enumerate(comandos, 1):
+        if comando != "01":
+            form = form.replace(
+                f'<input type="checkbox" name="titulo{indice}" id="prazo" value="{100 + indice}" checked>', "")
+            instrucoes += f"{100 + indice}@"
+    form = form.replace("</form>", f'<input name="instrucoes" value="{instrucoes}"></form>')
     o.robo.ger.filtrar.return_value = form
     item = {"id": 42, "cc": "395", "arquivo": "teste.REM", "data": agora.strftime("%d/%m/%Y %H:%M")}
     o.robo.listar_remessas.return_value = [item]
@@ -271,6 +279,34 @@ def test_cnab_direto_preserva_resposta_e_retoma_upload_sem_novo_post(origem):
     assert (resposta.parent / "42.REM").read_bytes() == dados
     o.ctx.request.post.assert_called_once()
     o.robo.baixar_id.assert_called_once()
+
+
+@pytest.mark.parametrize("comandos", [("01", "02"), ("01", "06"), ("01", "04"), ("02", "06")])
+def test_download_direto_confere_entradas_e_instrucoes_e_retoma_sem_regerar(origem, comandos):
+    o = origem
+    dados = preparar_resposta_direta(o, comandos)
+    o.robo.nuvem.enviar.return_value = (False, "", "indisponível")
+    with pytest.raises(o.bb.OrigemBBInconclusiva):
+        rodar(o)
+    resposta, = o.pasta.rglob("resultado.json")
+    original = resposta.read_bytes()
+    o.robo.nuvem.enviar.return_value = (True, "CNAB/teste.REM", "OK")
+    assert rodar(o)["ids"] == [42]
+    assert (resposta.parent / "42.REM").read_bytes() == dados
+    assert resposta.read_bytes() == original
+    o.ctx.request.post.assert_called_once()
+
+
+@pytest.mark.parametrize("lista", ["", "103@", "102@102@", "101@"])
+def test_download_direto_recusa_instrucao_ausente_extra_ou_de_outro_titulo(origem, lista):
+    o = origem
+    preparar_resposta_direta(o, ("01", "06"))
+    o.robo.ger.filtrar.return_value = o.robo.ger.filtrar.return_value.replace(
+        'name="instrucoes" value="102@"', f'name="instrucoes" value="{lista}"')
+    with pytest.raises(o.bb.OrigemBBInconclusiva):
+        rodar(o)
+    o.robo.nuvem.enviar.assert_not_called()
+    assert not list(o.pasta.rglob("pronta.json"))
 
 
 @pytest.mark.parametrize("falha", ["bytes", "duplicado", "conta", "data", "titulos"])
