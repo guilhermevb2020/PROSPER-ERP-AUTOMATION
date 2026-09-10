@@ -1,6 +1,9 @@
 # Retorno reconstruído da API BB
 
-Preparado no checkout isolado em 09/09/2026. Ainda não publicado/agendado.
+Integrado no ERP em 09/09/2026 pelo commit `5ee7f65`, sem agendamento BB.
+Os 14 arquivos de `src/` da mudança foram comparados byte a byte entre commit,
+checkout principal e container. A publicação ocorreu pelo bind existente de
+`/app/src`, sob a trava financeira, sem recriar o container.
 
 O modo `--conta-bb-api` liga a conferência específica de `bb_api.py` e o controle
 durável `bb_entrega.py`, usando o processador de retorno existente. Exige conta
@@ -56,6 +59,9 @@ o recibo junto aos marcadores dos pagamentos em uma transação. Ainda depende
 da publicação e ativação em produção.
 
 ## Validação e limites
+
+Regressão anterior à integração: 191 testes de remessa, retorno, recibos,
+wrappers, descoberta e portão passaram, com serviços externos simulados.
 
 125 testes passaram para entrega BB, conferência, retorno BB, depósito,
 artefatos, descoberta e portão. Testes de entrega incluem persistência antes
