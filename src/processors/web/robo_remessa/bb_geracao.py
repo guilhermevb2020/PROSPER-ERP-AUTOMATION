@@ -127,6 +127,33 @@ def _entregar(robo, ctx, pasta: Path, intencao: dict) -> dict:
             "ids": [item["id"] for item in arquivos], "arquivos": len(arquivos)}
 
 
+def _id_do_controle(controle: str, conta: str) -> str:
+    """ID do título no "número de controle do participante" (posições 38:63 do detalhe 7).
+
+    O Smart já escreveu esse campo de duas formas, as duas medidas em arquivos reais
+    da conta 395 (convênio 3770013):
+
+    - até 10/09/2026 (26282.REM, 28 detalhes): conta em 10 posições + ID em 15
+      ``0000000395`` ``000000000907046``
+    - desde 11/09/2026 (remessa 40, 103 detalhes): ``X`` + 5 dígitos + conta em 7 + ID em 12
+      ``X03912`` ``0000395`` ``000000909174``
+
+    A leitura fixa em ``[48:63]`` recusava a segunda forma com "download não contém
+    exatamente os títulos selecionados", embora as 95 entradas e as 8 instruções
+    batessem com o formulário. Qualquer outra forma é inconclusiva: ID não se deduz
+    de layout desconhecido (BUG-548).
+    """
+    if len(controle) != 25:
+        raise OrigemBBInconclusiva("controle do participante fora das 25 posições")
+    if controle[:10] == conta.zfill(10) and controle[10:].isascii() and controle[10:].isdigit():
+        return str(int(controle[10:]))
+    if (controle[0] == "X" and controle[1:6].isascii() and controle[1:6].isdigit()
+            and controle[6:13] == conta.zfill(7)
+            and controle[13:].isascii() and controle[13:].isdigit()):
+        return str(int(controle[13:]))
+    raise OrigemBBInconclusiva("controle do participante em layout desconhecido")
+
+
 def _conferir_direto(robo, intencao, resultado, item, dados, *, legado):
     """Confere o download contra a resposta, o formulário e a listagem Smart."""
     if (resultado.get("enviado") is not True or resultado.get("ok") is not False
@@ -162,9 +189,13 @@ def _conferir_direto(robo, intencao, resultado, item, dados, *, legado):
         raise OrigemBBInconclusiva("instruções do POST divergem do resumo")
     instrucoes = sorted(v for v in listas[0].split("@") if v)
     # Entradas vêm dos checkboxes tituloN; baixas e alterações vêm do campo
-    # instrucoes. Tipo 5 é complemento, não outro título selecionado.
-    entradas = sorted(str(int(l[48:63])) for l in linhas if l.startswith("7") and l[108:110] == "01")
-    alteracoes = sorted(str(int(l[48:63])) for l in linhas if l.startswith("7") and l[108:110] != "01")
+    # instrucoes. Tipo 5 é complemento, não outro título selecionado. O ID sai
+    # do controle do participante, que o Smart escreve em dois layouts.
+    conta = intencao["conta_smart"]
+    entradas = sorted(_id_do_controle(l[38:63], conta)
+                      for l in linhas if l.startswith("7") and l[108:110] == "01")
+    alteracoes = sorted(_id_do_controle(l[38:63], conta)
+                        for l in linhas if l.startswith("7") and l[108:110] != "01")
     if legado and (not selecionados or intencao["resumo"].get("instrucoes")):
         raise OrigemBBInconclusiva("recuperação legada exige seleção explícita de todos os títulos")
     if (selecionados != entradas or instrucoes != alteracoes

@@ -1,8 +1,10 @@
 """Geração Smart simulada; arquivos, interrupções e retomadas reais no disco."""
 
 import importlib
+import importlib.util
 import json
 import sys
+import types
 from datetime import datetime
 from pathlib import Path
 from types import SimpleNamespace
@@ -20,6 +22,14 @@ def origem(monkeypatch, tmp_path):
         for nome in ("_nextcloud", "_sessao", "gerar", "login", "remessa_config",
                      "robo_remessa", "bb_geracao"):
             sys.modules.pop(nome, None)
+        if importlib.util.find_spec("playwright") is None:
+            # O host de testes não tem o Playwright; robo_remessa só o usa em main().
+            api = types.ModuleType("playwright.sync_api")
+            api.sync_playwright = Mock()
+            pacote = types.ModuleType("playwright")
+            pacote.sync_api = api
+            sys.modules["playwright"] = pacote
+            sys.modules["playwright.sync_api"] = api
         robo = importlib.import_module("robo_remessa")
         bb = importlib.import_module("bb_geracao")
         form = '''<form name="ConfirmarDadosConta">
@@ -39,8 +49,8 @@ def origem(monkeypatch, tmp_path):
         monkeypatch.setattr(robo, "baixar_id", Mock(return_value=("teste.REM", dados)))
         monkeypatch.setattr(robo, "listar_remessas", Mock())
         monkeypatch.setattr(robo.nuvem, "enviar", Mock(return_value=(True, "CNAB/arquivo.REM", "OK")))
-        kwargs = dict(conta="395", carteira="17", convenio="1234567", ambiente="producao",
-                      pasta=str(tmp_path / "origem"), dry_run=False)
+        kwargs = {"conta": "395", "carteira": "17", "convenio": "1234567", "ambiente": "producao",
+                  "pasta": str(tmp_path / "origem"), "dry_run": False}
         yield SimpleNamespace(bb=bb, robo=robo, kwargs=kwargs, ctx=object(), dados=dados,
                               pasta=tmp_path / "origem", gerar_real=gerar_real)
 
@@ -230,14 +240,21 @@ def test_cli_bb_nao_aceita_reenvio_historico(origem):
     o.robo.ger.gerar.assert_not_called()
 
 
-def preparar_resposta_direta(o, comandos=("01", "01")):
+def controle_do_participante(tid, layout="antigo"):
+    """Os dois layouts que o Smart já escreveu nas posições 38:63 (medidos em produção)."""
+    if layout == "antigo":
+        return f"{'395'.zfill(10)}{tid:015d}"
+    return f"X03912{'395'.zfill(7)}{tid:012d}"
+
+
+def preparar_resposta_direta(o, comandos=("01", "01"), layout="antigo", controles=None):
     agora = datetime.now(ZoneInfo("America/Sao_Paulo"))
     header = list(o.dados.decode().splitlines()[0])
     header[94:100] = agora.strftime("%d%m%y")
     detalhes = []
-    for tid, comando in zip((101, 102), comandos, strict=True):
+    for indice, (tid, comando) in enumerate(zip((101, 102), comandos, strict=True)):
         linha = list("7".ljust(400))
-        linha[48:63] = f"{tid:015d}"
+        linha[38:63] = (controles[indice] if controles else controle_do_participante(tid, layout))
         linha[108:110] = comando
         detalhes.append("".join(linha))
     dados = ("\r\n".join(["".join(header), detalhes[0], "5".ljust(400), detalhes[1], "9".ljust(400)])
@@ -295,6 +312,48 @@ def test_download_direto_confere_entradas_e_instrucoes_e_retoma_sem_regerar(orig
     assert (resposta.parent / "42.REM").read_bytes() == dados
     assert resposta.read_bytes() == original
     o.ctx.request.post.assert_called_once()
+
+
+@pytest.mark.parametrize("layout", ["antigo", "novo"])
+def test_download_direto_le_o_id_nos_dois_layouts_do_controle(origem, layout):
+    o = origem
+    dados = preparar_resposta_direta(o, ("01", "06"), layout=layout)
+    assert rodar(o)["ids"] == [42]
+    arquivo, = o.pasta.rglob("42.REM")
+    assert arquivo.read_bytes() == dados
+    o.ctx.request.post.assert_called_once()
+
+
+@pytest.mark.parametrize("controle", [
+    "Y03912" + "395".zfill(7) + f"{102:012d}",    # prefixo que o Smart nunca escreveu
+    "X03912" + "396".zfill(7) + f"{102:012d}",    # outra conta no layout novo
+    "396".zfill(10) + f"{102:015d}",              # outra conta no layout antigo
+    "395".zfill(10) + f"{102:014d}" + "A",        # ID com letra
+])
+def test_controle_fora_dos_dois_layouts_e_inconclusivo(origem, controle):
+    o = origem
+    preparar_resposta_direta(o, ("01", "01"), controles=[controle_do_participante(101), controle])
+    with pytest.raises(o.bb.OrigemBBInconclusiva):
+        rodar(o)
+    o.robo.nuvem.enviar.assert_not_called()
+    assert not list(o.pasta.rglob("pronta.json"))
+
+
+@pytest.mark.parametrize("controle,esperado", [
+    ("0000000395000000000907046", "907046"),    # 26282.REM, 10/09/2026
+    ("X039120000395000000909174", "909174"),    # remessa 40, 11/09/2026
+])
+def test_id_do_controle_nos_dois_layouts_reais(origem, controle, esperado):
+    assert origem.bb._id_do_controle(controle, "395") == esperado
+
+
+@pytest.mark.parametrize("controle", [
+    "X039120000396000000909174", "0000000396000000000907046",
+    "Z039120000395000000909174", "000000039500000000A907046", "0000000395000000000907046 ",
+])
+def test_id_do_controle_recusa_layout_desconhecido(origem, controle):
+    with pytest.raises(origem.bb.OrigemBBInconclusiva):
+        origem.bb._id_do_controle(controle, "395")
 
 
 @pytest.mark.parametrize("lista", ["", "103@", "102@102@", "101@"])
