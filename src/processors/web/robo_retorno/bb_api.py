@@ -21,6 +21,19 @@ OCORRENCIAS = {
 }
 
 
+def _documento(texto):
+    """Número do documento como a grade do Smart o mostra: espaços internos colapsados.
+
+    14/09/2026: o arquivo BBAPI000002632A181A8EADBC493.RET levava `Q  19902/A` (dois
+    espaços, como o ERP guarda o título) e `retorno.extrair_titulos` colapsa o HTML da
+    grade em `Q 19902/A`. Comparar o campo cru recusou o arquivo inteiro: 100
+    liquidações, 99 idênticas. Só a comparação colapsa; o arquivo enviado não muda.
+    O validador do recibo no process-automation (`bb_recibo._documento_comparavel`)
+    faz o mesmo, e os dois portões têm de continuar concordando.
+    """
+    return " ".join(str(texto or "").split())
+
+
 def avaliar_grade(linhas, detalhes, quantidade_upload):
     """Confere envelope, quantidade, ação e valores de cada registro enviado."""
     eventos = linhas[1:-1]
@@ -64,11 +77,11 @@ def avaliar_grade(linhas, detalhes, quantidade_upload):
                 continue
             acao, contador = OCORRENCIAS[codigo]
             contadores[contador] += 1
-            esperados[(linha[116:126].strip(), valor, pago, abatimento, data, acao)] += 1
+            esperados[(_documento(linha[116:126]), valor, pago, abatimento, data, acao)] += 1
     for linha in detalhes or []:
         if portao.e_linha_de_resumo(linha):
             continue
-        observados[(linha.get("numero_titulo", "").strip(), portao._num(linha.get("valor_titulo_arq")),
+        observados[(_documento(linha.get("numero_titulo")), portao._num(linha.get("valor_titulo_arq")),
                     portao._num(linha.get("valor_pago")), portao._num(linha.get("abatimento")),
                     linha.get("data_ocorrencia"), portao._sem_acento(linha.get("acao_tomada")))] += 1
     if not esperados or esperados != observados:

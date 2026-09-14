@@ -12,7 +12,8 @@ import bb_api  # noqa: E402
 import retorno  # noqa: E402
 
 
-def arquivo(tmp_path, codigo="06"):
+def arquivo(tmp_path, codigo="06", documento="TESTE-001 "):
+    assert len(documento) == 10
     header, detalhe, trailer = [list(" " * 400) for _ in range(3)]
     header[:19] = "02RETORNO01COBRANCA"
     header[26:40] = "03867" + "00098691" + "7"
@@ -25,7 +26,7 @@ def arquivo(tmp_path, codigo="06"):
     detalhe[63:80] = "37700130000000001"
     detalhe[108:110] = codigo
     detalhe[110:116] = "090926"
-    detalhe[116:126] = "TESTE-001 "
+    detalhe[116:126] = documento
     detalhe[152:165] = "0000000025000"
     detalhe[227:240] = "0000000001234" if codigo == "12" else " " * 13
     detalhe[253:266] = "0000000025000" if codigo == "06" else " " * 13
@@ -39,10 +40,10 @@ def arquivo(tmp_path, codigo="06"):
     return p
 
 
-def grade(codigo="06"):
+def grade(codigo="06", documento="TESTE-001"):
     acoes = {"02": "Entrada Confirmada", "06": "Liquidado", "10": "Baixa",
              "12": "Abatimento Concedido", "14": "Prorrogado"}
-    return [{"numero_titulo": "TESTE-001", "valor_titulo": "250,00", "valor_titulo_arq": "250,00",
+    return [{"numero_titulo": documento, "valor_titulo": "250,00", "valor_titulo_arq": "250,00",
              "valor_pago": "250,00" if codigo == "06" else "0,00",
              "abatimento": "12,34" if codigo == "12" else "0,00",
              "data_ocorrencia": "09/09/2026", "acao_tomada": acoes[codigo], "status": "OK"}]
@@ -136,3 +137,24 @@ def test_envelope_misto_nao_aceita_outra_conta(tmp_path):
     linhas = arquivo(tmp_path).read_text().splitlines()
     linhas[1] = linhas[1][:31] + "7654321" + linhas[1][38:]
     assert not bb_api.avaliar_grade(linhas, grade(), 1)["liberado"]
+
+
+def test_espaco_duplo_no_documento_casa_com_a_grade_colapsada(tmp_path, monkeypatch):
+    """14/09/2026: o ERP guarda `Q  19902/A`, o arquivo leva os dois espaços e a grade
+    volta colapsada em `Q 19902/A`. A comparação crua recusou o arquivo inteiro de 100
+    liquidações (BBAPI000002632A181A8EADBC493.RET), 99 delas idênticas."""
+    chamada = preparar(monkeypatch, grade(documento="Q 19902/A"),
+                       {"message": "OK", "liquidacao": 1, "DifSistema": 0})
+    resultado = retorno.processar(None, arquivo(tmp_path, documento="Q  19902/A"),
+                                  dry_run=False, conta_bb_api=395)
+    assert chamada.call_count == 1
+    assert resultado["processado"] and resultado["estado_final"] == "processado_smart"
+
+
+@pytest.mark.parametrize("na_grade", ["Q 19902/B", "Q 19902-A", "Q19902/A", "BQ 19902/A"])
+def test_so_o_espaco_interno_e_tolerado_no_documento(tmp_path, monkeypatch, na_grade):
+    chamada = preparar(monkeypatch, grade(documento=na_grade), {"message": "OK", "liquidacao": 1})
+    resultado = retorno.processar(None, arquivo(tmp_path, documento="Q  19902/A"),
+                                  dry_run=False, conta_bb_api=395)
+    chamada.assert_not_called()
+    assert resultado["estado_final"] == "recusado_portao"
