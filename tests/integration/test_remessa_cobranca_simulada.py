@@ -190,3 +190,48 @@ def test_campos_disabled_nao_vao_no_post_nem_sobrescrevem_prazo_ativo(robo, praz
         assert 'qtdDias' not in corpo
     else:
         assert corpo['qtdDias'] == [prazo_ativo]
+
+
+# --------------------------------------------------------------------------- #
+# POST que NAO responde: a duvida e a mesma do POST sem ids (11/09/2026)
+# --------------------------------------------------------------------------- #
+def test_timeout_no_post_recupera_a_remessa_pela_listagem(robo, monkeypatch):
+    """Timeout nao diz se o Smart gerou. O robo RECUPERA pela listagem em vez de
+    pular a conta — senao a remessa fica orfa, com o sequencial ja consumido."""
+    r, ctx = robo
+    ctx.request.post.side_effect = Exception('read ETIMEDOUT')
+    monkeypatch.setattr(r, 'listar_remessas', Mock(return_value=[{'id': 42}]))
+    out = r.ciclo_conta(ctx, '1', 'Conta sintetica', '2', dry_run=False)
+    assert out['gerou'] and out['ids'] == [42] and out['baixados'] == 1
+    assert not out['incerto']
+    r.nuvem.enviar.assert_called_once()
+
+
+def test_timeout_sem_remessa_na_listagem_fica_INCERTO(robo, monkeypatch):
+    r, ctx = robo
+    ctx.request.post.side_effect = Exception('Timeout 90000ms exceeded.')
+    monkeypatch.setattr(r, 'listar_remessas', Mock(return_value=[]))
+    out = r.ciclo_conta(ctx, '1', 'Conta sintetica', '2', dry_run=False)
+    assert out['incerto'] is True and not out['gerou']
+    assert 'CONFERIR NO SMART' in out['motivo']
+    r.baixar_id.assert_not_called()
+
+
+def _rodada(r, ctx, monkeypatch):
+    monkeypatch.setattr(r, 'carregar_contas_carteiras', Mock(return_value=({}, {})))
+    monkeypatch.setattr(r, 'resolver_conta', Mock(return_value=('1', 'Conta sintetica')))
+    args = r.montar_parser().parse_args(['--gerar', '--conta', '1', '--pra-valer'])
+    return r.rodada_geracao(ctx, args, dry=False)
+
+
+def test_conta_pulada_por_erro_faz_a_rodada_sair_INCOMPLETA(robo, monkeypatch):
+    """O caso de 11/09/2026: duas contas estouraram, a rodada saiu 0 e o hub
+    marcou sucesso. Conta pulada por erro nao e conta sem remessa."""
+    r, ctx = robo
+    monkeypatch.setattr(r.ger, 'filtrar', Mock(side_effect=Exception('read ETIMEDOUT')))
+    assert _rodada(r, ctx, monkeypatch) == r.SAIU_RODADA_INCOMPLETA
+
+
+def test_rodada_normal_continua_saindo_OK(robo, monkeypatch):
+    r, ctx = robo
+    assert _rodada(r, ctx, monkeypatch) == r.SAIU_OK

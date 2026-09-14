@@ -25,7 +25,13 @@ SEGURANCA
 - POST que foi mas nao devolveu os ids NAO vira falha silenciosa: a remessa
   existe no Smart, entao o robo a recupera pela tela de listagem (senao ela
   fica orfa, o sequencial ja foi consumido e a proxima rodada dira "nada a
-  fazer" porque os titulos sairam da fila).
+  fazer" porque os titulos sairam da fila). Vale TAMBEM quando o POST nao
+  responde (timeout, conexao cortada): a duvida e a mesma, e por isso a
+  excecao nao aborta a conta em silencio.
+- Conta que ficou INCERTA (erro no meio do ciclo, ou recuperacao sem achar a
+  remessa) faz a rodada sair != 0 mesmo que nenhuma outra conta tenha falhado.
+  Rodada que pula conta e termina com exit 0 e o modo de falha mais caro: o
+  hub marca sucesso e ninguem procura.
 - Valida CNAB-400 antes de salvar (header `01REMESSA` + linhas de 400). Se a
   sessao cair no meio, o Smart devolve HTML — descarta em vez de gravar lixo
   com nome de .REM.
@@ -439,7 +445,9 @@ class SessaoCaiu(Exception):
 def ciclo_conta(ctx, conta, rotulo, carteira, dry_run=True, forcar=False):
     """Gera a remessa de UMA conta e baixa os arquivos. Retorna dict do resultado."""
     saida = {"conta": conta, "rotulo": rotulo, "carteira": carteira,
-             "titulos": 0, "gerou": False, "ids": [], "baixados": 0, "motivo": ""}
+             "titulos": 0, "gerou": False, "ids": [], "baixados": 0, "motivo": "",
+             # "nao sei o que aconteceu no Smart" — diferente de "nao gerou".
+             "incerto": False}
 
     pagina = ger.filtrar(ctx, conta, carteira)
     if pagina is None:
@@ -486,6 +494,7 @@ def ciclo_conta(ctx, conta, rotulo, carteira, dry_run=True, forcar=False):
         controle = ler_controle()
         novas = [a for a in achadas if str(a["id"]) not in controle]
         if not novas:
+            saida["incerto"] = True
             saida["motivo"] = (f"{res['motivo']} E a listagem nao mostrou remessa "
                                f"nova hoje - CONFERIR NO SMART")
             log(f"  {rotulo}: {saida['motivo']}")
@@ -562,10 +571,13 @@ def rodada_geracao(ctx, args, dry):
             abortou = True
             break
         except Exception as e:
+            # Conta pulada por erro NAO e conta sem remessa: os titulos dela
+            # podem estar esperando, e o POST pode ate ter sido processado.
+            # `incerto` leva a rodada a sair != 0 para o hub alertar.
             log(f"  {rot}: ERRO no ciclo: {e}")
             resumo.append({"conta": num, "rotulo": rot, "titulos": 0,
                            "gerou": False, "ids": [], "baixados": 0,
-                           "motivo": f"erro: {e}"})
+                           "incerto": True, "motivo": f"erro: {e}"})
 
     log("=" * 66)
     com_titulo = [r for r in resumo if r["titulos"]]
@@ -584,9 +596,16 @@ def rodada_geracao(ctx, args, dry):
     # Conta gerada que NAO baixou e o caso que precisa de gente: os titulos ja
     # sairam da fila e o arquivo nao esta na pasta. Sai != 0 p/ o hub alertar.
     pendentes = [r for r in resumo if r["gerou"] and r["baixados"] == 0]
-    if abortou or pendentes:
+    incertas = [r for r in resumo if r.get("incerto")]
+    if incertas:
+        log(f"ATENCAO: {len(incertas)} conta(s) ficaram INCERTAS nesta rodada.")
+    if abortou or pendentes or incertas:
         for r in pendentes:
             log(f"PENDENTE: {r['rotulo']} gerou ids={r['ids']} e nao baixou")
+        for r in incertas:
+            log(f"INCERTA: {r['rotulo']} - {r['motivo']}. PODE haver remessa "
+                f"gerada no Smart sem arquivo aqui: conferir na tela de Download "
+                f"de Remessa antes de rodar de novo.")
         return SAIU_RODADA_INCOMPLETA
     return SAIU_OK
 

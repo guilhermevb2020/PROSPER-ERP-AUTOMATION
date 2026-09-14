@@ -267,10 +267,24 @@ def gerar(ctx, form, dry_run=True, timeout=180_000):
         return {"ok": None, "motivo": "DRY_RUN (nada enviado)", "corpo": corpo,
                 "ids": [], "erros": [], "enviado": False}
 
-    r = ctx.request.post(
-        cfg.SMART_BASE + "/financeiro/confirmardadosremessa.php", data=corpo,
-        headers={"content-type": "application/x-www-form-urlencoded"},
-        timeout=timeout)
+    try:
+        r = ctx.request.post(
+            cfg.SMART_BASE + "/financeiro/confirmardadosremessa.php", data=corpo,
+            headers={"content-type": "application/x-www-form-urlencoded"},
+            timeout=timeout)
+    except Exception as e:                                          # noqa: BLE001
+        # PERIGO, e e o PIOR caso: timeout ou conexao cortada NAO dizem se o
+        # Smart processou o POST. Vale a MESMA regra do bloco de baixo —
+        # `enviado=True`, para quem chamou RECUPERAR pela tela de listagem, que e
+        # a unica leitura confiavel do que existe la. Tratar como falha deixaria
+        # a remessa ORFA: sequencial consumido, titulos fora da fila, arquivo
+        # nunca baixado, e a proxima rodada diria "nada a fazer".
+        # Medido em 11/09/2026: `read ETIMEDOUT` na mp gfer e `Timeout 90000ms`
+        # na mp giga escaparam por aqui como excecao; as duas contas foram
+        # puladas em silencio e a rodada ainda terminou com exit 0.
+        return {"ok": False, "enviado": True,
+                "motivo": f"POST nao respondeu ({type(e).__name__}: {e}) - PODE ter sido gerado",
+                "corpo": corpo, "ids": [], "erros": []}
     dados = r.body()
     texto = dados.decode("iso-8859-1", errors="replace")
     # O BB também responde com o próprio CNAB. Guardar os bytes completos
