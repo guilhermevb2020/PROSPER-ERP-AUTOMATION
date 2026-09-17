@@ -99,7 +99,10 @@ def ler_form(pagina, nome_form="ConfirmarDadosConta"):
 
     Retorna dict:
       campos   -> {nome: valor} dos inputs simples (hidden/text/select)
-      titulos  -> [{nome, valor, marcado}] dos checkboxes de titulo (id=prazo)
+      titulos  -> [{nome, valor, marcado, celulas}] dos checkboxes de titulo (id=prazo);
+                  `celulas` sao os textos dos <td> da MESMA linha da grade — e por
+                  eles que a lista de exclusao acha o titulo (exclusoes.casar),
+                  porque o `value` do checkbox nao e o id do titulo do ERP
       opcoes   -> {nome: valor} dos checkboxes de instrucao (ckNNI7/8/9 etc.)
       resumo   -> {NumSequencial, existeEntrada, instrucoes, quant, ...}
     """
@@ -117,6 +120,7 @@ def ler_form(pagina, nome_form="ConfirmarDadosConta"):
     # ckNNI7/8/9 (protestar/devolucao/negativar): o JS olha se o elemento EXISTE
     # na tela, nao so se esta marcado -> guardamos os dois estados.
     instrucoes_box = {}
+    celulas_por_checkbox = _celulas_das_linhas(pagina)
 
     for tag in re.findall(r"<input\b[^>]*>", pagina, re.I):
         # Controles disabled não são enviados pelo navegador. No BB existem
@@ -135,7 +139,8 @@ def ler_form(pagina, nome_form="ConfirmarDadosConta"):
             instrucoes_box[ident] = marcado
         if tipo == "checkbox":
             if ident == "prazo" or nome.startswith("prazo"):
-                titulos.append({"nome": nome, "valor": valor, "marcado": marcado})
+                titulos.append({"nome": nome, "valor": valor, "marcado": marcado,
+                                "celulas": celulas_por_checkbox.get(nome, [])})
             elif marcado:
                 opcoes[nome] = valor or "on"
         elif tipo == "radio":
@@ -169,6 +174,29 @@ def ler_form(pagina, nome_form="ConfirmarDadosConta"):
     resumo["titulos_marcados"] = sum(1 for t in titulos if t["marcado"])
     return {"campos": campos, "titulos": titulos, "opcoes": opcoes,
             "instrucoes_box": instrucoes_box, "resumo": resumo}
+
+
+def _celulas_das_linhas(pagina):
+    """{nome do checkbox: [texto de cada <td> da linha]} — a grade, linha a linha.
+
+    Generico de proposito: nao sabe qual coluna e o documento ou o sacado; devolve
+    todas e quem casa decide. Linha sem checkbox de titulo e ignorada.
+    """
+    saida = {}
+    for linha in re.findall(r"<tr\b.*?</tr>", pagina, re.S | re.I):
+        nomes = [m for m in re.findall(r"<input\b[^>]*>", linha, re.I)
+                 if (_atr(m, "type") or "").lower() == "checkbox"
+                 and ((_atr(m, "id") or "") == "prazo" or (_atr(m, "name") or "").startswith("prazo"))]
+        if not nomes:
+            continue
+        celulas = [_html.unescape(re.sub(r"<[^>]+>", " ", td)).strip()
+                   for td in re.findall(r"<td\b[^>]*>(.*?)</td>", linha, re.S | re.I)]
+        celulas = [re.sub(r"\s+", " ", c) for c in celulas if c.strip()]
+        for tag in nomes:
+            nome = _atr(tag, "name")
+            if nome and nome not in saida:
+                saida[nome] = celulas
+    return saida
 
 
 def validar(form):

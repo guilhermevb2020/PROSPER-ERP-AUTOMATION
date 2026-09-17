@@ -280,6 +280,32 @@ constante lá.
 
 ---
 
+## A lista de exclusão e a tela guardada — 17/09/2026
+
+O MoneyPlus recusa o arquivo INTEIRO por um sacado cujo endereço sai sem número do
+pagador (09/09: 166 títulos; 17/09: 175 títulos e R$ 953 mil, com boleto já no sacado).
+O process-automation (`apontar_exclusoes_remessa_400`, dia útil 17:30) escreve em
+`ARQ_EXCLUSOES` (`/app/data/retornos_a_processar/remessa_cnab_400/exclusoes.json`, o
+bind compartilhado) os títulos abertos desses sacados. No `ciclo_conta`, logo depois de
+ler o formulário e ANTES de validar, `exclusoes.aplicar` desmarca os títulos casados e
+recalcula o resumo; o `RESUMO` da rodada mostra `excluidos=N` por conta.
+
+- **Validade dentro da lista** (`gerado_em` + `validade_horas`): lista velha é ignorada
+  com aviso — gerar como sempre é melhor do que gerar com a lista de anteontem.
+- **Casamento pela LINHA da grade**, não pelo `value` do checkbox: o value é o id da
+  ocorrência no Smart (911243), não o id do título do ERP (948707). `gerar.ler_form`
+  passou a devolver `celulas` (os `<td>` da linha de cada `prazoN`); casa quem tem o
+  documento numa célula exata E mais uma prova (sacado, nosso número ou id).
+- **Tela guardada**: `guardar_tela` grava a tela de confirmação de cada conta em
+  `DEBUG_DIR` (`form_<conta>_<data>.html`, 7 dias). É a única forma de ver a grade real
+  — ela só aparece com título na fila, e a fila esvazia na rodada das 18:00. Serve para
+  conferir o casamento e para ler a grade quando o Smart mudar.
+- ⚠️ Baixas e alterações vão no campo `instrucoes`, sem mapa para o título: a lista não
+  as segura. Conserto é o endereço, no ERP.
+
+Gates: `tests/integration/test_remessa_cobranca_simulada.py` (4 casos: exclui e não
+posta, exclui um e gera o outro, lista velha/ausente, documento igual de outro sacado).
+
 ## Armadilhas de operação
 
 **`--gerar` sem flag, dentro do container, é PRA VALER.** O `robo_remessa.env` de

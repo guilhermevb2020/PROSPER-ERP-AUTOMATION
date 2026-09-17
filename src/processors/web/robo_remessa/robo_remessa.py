@@ -73,6 +73,7 @@ from playwright.sync_api import sync_playwright  # noqa: E402
 import _nextcloud as nuvem                        # noqa: E402
 import _sessao                                    # noqa: E402
 import gerar as ger                               # noqa: E402
+import exclusoes                                  # noqa: E402
 import login as autenticacao                      # noqa: E402
 import remessa_config as cfg                      # noqa: E402
 
@@ -442,12 +443,38 @@ class SessaoCaiu(Exception):
     """
 
 
+def guardar_tela(pagina, conta, rotulo, dias=7):
+    """Guarda a tela de confirmacao como o Smart a devolveu (DEBUG_DIR, 7 dias).
+
+    E a unica forma de ver a grade real — colunas, nomes e valores dos checkboxes —
+    sem gerar nada: a grade so aparece quando ha titulo na fila, e a fila esvazia na
+    rodada das 18:00. 17/09/2026: o valor do checkbox NAO e o id do titulo do ERP
+    (911243 no controle do participante contra 948707 no titulo), entao excluir um
+    titulo da remessa exige ler a linha da grade, e para isso e preciso te-la.
+    ~36 KB por conta; o que passar de `dias` e apagado aqui mesmo.
+    """
+    try:
+        os.makedirs(cfg.DEBUG_DIR, exist_ok=True)
+        limite = time.time() - dias * 86400
+        for nome in os.listdir(cfg.DEBUG_DIR):
+            caminho = os.path.join(cfg.DEBUG_DIR, nome)
+            if nome.startswith("form_") and os.path.getmtime(caminho) < limite:
+                os.remove(caminho)
+        dump = os.path.join(cfg.DEBUG_DIR,
+                            f"form_{conta}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.html")
+        with open(dump, "w", encoding="iso-8859-1", errors="replace") as fh:
+            fh.write(pagina)
+        log(f"  {rotulo}: tela de confirmacao guardada em {dump}")
+    except OSError as e:                                            # noqa: BLE001
+        log(f"  {rotulo}: nao guardei a tela ({e}) — segue sem ela")
+
+
 def ciclo_conta(ctx, conta, rotulo, carteira, dry_run=True, forcar=False):
     """Gera a remessa de UMA conta e baixa os arquivos. Retorna dict do resultado."""
     saida = {"conta": conta, "rotulo": rotulo, "carteira": carteira,
              "titulos": 0, "gerou": False, "ids": [], "baixados": 0, "motivo": "",
              # "nao sei o que aconteceu no Smart" — diferente de "nao gerou".
-             "incerto": False}
+             "incerto": False, "excluidos": 0}
 
     pagina = ger.filtrar(ctx, conta, carteira)
     if pagina is None:
@@ -459,7 +486,13 @@ def ciclo_conta(ctx, conta, rotulo, carteira, dry_run=True, forcar=False):
         log(f"  {rotulo}: {saida['motivo']}")
         return saida
 
+    guardar_tela(pagina, conta, rotulo)
+
     form = ger.ler_form(pagina)
+    # O que o process-automation mandou segurar (sacado sem numero no endereco):
+    # desmarca ANTES de validar, para "nenhum titulo selecionado" valer de verdade.
+    excluidos = exclusoes.aplicar(form, exclusoes.carregar(log=log), log=log)
+    saida["excluidos"] = len(excluidos)
     r = form["resumo"]
     saida["titulos"] = r["titulos_marcados"]
 
@@ -587,7 +620,8 @@ def rodada_geracao(ctx, args, dry):
         f"{len(gerados)} gerada(s) | {baixados} arquivo(s) baixado(s)")
     for r in com_titulo:
         log(f"   {r['rotulo']:26} titulos={r['titulos']:<4} "
-            f"ids={r['ids']} baixados={r['baixados']} {r['motivo']}")
+            f"ids={r['ids']} baixados={r['baixados']} {r['motivo']}"
+            + (f" excluidos={r['excluidos']}" if r.get("excluidos") else ""))
     if dry:
         log("(DRY_RUN: nada foi gerado. Use --pra-valer quando quiser valer.)")
     else:

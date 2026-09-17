@@ -12,8 +12,10 @@ import pytest
 
 FORM = '''<form name="ConfirmarDadosConta">
 <input name="NumSequencial" value="123"><input name="existeEntrada" value="1">
-<input type="checkbox" name="prazo1" id="prazo" value="101" checked>
-<input type="checkbox" name="prazo2" id="prazo" value="102">
+<table><tr><td>125060-003</td><td>XPACE TECNOLOGIA LTDA</td><td>R$ 1.234,50</td><td>30/10/2026</td>
+<td><input type="checkbox" name="prazo1" id="prazo" value="101" checked></td></tr>
+<tr><td>125058-001</td><td>RADIADORES RADIAL LTDA</td><td>R$ 10,00</td><td>30/10/2026</td>
+<td><input type="checkbox" name="prazo2" id="prazo" value="102"></td></tr></table>
 </form>'''
 CNAB = ('01REMESSA'.ljust(400) + '\r\n' + '1'.ljust(400) + '\r\n' + '9'.ljust(400) + '\r\n').encode()
 # Mesmo nome, conteudo diferente e ainda valido (o detalhe muda no ultimo char).
@@ -25,12 +27,13 @@ def robo(monkeypatch, tmp_path):
     pasta = Path(__file__).resolve().parents[2] / 'src/processors/web/robo_remessa'
     monkeypatch.syspath_prepend(str(pasta))
     with patch.dict(sys.modules):
-        for nome in ('_nextcloud', '_sessao', 'gerar', 'login', 'remessa_config', 'robo_remessa'):
+        for nome in ('_nextcloud', '_sessao', 'exclusoes', 'gerar', 'login', 'remessa_config', 'robo_remessa'):
             sys.modules.pop(nome, None)
         r = importlib.import_module('robo_remessa')
         monkeypatch.setattr(r.cfg, 'PASTA_REMESSAS', str(tmp_path / 'remessas'))
         monkeypatch.setattr(r.cfg, 'ARQ_CONTROLE', str(tmp_path / 'controle.csv'))
         monkeypatch.setattr(r.cfg, 'ENVIAR_NEXTCLOUD', True)
+        monkeypatch.setattr(r.cfg, 'ARQ_EXCLUSOES', str(tmp_path / 'sem_lista.json'))
         monkeypatch.setattr(r.ger, 'filtrar', Mock(return_value=FORM))
         monkeypatch.setattr(r, 'baixar_id', Mock(return_value=('teste.REM', CNAB)))
         monkeypatch.setattr(r.nuvem, 'enviar', Mock(return_value=(True, 'nuvem simulada', 'OK')))
@@ -235,3 +238,65 @@ def test_conta_pulada_por_erro_faz_a_rodada_sair_INCOMPLETA(robo, monkeypatch):
 def test_rodada_normal_continua_saindo_OK(robo, monkeypatch):
     r, ctx = robo
     assert _rodada(r, ctx, monkeypatch) == r.SAIU_OK
+
+
+# --------------------------------------------------------------------------- #
+# 17/09/2026 — a lista de exclusao do process-automation segura o titulo do sacado
+# sem numero no endereco; o resto do arquivo passa
+# --------------------------------------------------------------------------- #
+def _lista(tmp_path, gerado_em, **titulo):
+    item = {"documento": "125060-003", "nosso_numero": "827786", "sacado": "XPACE TECNOLOGIA LTDA",
+            "sacado_cnpj": "28251112000134", "conta": "291", "motivo": "sacado sem numero no endereco", **titulo}
+    caminho = tmp_path / "exclusoes.json"
+    caminho.write_text(json.dumps({"versao": 1, "gerado_em": gerado_em.isoformat(), "validade_horas": 30,
+                                   "titulos": {"948710": item}, "sacados": {}}), encoding="utf-8")
+    return str(caminho)
+
+
+def test_titulo_da_lista_de_exclusao_e_desmarcado_e_nao_vai_no_post(robo, monkeypatch, tmp_path):
+    import datetime as dt
+    r, ctx = robo
+    monkeypatch.setattr(r.cfg, "ARQ_EXCLUSOES", _lista(tmp_path, dt.datetime.now(dt.timezone.utc)))
+    form_lido = r.ger.ler_form(FORM)
+    assert form_lido["titulos"][0]["celulas"][:2] == ["125060-003", "XPACE TECNOLOGIA LTDA"]
+    out = r.ciclo_conta(ctx, "1", "mp cast", "2", dry_run=False)
+    assert out["excluidos"] == 1
+    # so o prazo1 estava marcado e ele foi excluido: nada a gerar, nada postado
+    assert not out["gerou"] and "nenhum titulo" in out["motivo"]
+    ctx.request.post.assert_not_called()
+
+
+def test_lista_exclui_um_e_o_outro_marcado_gera_normalmente(robo, monkeypatch, tmp_path):
+    import datetime as dt
+    r, ctx = robo
+    monkeypatch.setattr(r.cfg, "ARQ_EXCLUSOES", _lista(tmp_path, dt.datetime.now(dt.timezone.utc)))
+    monkeypatch.setattr(r.ger, "filtrar", Mock(return_value=FORM.replace('value="102">', 'value="102" checked>')))
+    out = r.ciclo_conta(ctx, "1", "mp cast", "2", dry_run=False)
+    assert out["excluidos"] == 1 and out["gerou"] and out["titulos"] == 1
+    corpo = parse_qs(ctx.request.post.call_args.kwargs["data"])
+    assert "prazo1" not in corpo and corpo["prazo2"] == ["102"]
+
+
+def test_lista_velha_ou_ausente_nao_exclui_e_avisa(robo, monkeypatch, tmp_path, capsys):
+    import datetime as dt
+    r, ctx = robo
+    velha = dt.datetime.now(dt.timezone.utc) - dt.timedelta(hours=31)
+    monkeypatch.setattr(r.cfg, "ARQ_EXCLUSOES", _lista(tmp_path, velha))
+    out = r.ciclo_conta(ctx, "1", "mp cast", "2", dry_run=False)
+    assert out["excluidos"] == 0 and out["gerou"]
+    assert "IGNORADA" in capsys.readouterr().out
+    monkeypatch.setattr(r.cfg, "ARQ_EXCLUSOES", str(tmp_path / "nao_existe.json"))
+    ctx.request.post.reset_mock()
+    out = r.ciclo_conta(ctx, "1", "mp cast", "2", dry_run=False)
+    assert out["excluidos"] == 0 and "prazo1" in parse_qs(ctx.request.post.call_args.kwargs["data"])
+
+
+def test_documento_igual_de_outro_sacado_nao_casa(robo, monkeypatch, tmp_path):
+    """O mesmo numero de documento existe em cedentes diferentes: exige o sacado (ou o
+    nosso numero, ou o id) alem do documento."""
+    import datetime as dt
+    r, ctx = robo
+    monkeypatch.setattr(r.cfg, "ARQ_EXCLUSOES", _lista(tmp_path, dt.datetime.now(dt.timezone.utc),
+                                                          sacado="OUTRA EMPRESA LTDA", nosso_numero="1"))
+    out = r.ciclo_conta(ctx, "1", "mp cast", "2", dry_run=False)
+    assert out["excluidos"] == 0 and out["gerou"]

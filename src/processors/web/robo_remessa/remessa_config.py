@@ -127,6 +127,14 @@ ENVIAR_NEXTCLOUD = _b("ENVIAR_NEXTCLOUD_REM", "True")
 # Controle de idempotencia (id/arquivo/md5). Fica no volume ./data, que
 # sobrevive a recriacao do container.
 ARQ_CONTROLE = _s("ARQ_CONTROLE", "/app/data/robo_remessa/controle_remessas.csv")
+# Lista de EXCLUSAO da geracao, escrita pelo process-automation
+# (`apontar_exclusoes_remessa_400`, dia util 17:30) no bind compartilhado
+# `data/retornos_a_processar`: titulos abertos de sacado cujo endereco sai SEM
+# numero do pagador no CNAB 400 — o MoneyPlus recusa o arquivo INTEIRO por um so
+# (09/09/2026: 166 titulos; 17/09: 175). O robo desmarca esses e o resto passa.
+# Lista mais velha que a validade declarada nela e ignorada, com aviso.
+ARQ_EXCLUSOES = _s("ARQ_EXCLUSOES_REM",
+                   "/app/data/retornos_a_processar/remessa_cnab_400/exclusoes.json")
 DEBUG_DIR = _s("DEBUG_DIR_REM", "/app/data/robo_remessa/debug")
 
 # Segundos entre pings de keep-alive quando o robo roda em modo sessao viva.
