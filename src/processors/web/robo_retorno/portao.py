@@ -69,6 +69,17 @@ POR_ACAO = "acao diferente de Liquidado"
 POR_GRADE_VAZIA = "grade do upload sem titulo avaliavel"
 POR_QUANTIDADE = "quantidade do arquivo, upload e grade divergem"
 
+# Status que NAO recusam uma LIQUIDACAO com o valor batendo: o Smart avisa que o
+# vencimento do arquivo difere do dele e liquida assim mesmo. Medido nas tres
+# capturas (7 linhas `Liquidado`, valor igual dos dois lados) e de novo em
+# 17/09/2026, quando a entrega BB 38 — 67 pagamentos de 16 e 17/09 — foi recusada
+# inteira pelo titulo 11893-001: boleto vencendo 14/09 no banco e 30/09 no ERP
+# (prorrogado so no ERP), pago em 17/09. O pagamento aconteceu; a data e
+# informativa. So vale para `Liquidado`: em entrada, baixa e prorrogacao um
+# status fora de OK continua recusando o arquivo. Comparado sem acento e em
+# minusculas (`_sem_acento`).
+STATUS_TOLERADOS_NA_LIQUIDACAO = ("data de vencimento diferente",)
+
 
 def _num(texto):
     """'1.234,56' -> 1234.56. Devolve None quando nao da para ler.
@@ -159,8 +170,10 @@ def avaliar_titulo(linha, exigir_status_ok=False, exigir_valor_arquivo=False,
                  f"sacado={(linha.get('sacado') or '?')[:28]}"))
 
     if exigir_status_ok and (linha.get("status") or "").strip().upper() != "OK":
-        return (RECUSADO, POR_STATUS,
-                f"status={(linha.get('status') or '(vazio)')!r}")
+        liquidado = _sem_acento(linha.get("acao_tomada")) == "liquidado"
+        if not (liquidado and _sem_acento(linha.get("status")) in STATUS_TOLERADOS_NA_LIQUIDACAO):
+            return (RECUSADO, POR_STATUS,
+                    f"status={(linha.get('status') or '(vazio)')!r}")
 
     if exigir_acao and _sem_acento(linha.get("acao_tomada")) != _sem_acento(exigir_acao):
         return (RECUSADO, POR_ACAO,
@@ -178,7 +191,9 @@ def avaliar_grade(detalhes, exigir_status_ok=False, quantidade_esperada=None,
         detalhes: `saida["detalhes"]` do upload — a grade titulo a titulo.
         exigir_status_ok: tambem recusa quem tem `status != OK`. Padrao False
             porque, medido em 804 titulos reais, `status != OK` aparece em
-            liquidacao legitima (`DATA DE VENCIMENTO DIFERENTE`).
+            liquidacao legitima (`DATA DE VENCIMENTO DIFERENTE`) — que, desde
+            17/09/2026, e tolerada em linhas `Liquidado` mesmo com o status
+            exigido (`STATUS_TOLERADOS_NA_LIQUIDACAO`).
 
     Returns:
         dict com `liberado` (bool), `avaliados`, `resumo`, `recusados`

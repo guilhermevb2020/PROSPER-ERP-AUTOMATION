@@ -52,6 +52,7 @@ from portao import (  # noqa: E402  (o sys.path tem de vir antes)
     POR_VALOR_ARQUIVO_ILEGIVEL,
     RECUSADO,
     RESUMO,
+    STATUS_TOLERADOS_NA_LIQUIDACAO,
     _num,
     avaliar_cnab_deposito,
     avaliar_grade,
@@ -71,14 +72,21 @@ DADOS = RAIZ / "data" / "robo_retorno"
 #   resumo ....... linhas do bloco de rodape da grade
 #   bloq_status .. arquivos que CAIRIAM com exigir_status_ok=True
 #   rec_status ... titulos que CAIRIAM com exigir_status_ok=True
+#
+# ⏪ 17/09/2026: `Data de vencimento diferente` em linha `Liquidado` deixou de
+# recusar (STATUS_TOLERADOS_NA_LIQUIDACAO) — a entrega BB 38, 67 pagamentos,
+# caiu inteira por um titulo assim. Das 9 recusas medidas em 21/08, 7 eram
+# `Liquidado` (4 na prod_0408, 3 na 0508) e sairam; ficaram as 2 da prod_0408
+# — o mesmo titulo 1645-001 em `Prorrogado` e `Entrada Rejeitada`, num unico
+# arquivo (CBR6432340308202620223.ret) —, que continuam recusando.
 MEDIDO = {
     "titulos_prod_0408.csv": {
         "arquivos": 79, "titulos": 800, "resumo": 4,
-        "bloq_status": 3, "rec_status": 6,
+        "bloq_status": 1, "rec_status": 2,
     },
     "titulos_0508.csv": {
         "arquivos": 107, "titulos": 289, "resumo": 0,
-        "bloq_status": 2, "rec_status": 3,
+        "bloq_status": 0, "rec_status": 0,
     },
     "titulos_teste.csv": {
         "arquivos": 71, "titulos": 149, "resumo": 0,
@@ -573,10 +581,11 @@ def test_as_linhas_de_rodape_reais_sao_as_medidas(captura):
 def test_exigir_status_ok_barraria_liquidacao_LEGITIMA(captura):
     """O custo medido de ligar o status - e a razao de o padrao ser False.
 
-    Todas as recusas que aparecem aqui sao `Data de vencimento diferente`: o
-    banco pagou em data diferente da vencida, o dinheiro entrou e o valor BATE
-    dos dois lados. Ligar o status jogaria fora 5 arquivos bons entre as tres
-    capturas sem pegar um unico erro de casamento.
+    Todas as recusas que aparecem aqui sao `Data de vencimento diferente`. Desde
+    17/09/2026 a linha `Liquidado` com esse status passa (o banco pagou em data
+    diferente da vencida, o dinheiro entrou e o valor BATE dos dois lados);
+    sobram as acoes que NAO sao liquidacao — `Prorrogado`, `Entrada Rejeitada` —,
+    onde o status continua recusando o arquivo.
     """
     esperado = MEDIDO[captura]
     bloqueados, recusados = [], []
@@ -596,14 +605,44 @@ def test_exigir_status_ok_barraria_liquidacao_LEGITIMA(captura):
             f"{captura} tem recusa por {r['motivo']!r} - se aparecer "
             f"{POR_VALOR!r} aqui, o criterio padrao esta deixando erro passar")
         assert STATUS_LEGITIMO in r["detalhe"]
+        assert r["acao_tomada"] != "Liquidado", "liquidacao com esse status nao recusa mais"
+
+
+@pytest.mark.parametrize("acao,veredito_esperado", [
+    ("Liquidado", APROVADO), ("liquidado", APROVADO),
+    ("Prorrogado", RECUSADO), ("Entrada Confirmada", RECUSADO), ("Entrada Rejeitada", RECUSADO),
+    ("", RECUSADO),
+])
+def test_data_de_vencimento_diferente_so_passa_em_LIQUIDACAO(acao, veredito_esperado):
+    """17/09/2026: a entrega BB 38 (67 pagamentos de 16 e 17/09) foi recusada inteira
+    porque o 11893-001 veio `Data de vencimento diferente` — boleto vencendo 14/09 no
+    banco e 30/09 no ERP, pago em 17/09. Pagamento e pagamento; a data e informativa.
+    Em qualquer outra acao o status continua recusando o arquivo."""
+    linha = {"numero_titulo": "11893-001", "valor_titulo": "425,90", "valor_titulo_arq": "425,90",
+             "sacado": "SACADO", "status": STATUS_LEGITIMO, "acao_tomada": acao}
+    veredito, motivo, _ = avaliar_titulo(linha, exigir_status_ok=True, exigir_valor_arquivo=True)
+    assert veredito == veredito_esperado
+    assert motivo == ("" if veredito_esperado == APROVADO else POR_STATUS)
+    assert STATUS_LEGITIMO.lower() in STATUS_TOLERADOS_NA_LIQUIDACAO
+
+
+def test_liquidacao_com_OUTRO_status_fora_de_OK_continua_recusada():
+    linha = {"numero_titulo": "1", "valor_titulo": "10,00", "valor_titulo_arq": "10,00",
+             "status": "Titulo nao encontrado", "acao_tomada": "Liquidado"}
+    veredito, motivo, _ = avaliar_titulo(linha, exigir_status_ok=True)
+    assert (veredito, motivo) == (RECUSADO, POR_STATUS)
+    # e o valor divergente vence a tolerancia: BUG-548 continua barrado
+    linha_548 = {**linha, "status": STATUS_LEGITIMO, "valor_titulo_arq": "6.108,23"}
+    assert avaliar_titulo(linha_548, exigir_status_ok=True)[1] == POR_VALOR
 
 
 def test_ligar_o_status_nao_encontra_NENHUM_erro_de_casamento_novo():
     """A prova de que o status nao acrescenta poder de deteccao, so custo.
 
-    Somando as tres capturas: com o status ligado sobem 9 recusas, e as 9 sao
-    por status. Nenhuma divergencia de valor aparece que o padrao ja nao pegue
-    - e o padrao pega zero, porque nao ha nenhuma nos dados reais.
+    Somando as tres capturas: com o status ligado sobem 2 recusas (eram 9 ate a
+    tolerancia de 17/09/2026 para `Liquidado`), e as 2 sao por status. Nenhuma
+    divergencia de valor aparece que o padrao ja nao pegue - e o padrao pega
+    zero, porque nao ha nenhuma nos dados reais.
     """
     por_motivo = {}
     for captura in CAPTURAS:
@@ -611,6 +650,6 @@ def test_ligar_o_status_nao_encontra_NENHUM_erro_de_casamento_novo():
             for r in avaliar_grade(grade, exigir_status_ok=True)["recusados"]:
                 por_motivo[r["motivo"]] = por_motivo.get(r["motivo"], 0) + 1
 
-    assert por_motivo == {POR_STATUS: 9}
+    assert por_motivo == {POR_STATUS: 2}
     assert POR_VALOR not in por_motivo
     assert POR_SEM_CASAMENTO not in por_motivo

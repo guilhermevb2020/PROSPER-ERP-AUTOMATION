@@ -322,7 +322,7 @@ O `controle_processados.csv` guarda uma linha por arquivo, com `motivo` e
 |---|---|---|
 | `valor no Smart diverge do valor no arquivo` | O Smart resolveu **outro título**. É a forma do `BUG-548`. | ⛔ **Não force.** O erro é a montante, no arquivo que geramos. |
 | `o Smart nao resolveu titulo para esta linha` | O Smart não achou título nenhum para aquela linha. | Nada seria baixado *naquela linha* — mas o arquivo inteiro está barrado. Descubra por que o título sumiu. |
-| `status diferente de OK` | Só aparece com `PORTAO_STATUS_OK_RET`. Quase sempre `Data de vencimento diferente`. | Liquidação legítima. Considere desligar a segunda chave. |
+| `status diferente de OK` | Só aparece com `PORTAO_STATUS_OK_RET` (ou no ramo BB API, que exige status OK). Quase sempre `Data de vencimento diferente`. | Liquidação legítima. ⏪ Desde 17/09/2026 a linha `Liquidado` com esse status **passa** mesmo com o status exigido (`portao.STATUS_TOLERADOS_NA_LIQUIDACAO`): a entrega BB 38, 67 pagamentos, caiu inteira pelo 11893-001 (boleto vencendo 14/09 no banco e 30/09 no ERP, pago em 17/09). Em `Prorrogado`/`Entrada …` o status continua recusando. |
 
 ---
 

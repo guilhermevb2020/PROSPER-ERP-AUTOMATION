@@ -71,3 +71,13 @@ concorrência e erro de consulta auxiliar depois da confirmação. Smart simulad
 O comando 12 continua pendente de aceitação real pelo Smart. A prévia histórica
 registrada no plano PA retornou “Ocorrência não encontrada”; não converter esse
 código em outra ação nem tratar status OK isolado como sucesso.
+
+⏪ 17/09/2026 — o portão BB exige `status OK`, e isso recusou inteira a entrega 38
+(67 liquidações de 16 e 17/09) por um título `Liquidado` com `Data de vencimento
+diferente` (11893-001: boleto vencendo 14/09 no banco, 30/09 no ERP, pago em
+17/09). Esse status em linha `Liquidado` passou a ser tolerado no portão comum
+(`portao.STATUS_TOLERADOS_NA_LIQUIDACAO`); o pagamento aconteceu e a data é
+informativa. Em qualquer outra ação continua recusando. Entrega recusada pelo
+portão não volta sozinha: o arquivo vai para `_REJEITADOS/` e só é reoferecido
+movendo-o de volta à entrada — o recibo de recusa não impede nova tentativa
+(`bb_entrega._anterior` só bloqueia tentativa com intenção gravada).
