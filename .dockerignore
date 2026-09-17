@@ -16,10 +16,15 @@ __pycache__/
 *.pyc
 
 # Credenciais e cópias privadas nunca entram em uma camada de imagem.
+# ⛔ SEM padrão de reinclusão (`!...`) neste arquivo. Com qualquer `!`, o walker do BuildKit
+# (fsutil) não pode pular um diretório excluído inteiro — um filho poderia ser reincluído —,
+# então desce em data/ e morre em data/boletos/perfil_chrome/Default, que o container cria
+# como root:proj-erp-automation 2770 e o remetente do build não lê (prospere não é do grupo).
+# Medido em 17/09/2026: com `!.env.example` e `!config/*.example.env` presentes o build
+# falhou exatamente aí, duas vezes. Os arquivos-exemplo não fazem falta na imagem:
+# `.env*` é env_file do host e `config/` é bind-mount no compose.
 .env*
-!.env.example
 config/*.env
-!config/*.example.env
 config/credentials.csv
 backups/
 .cache/

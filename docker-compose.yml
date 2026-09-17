@@ -1,7 +1,7 @@
 services:
   erp-automation:
     # Imagem sem camadas de credenciais/estado legado; validada antes do recreate.
-    image: erp-automation-erp-automation:guardian-clean-20260907-v2
+    image: erp-automation-erp-automation:guardian-clean-20260917-pypdf
     build:
       context: .
       dockerfile: Dockerfile

@@ -53,3 +53,9 @@ SQLAlchemy==2.0.36
 # Config e templates (config_loader, notificacoes)
 PyYAML==6.0.3
 Jinja2==3.1.2
+# Leitura de PDF — doc2you/classificar.py le o CNPJ do sacado para NOMEAR a carta.
+# Nunca esteve declarado: `texto_pdf` importa pypdf dentro de try/except e devolve ""
+# quando falta, entao a carta saia SEM CNPJ no nome (100% das cartas desde 21/08/2026)
+# e a verificacao do process-automation passou a ler 550 PDFs por dia para descobrir
+# o que o robo ja sabia (17/09/2026). Versao = a do process-automation (uv.lock).
+pypdf==6.16.2
