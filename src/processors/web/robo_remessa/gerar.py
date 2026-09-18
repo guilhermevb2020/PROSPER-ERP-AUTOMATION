@@ -99,9 +99,10 @@ def ler_form(pagina, nome_form="ConfirmarDadosConta"):
 
     Retorna dict:
       campos   -> {nome: valor} dos inputs simples (hidden/text/select)
-      titulos  -> [{nome, valor, marcado, celulas}] dos checkboxes de titulo (id=prazo);
-                  `celulas` sao os textos dos <td> da MESMA linha da grade — e por
-                  eles que a lista de exclusao acha o titulo (exclusoes.casar),
+      titulos  -> [{nome, valor, marcado, celulas, colunas}] dos checkboxes de titulo
+                  (id=prazo); `celulas` sao os textos nao vazios da MESMA linha da
+                  grade e `colunas` o {cabecalho: texto} dela — e por eles que a lista
+                  de exclusao acha o titulo e o vencimento e lido (exclusoes.py),
                   porque o `value` do checkbox nao e o id do titulo do ERP
       opcoes   -> {nome: valor} dos checkboxes de instrucao (ckNNI7/8/9 etc.)
       resumo   -> {NumSequencial, existeEntrada, instrucoes, quant, ...}
@@ -120,7 +121,7 @@ def ler_form(pagina, nome_form="ConfirmarDadosConta"):
     # ckNNI7/8/9 (protestar/devolucao/negativar): o JS olha se o elemento EXISTE
     # na tela, nao so se esta marcado -> guardamos os dois estados.
     instrucoes_box = {}
-    celulas_por_checkbox = _celulas_das_linhas(pagina)
+    linhas_da_grade = _linhas_da_grade(pagina)
 
     for tag in re.findall(r"<input\b[^>]*>", pagina, re.I):
         # Controles disabled não são enviados pelo navegador. No BB existem
@@ -139,8 +140,9 @@ def ler_form(pagina, nome_form="ConfirmarDadosConta"):
             instrucoes_box[ident] = marcado
         if tipo == "checkbox":
             if ident == "prazo" or nome.startswith("prazo"):
+                celulas, colunas = linhas_da_grade.get(nome, ([], {}))
                 titulos.append({"nome": nome, "valor": valor, "marcado": marcado,
-                                "celulas": celulas_por_checkbox.get(nome, [])})
+                                "celulas": celulas, "colunas": colunas})
             elif marcado:
                 opcoes[nome] = valor or "on"
         elif tipo == "radio":
@@ -176,26 +178,37 @@ def ler_form(pagina, nome_form="ConfirmarDadosConta"):
             "instrucoes_box": instrucoes_box, "resumo": resumo}
 
 
-def _celulas_das_linhas(pagina):
-    """{nome do checkbox: [texto de cada <td> da linha]} — a grade, linha a linha.
+def _linhas_da_grade(pagina):
+    """{nome do checkbox: (celulas, colunas)} — a grade, linha a linha.
 
-    Generico de proposito: nao sabe qual coluna e o documento ou o sacado; devolve
-    todas e quem casa decide. Linha sem checkbox de titulo e ignorada.
+    `celulas`: os textos NAO vazios da linha, na ordem — generico, quem casa decide o
+    que procurar. `colunas`: {cabecalho: texto} da mesma linha, quando a grade tem uma
+    linha de cabecalho (reconhecida pela coluna "Vencimento") com o mesmo numero de
+    celulas; senao `{}`. Linha sem checkbox de titulo e ignorada.
+
+    A grade real da geracao MoneyPlus (medida em 18/09/2026, 40 telas):
+      | | Instrucao | Tipo | No | M | Sacado | Vencimento | Valor (R$) | Cedente | Operacao | Data | Prazo | Juros | Multa |
+      | x | Envio de cobranca | DMR | 13274-001 | C | 28.020.670/0001-99 | 18/09/2026 | 1456.00 | 15.570.552/0001-02 | 64494 | 19/08/2026 | | 12.00 % | 2.00 % |
+    O "Sacado" e o CNPJ, nao o nome; nosso numero e id do titulo nao aparecem.
     """
     saida = {}
+    cabecalho = None
     for linha in re.findall(r"<tr\b.*?</tr>", pagina, re.S | re.I):
+        textos = [re.sub(r"\s+", " ", _html.unescape(re.sub(r"<[^>]+>", " ", c))).strip()
+                  for c in re.findall(r"<t[hd]\b[^>]*>(.*?)</t[hd]>", linha, re.S | re.I)]
         nomes = [m for m in re.findall(r"<input\b[^>]*>", linha, re.I)
                  if (_atr(m, "type") or "").lower() == "checkbox"
                  and ((_atr(m, "id") or "") == "prazo" or (_atr(m, "name") or "").startswith("prazo"))]
         if not nomes:
+            if any(t.lower() == "vencimento" for t in textos):
+                cabecalho = textos
             continue
-        celulas = [_html.unescape(re.sub(r"<[^>]+>", " ", td)).strip()
-                   for td in re.findall(r"<td\b[^>]*>(.*?)</td>", linha, re.S | re.I)]
-        celulas = [re.sub(r"\s+", " ", c) for c in celulas if c.strip()]
+        colunas = dict(zip(cabecalho, textos)) if cabecalho and len(cabecalho) == len(textos) else {}
+        celulas = [t for t in textos if t]
         for tag in nomes:
             nome = _atr(tag, "name")
             if nome and nome not in saida:
-                saida[nome] = celulas
+                saida[nome] = (celulas, colunas)
     return saida
 
 

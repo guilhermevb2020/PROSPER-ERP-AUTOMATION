@@ -474,7 +474,7 @@ def ciclo_conta(ctx, conta, rotulo, carteira, dry_run=True, forcar=False):
     saida = {"conta": conta, "rotulo": rotulo, "carteira": carteira,
              "titulos": 0, "gerou": False, "ids": [], "baixados": 0, "motivo": "",
              # "nao sei o que aconteceu no Smart" — diferente de "nao gerou".
-             "incerto": False, "excluidos": 0}
+             "incerto": False, "excluidos": 0, "retidos": []}
 
     pagina = ger.filtrar(ctx, conta, carteira)
     if pagina is None:
@@ -489,10 +489,12 @@ def ciclo_conta(ctx, conta, rotulo, carteira, dry_run=True, forcar=False):
     guardar_tela(pagina, conta, rotulo)
 
     form = ger.ler_form(pagina)
-    # O que o process-automation mandou segurar (sacado sem numero no endereco):
-    # desmarca ANTES de validar, para "nenhum titulo selecionado" valer de verdade.
-    excluidos = exclusoes.aplicar(form, exclusoes.carregar(log=log), log=log)
-    saida["excluidos"] = len(excluidos)
+    # O que o banco recusaria — sacado sem numero no endereco (lista do
+    # process-automation) e entrada que vence hoje ou antes (MoneyPlus): desmarca
+    # ANTES de validar, para "nenhum titulo selecionado" valer de verdade.
+    afetados = exclusoes.aplicar(form, exclusoes.carregar(log=log), log=log)
+    saida["excluidos"] = sum(1 for a in afetados if a["regra"] == "lista")
+    saida["retidos"] = [a for a in afetados if a["regra"] == "vencimento"]
     r = form["resumo"]
     saida["titulos"] = r["titulos_marcados"]
 
@@ -621,7 +623,15 @@ def rodada_geracao(ctx, args, dry):
     for r in com_titulo:
         log(f"   {r['rotulo']:26} titulos={r['titulos']:<4} "
             f"ids={r['ids']} baixados={r['baixados']} {r['motivo']}"
-            + (f" excluidos={r['excluidos']}" if r.get("excluidos") else ""))
+            + (f" excluidos={r['excluidos']}" if r.get("excluidos") else "")
+            + (f" retidos={len(r['retidos'])}" if r.get("retidos") else ""))
+    # Retido fica na fila do Smart ate alguem prorrogar no ERP: tem de aparecer na
+    # saida da task todo dia, inclusive quando a conta ficou sem nada para gerar.
+    for r in resumo:
+        for a in r.get("retidos") or []:
+            log(f"RETIDO NA FILA: {r['rotulo']} {a['documento']} vence "
+                f"{a['vencimento'][8:10]}/{a['vencimento'][5:7]}/{a['vencimento'][:4]} — "
+                f"prorrogar no ERP (o MoneyPlus recusa com 16/92)")
     if dry:
         log("(DRY_RUN: nada foi gerado. Use --pra-valer quando quiser valer.)")
     else:

@@ -300,3 +300,121 @@ def test_documento_igual_de_outro_sacado_nao_casa(robo, monkeypatch, tmp_path):
                                                           sacado="OUTRA EMPRESA LTDA", nosso_numero="1"))
     out = r.ciclo_conta(ctx, "1", "mp cast", "2", dry_run=False)
     assert out["excluidos"] == 0 and out["gerou"]
+
+
+# --------------------------------------------------------------------------- #
+# 18/09/2026 — a grade REAL da geracao MoneyPlus (medida em 40 telas): o "Sacado" e o
+# CNPJ, nao ha nome nem nosso numero, e o vencimento esta na linha. Entrada que vence
+# hoje ou antes fica retida na fila (o banco recusa com 16/92); a lista casa por
+# documento + CNPJ do sacado.
+# --------------------------------------------------------------------------- #
+_CABECALHO = ("<tr><th></th><th>Instrução</th><th>Tipo</th><th>Nº</th><th>M</th><th>Sacado</th>"
+              "<th>Vencimento</th><th>Valor (R$)</th><th>Cedente</th><th>Operação</th><th>Data</th>"
+              "<th>Prazo</th><th>Juros</th><th>Multa</th></tr>")
+
+
+def _linha(nome, valor, doc, cnpj, venc, instrucao="Envio de cobrança", marcado=True, desabilitado=False):
+    attrs = (" checked" if marcado else "") + (" disabled" if desabilitado else "")
+    return (f'<tr><td><input type="checkbox" name="{nome}" id="prazo" value="{valor}"{attrs}></td>'
+            f"<td>{instrucao}</td><td>DMR</td><td>{doc}</td><td>C</td><td>{cnpj}</td><td>{venc}</td>"
+            f"<td>1456.00</td><td>15.570.552/0001-02</td><td>64494</td><td>19/08/2026</td><td></td>"
+            f"<td>12.00 %</td><td>2.00 %</td></tr>")
+
+
+def _form_real(*linhas, banco="274"):
+    return ('<form name="ConfirmarDadosConta">'
+            f'<input name="NumSequencial" value="1098"><input name="existeEntrada" value="1">'
+            f'<input name="numBanco" value="{banco}"><table>{_CABECALHO}{"".join(linhas)}</table></form>')
+
+
+TECNOMIDIA = "28.020.670/0001-99"
+GRADE_VITORIA = _form_real(
+    _linha("titulo0", "897629", "13274-001", TECNOMIDIA, "18/09/2026"),
+    _linha("titulo1", "897628", "13274-002", TECNOMIDIA, "03/10/2026"),
+    _linha("titulo2", "897630", "13100-001", "11.111.111/0001-11", "10/09/2026",
+           instrucao="Quitação ou cancelamento", desabilitado=True),
+    _linha("titulo3", "912990", "13466-001", "22.259.571/0001-88", "19/09/2026"),
+)
+
+
+@pytest.fixture
+def hoje_18_09(robo, monkeypatch):
+    import datetime as dt
+    r, _ = robo
+    monkeypatch.setattr(r.exclusoes, "hoje_sp", lambda: dt.date(2026, 9, 18))
+
+
+def test_grade_real_e_lida_pelo_cabecalho(robo):
+    r, _ = robo
+    form = r.ger.ler_form(GRADE_VITORIA)
+    assert [t["nome"] for t in form["titulos"]] == ["titulo0", "titulo1", "titulo3"]  # o desabilitado nao entra
+    colunas = form["titulos"][0]["colunas"]
+    assert colunas["Nº"] == "13274-001" and colunas["Sacado"] == TECNOMIDIA and colunas["Vencimento"] == "18/09/2026"
+    assert colunas["Instrução"] == "Envio de cobrança"
+    assert r.exclusoes.vencimento_da_linha(form["titulos"][0]).isoformat() == "2026-09-18"
+
+
+def test_entrada_que_vence_hoje_fica_retida_e_o_resto_sai(robo, monkeypatch, hoje_18_09, capsys):
+    """13274-001 TECNOMIDIA, 18/09/2026: vencimento de hoje, o MoneyPlus recusa com 16/92.
+    Retido, continua na fila do Smart; o 13274-002 e o 13466-001 (vence amanha) saem."""
+    r, ctx = robo
+    monkeypatch.setattr(r.ger, "filtrar", Mock(return_value=GRADE_VITORIA))
+    out = r.ciclo_conta(ctx, "312", "mp vitoria", "9", dry_run=False)
+    assert [a["documento"] for a in out["retidos"]] == ["13274-001"] and out["excluidos"] == 0
+    assert out["gerou"] and out["titulos"] == 2
+    corpo = parse_qs(ctx.request.post.call_args.kwargs["data"])
+    assert "titulo0" not in corpo and corpo["titulo1"] == ["897628"] and corpo["titulo3"] == ["912990"]
+    assert "retido na fila: 13274-001" in capsys.readouterr().out
+
+
+def test_tudo_retido_nao_gera_nada(robo, monkeypatch, hoje_18_09):
+    r, ctx = robo
+    monkeypatch.setattr(r.ger, "filtrar", Mock(return_value=_form_real(
+        _linha("titulo0", "897629", "13274-001", TECNOMIDIA, "18/09/2026"),
+        _linha("titulo1", "897631", "13275-001", TECNOMIDIA, "17/09/2026"))))
+    out = r.ciclo_conta(ctx, "312", "mp vitoria", "9", dry_run=False)
+    assert len(out["retidos"]) == 2 and not out["gerou"] and "nenhum titulo" in out["motivo"]
+    ctx.request.post.assert_not_called()
+
+
+def test_vencimento_de_amanha_outro_banco_e_outra_instrucao_nao_sao_retidos(robo, monkeypatch):
+    import datetime as dt
+    r, _ = robo
+    form = r.ger.ler_form(GRADE_VITORIA)
+    assert r.exclusoes.reter_vencidos(form, dt.date(2026, 9, 17), log=lambda *_: None) == []
+    form = r.ger.ler_form(GRADE_VITORIA.replace('value="274"', 'value="001"'))
+    assert r.exclusoes.reter_vencidos(form, dt.date(2026, 9, 18), log=lambda *_: None) == []
+    form = r.ger.ler_form(_form_real(_linha("titulo0", "1", "13274-001", TECNOMIDIA, "18/09/2026",
+                                            instrucao="Prorrogação de vencimento")))
+    assert r.exclusoes.reter_vencidos(form, dt.date(2026, 9, 18), log=lambda *_: None) == []
+
+
+def test_grade_sem_cabecalho_nao_retem_e_avisa(robo, monkeypatch, hoje_18_09, capsys):
+    """Sem a coluna "Vencimento" legivel nada e retido: a conferencia do envio avisa."""
+    r, ctx = robo
+    sem_cabecalho = FORM.replace('<input name="existeEntrada" value="1">',
+                                 '<input name="existeEntrada" value="1"><input name="numBanco" value="274">')
+    monkeypatch.setattr(r.ger, "filtrar", Mock(return_value=sem_cabecalho))
+    out = r.ciclo_conta(ctx, "1", "mp cast", "2", dry_run=False)
+    assert out["retidos"] == [] and out["gerou"]
+    assert "sem vencimento legivel" in capsys.readouterr().out
+
+
+def test_lista_casa_pela_linha_real_documento_e_cnpj_do_sacado(robo, monkeypatch, tmp_path, hoje_18_09):
+    """A grade real nao mostra nome nem nosso numero: o casamento de 17/09 nunca acharia
+    a linha. Documento + CNPJ do sacado acha; CNPJ de outro sacado nao."""
+    import datetime as dt
+    r, ctx = robo
+    agora = dt.datetime.now(dt.timezone.utc)
+    monkeypatch.setattr(r.cfg, "ARQ_EXCLUSOES", _lista(tmp_path, agora, documento="13274-002",
+                                                          sacado_cnpj="28020670000199", nosso_numero="827806",
+                                                          sacado="TECNOMIDIA COMUNICACAO LTDA"))
+    monkeypatch.setattr(r.ger, "filtrar", Mock(return_value=GRADE_VITORIA))
+    out = r.ciclo_conta(ctx, "312", "mp vitoria", "9", dry_run=False)
+    assert out["excluidos"] == 1 and [a["documento"] for a in out["retidos"]] == ["13274-001"]
+    assert set(parse_qs(ctx.request.post.call_args.kwargs["data"])) & {"titulo0", "titulo1", "titulo3"} == {"titulo3"}
+    monkeypatch.setattr(r.cfg, "ARQ_EXCLUSOES", _lista(tmp_path, agora, documento="13274-002",
+                                                          sacado_cnpj="99999999000199", nosso_numero="1",
+                                                          sacado="OUTRA"))
+    ctx.request.post.reset_mock()
+    assert r.ciclo_conta(ctx, "312", "mp vitoria", "9", dry_run=False)["excluidos"] == 0

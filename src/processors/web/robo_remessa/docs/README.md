@@ -280,7 +280,7 @@ constante lá.
 
 ---
 
-## A lista de exclusão e a tela guardada — 17/09/2026
+## A lista de exclusão, a retenção por vencimento e a tela guardada — 17 e 18/09/2026
 
 O MoneyPlus recusa o arquivo INTEIRO por um sacado cujo endereço sai sem número do
 pagador (09/09: 166 títulos; 17/09: 175 títulos e R$ 953 mil, com boleto já no sacado).
@@ -293,9 +293,20 @@ recalcula o resumo; o `RESUMO` da rodada mostra `excluidos=N` por conta.
 - **Validade dentro da lista** (`gerado_em` + `validade_horas`): lista velha é ignorada
   com aviso — gerar como sempre é melhor do que gerar com a lista de anteontem.
 - **Casamento pela LINHA da grade**, não pelo `value` do checkbox: o value é o id da
-  ocorrência no Smart (911243), não o id do título do ERP (948707). `gerar.ler_form`
-  passou a devolver `celulas` (os `<td>` da linha de cada `prazoN`); casa quem tem o
-  documento numa célula exata E mais uma prova (sacado, nosso número ou id).
+  ocorrência no Smart (897629), não o id do título do ERP (934235). `gerar.ler_form`
+  devolve `celulas` (os textos da linha) e `colunas` ({cabeçalho: texto}); casa quem tem
+  o **documento numa célula exata E o CNPJ do sacado**. ⚠️ A grade real (18/09/2026,
+  40 telas) é `| | Instrução | Tipo | Nº | M | Sacado | Vencimento | Valor (R$) | Cedente
+  | Operação | Data | Prazo | Juros | Multa |`, e "Sacado" é o CNPJ — sem nome, sem
+  nosso número. A versão de 17/09 casava por nome/nosso número/id e não acharia nenhuma
+  linha real (nenhum título da lista tinha aparecido ainda).
+- **Entrada que vence hoje ou antes fica retida** (só `numBanco` 274, só "Envio de
+  cobrança"): o MoneyPlus processa o arquivo no mesmo dia e recusa com 16/92 o vencimento
+  que não é posterior. O vencimento vem da coluna "Vencimento" pelo cabeçalho; o dia é o
+  de São Paulo (o container roda em UTC). Retido, o título continua na fila do Smart e
+  sai na geração seguinte à prorrogação no ERP; a saída da rodada lista cada um
+  (`RETIDO NA FILA`). Grade sem cabeçalho legível: nada é retido, com aviso. Caso que
+  obrigou: 13274-001 TECNOMIDIA, 18/09/2026.
 - **Tela guardada**: `guardar_tela` grava a tela de confirmação de cada conta em
   `DEBUG_DIR` (`form_<conta>_<data>.html`, 7 dias). É a única forma de ver a grade real
   — ela só aparece com título na fila, e a fila esvazia na rodada das 18:00. Serve para
@@ -303,8 +314,10 @@ recalcula o resumo; o `RESUMO` da rodada mostra `excluidos=N` por conta.
 - ⚠️ Baixas e alterações vão no campo `instrucoes`, sem mapa para o título: a lista não
   as segura. Conserto é o endereço, no ERP.
 
-Gates: `tests/integration/test_remessa_cobranca_simulada.py` (4 casos: exclui e não
-posta, exclui um e gera o outro, lista velha/ausente, documento igual de outro sacado).
+Gates: `tests/integration/test_remessa_cobranca_simulada.py` — lista (exclui e não
+posta, exclui um e gera o outro, lista velha/ausente, documento igual de outro sacado,
+documento + CNPJ na grade real) e vencimento (retido e o resto sai, tudo retido não gera,
+amanhã/outro banco/outra instrução não retêm, grade sem cabeçalho não retém).
 
 ## Armadilhas de operação
 
