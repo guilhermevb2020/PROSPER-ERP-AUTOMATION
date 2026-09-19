@@ -313,11 +313,53 @@ recalcula o resumo; o `RESUMO` da rodada mostra `excluidos=N` por conta.
   conferir o casamento e para ler a grade quando o Smart mudar.
 - ⚠️ Baixas e alterações vão no campo `instrucoes`, sem mapa para o título: a lista não
   as segura. Conserto é o endereço, no ERP.
+- Desde 18/09 a lista também traz o título com **nosso número de outro banco** (mais de 11
+  dígitos) — quem decide é o `apontar_exclusoes_remessa_400`; aqui nada mudou, o casamento
+  continua documento + CNPJ.
 
 Gates: `tests/integration/test_remessa_cobranca_simulada.py` — lista (exclui e não
 posta, exclui um e gera o outro, lista velha/ausente, documento igual de outro sacado,
 documento + CNPJ na grade real) e vencimento (retido e o resto sai, tudo retido não gera,
 amanhã/outro banco/outra instrução não retêm, grade sem cabeçalho não retém).
+
+## Remessa gerada e não levada deixa rastro — `falhas.py`, 18/09/2026
+
+Em 15/09 o Smart gerou a remessa da MP PROSPERE (id 26381, `CB15090000021.REM`, 60 títulos,
+R$ 492.734,47) e o robô a **descartou**: dois registros com 406 bytes, porque os títulos
+104-001 e 105-001 da NATURAL FOODS traziam o nosso número de 17 dígitos da BB Ativos num
+campo de 11. O Smart já dava os 60 títulos por despachados, o arquivo nunca foi ao banco, e
+o rastro era uma linha de log (`DESCARTADO - 2 linha(s) fora dos 400 chars (1a: linha 118)`).
+
+Agora toda geração que o robô **não baixou** (download falho), **descartou** (validação do
+CNAB) ou deixou **incerta** (o POST de geração falhou e a listagem não mostrou remessa nova)
+grava em `PASTA_FALHAS` (`/app/data/retornos_a_processar/remessa_cnab_400/falhas`, o bind
+compartilhado com o process-automation):
+
+- `<id>.json` — conta, rótulo, nome do arquivo, quando, o motivo, os títulos que a geração
+  levou (lidos da GRADE, que só descreve entradas; sem grade, do próprio arquivo) e os
+  **culpados**: linha, bytes, documento, nosso número, sacado e o porquê
+  («nosso numero de 17 digitos … precisa de boleto novo nesta conta»);
+- `<id>.REM` — os bytes, quando houve download.
+
+O envio incerto usa o id `incerto-<conta>-<AAAAMMDDhhmmss>`: não há id do Smart para citar.
+Corpo que não é CNAB (o Smart devolve HTML quando a sessão cai) não tem culpado nem `.REM`
+(`conteudo_cnab: false`): o arquivo no Smart está íntegro e basta baixá-lo de novo. A saída do
+`DESCARTADO` passou a nomear o culpado. No fim de cada rodada o robô exporta
+`ARQ_REMESSAS_GERADAS` (`remessas_geradas.json`: nome do arquivo no Smart → LISTA de {id,
+tipo, md5, bytes, baixado_em}), para quem precisa cancelar a remessa na tela Download de
+Remessa saber qual é. ⛔ Lista porque o nome se repete entre contas (18/09/2026:
+`CB08090000011` da mp prospere e da mp wj moreira; `CB09090000013` da mp prospere e da mp
+relvaplac) — o process-automation escolhe pelo md5 dos bytes que subiram ao banco.
+Escrita atômica, arquivos 0644; nada disso levanta — registrar a falha não derruba a rodada.
+
+Quem lê: o vigia do process-automation (`vigiar_boletos_sem_registro`), que investiga todo
+dia cada remessa que não chegou ao banco — recusada ou não levada — e diz o que fazer.
+
+Gates: `tests/integration/test_remessa_cobranca_simulada.py` — descartado vira falha com os
+culpados e o nome do arquivo, download falho vira falha com os títulos da grade, download que
+volta HTML não aponta culpado nem grava `.REM`, o arquivo de baixas não leva os títulos da
+grade (e o retido por vencimento fica fora da falha), `exportar_controle` tira o `_dup` do
+nome e guarda as duas remessas de mesmo nome.
 
 ## Armadilhas de operação
 

@@ -27,13 +27,15 @@ def robo(monkeypatch, tmp_path):
     pasta = Path(__file__).resolve().parents[2] / 'src/processors/web/robo_remessa'
     monkeypatch.syspath_prepend(str(pasta))
     with patch.dict(sys.modules):
-        for nome in ('_nextcloud', '_sessao', 'exclusoes', 'gerar', 'login', 'remessa_config', 'robo_remessa'):
+        for nome in ('_nextcloud', '_sessao', 'exclusoes', 'falhas', 'gerar', 'login', 'remessa_config', 'robo_remessa'):
             sys.modules.pop(nome, None)
         r = importlib.import_module('robo_remessa')
         monkeypatch.setattr(r.cfg, 'PASTA_REMESSAS', str(tmp_path / 'remessas'))
         monkeypatch.setattr(r.cfg, 'ARQ_CONTROLE', str(tmp_path / 'controle.csv'))
         monkeypatch.setattr(r.cfg, 'ENVIAR_NEXTCLOUD', True)
         monkeypatch.setattr(r.cfg, 'ARQ_EXCLUSOES', str(tmp_path / 'sem_lista.json'))
+        monkeypatch.setattr(r.cfg, 'PASTA_FALHAS', str(tmp_path / 'falhas'))
+        monkeypatch.setattr(r.cfg, 'ARQ_REMESSAS_GERADAS', str(tmp_path / 'remessas_geradas.json'))
         monkeypatch.setattr(r.ger, 'filtrar', Mock(return_value=FORM))
         monkeypatch.setattr(r, 'baixar_id', Mock(return_value=('teste.REM', CNAB)))
         monkeypatch.setattr(r.nuvem, 'enviar', Mock(return_value=(True, 'nuvem simulada', 'OK')))
@@ -418,3 +420,89 @@ def test_lista_casa_pela_linha_real_documento_e_cnpj_do_sacado(robo, monkeypatch
                                                           sacado="OUTRA"))
     ctx.request.post.reset_mock()
     assert r.ciclo_conta(ctx, "312", "mp vitoria", "9", dry_run=False)["excluidos"] == 0
+
+
+# --------------------------------------------------------------------------- #
+# 18/09/2026 — a remessa que o Smart gerou e que nao chegou ao banco deixa rastro.
+# Em 15/09 a da MP PROSPERE (id 26381, 60 titulos) foi descartada por dois registros de
+# 406 bytes (nosso numero de 17 digitos da BB Ativos) e sumiu com uma linha de log.
+# --------------------------------------------------------------------------- #
+def _registro_longo(doc="104-001", nosso="34913460000444530"):
+    linha = list(" " * 400)
+    linha[0] = "1"
+    linha[70:81] = list("00000000000")
+    linha[108:110] = list("01")
+    linha[110:120] = list(doc.ljust(10))
+    texto = "".join(linha)
+    # o Smart escreve os 17 digitos no campo de 11: o registro cresce 6 bytes
+    return texto[:70] + nosso + texto[81:]
+
+
+def test_arquivo_descartado_vira_falha_com_os_culpados_nomeados(robo, monkeypatch, tmp_path):
+    r, ctx = robo
+    ruim = ('01REMESSA'.ljust(400) + '\r\n' + _registro_longo() + '\r\n' + '9'.ljust(400) + '\r\n').encode()
+    r.baixar_id.return_value = ('CB15090000021.REM', ruim)
+    grade = [{"documento": "104-001", "sacado_cnpj": "08.747.539/0003-82", "vencimento": "19/09/2026", "valor": "567.00"}]
+    assert r.processar(ctx, [{"id": 26381, "rotulo": "mp prospere Envio de cobranca registrado", "conta": "404",
+                               "titulos_grade": grade}]) == 0
+    registro = json.loads((tmp_path / "falhas" / "26381.json").read_text(encoding="utf-8"))
+    assert registro["conta"] == "404" and registro["motivo"].startswith("DESCARTADO")
+    assert registro["nome_arquivo"] == "CB15090000021.REM"
+    assert registro["titulos"][0]["documento"] == "104-001" and registro["titulos"][0]["nosso_numero"] == "34913460000444530"
+    (culpado,) = registro["culpados"]
+    assert culpado["documento"] == "104-001" and culpado["bytes"] == 406 and "outro banco" in culpado["motivo"]
+    assert (tmp_path / "falhas" / "26381.REM").read_bytes() == ruim and registro["conteudo_cnab"] is True
+    assert not r.ler_controle(), "arquivo descartado nao pode entrar no controle"
+
+
+def test_download_que_falha_vira_falha_com_os_titulos_da_grade(robo, tmp_path):
+    r, ctx = robo
+    r.baixar_id.return_value = (None, None)
+    r.processar(ctx, [{"id": 7, "rotulo": "mp cast Envio de cobranca registrado", "conta": "291",
+                       "titulos_grade": [{"documento": "125060-003", "sacado_cnpj": "1", "vencimento": "", "valor": ""}]}])
+    registro = json.loads((tmp_path / "falhas" / "7.json").read_text(encoding="utf-8"))
+    assert registro["motivo"] == "download do Smart falhou" and registro["titulos"][0]["documento"] == "125060-003"
+    assert registro["arquivo"] is None and not (tmp_path / "falhas" / "7.REM").exists()
+
+
+def test_ciclo_leva_os_titulos_da_grade_so_para_o_arquivo_de_entradas(robo, monkeypatch, tmp_path, hoje_18_09):
+    r, ctx = robo
+    monkeypatch.setattr(r.ger, "filtrar", Mock(return_value=GRADE_VITORIA))
+    resultado = base64.b64encode(json.dumps({'idsSucesso': {'1': 55, '3': 56}}).encode()).decode()
+    ctx.request.post.return_value = SimpleNamespace(
+        status=200, url='https://smart.invalid/gridremessagerada.php?resultado=' + resultado, body=lambda: b'')
+    r.baixar_id.return_value = (None, None)
+    r.ciclo_conta(ctx, "312", "mp vitoria", "9", dry_run=False)
+    entradas = json.loads((tmp_path / "falhas" / "55.json").read_text(encoding="utf-8"))
+    baixas = json.loads((tmp_path / "falhas" / "56.json").read_text(encoding="utf-8"))
+    assert [t["documento"] for t in entradas["titulos"]] == ["13274-002", "13466-001"]  # 13274-001 retido
+    assert baixas["titulos"] == []
+
+
+def test_exportar_controle_diz_o_id_do_smart_pelo_nome_do_smart(robo, tmp_path):
+    r, _ = robo
+    controle = {"26271": {"arquivo": "CB09090000012.REM", "tipo": "mp prospere Envio", "md5": "a", "baixado_em": "x"},
+                "26299": {"arquivo": "CB10090000013_dup211530.REM", "tipo": "mp prospere Envio", "md5": "b",
+                          "baixado_em": "y"},
+                # 18/09/2026: o mesmo nome em duas contas — os dois ficam, e o md5 separa
+                "26249": {"arquivo": "CB08090000011.REM", "tipo": "mp prospere Envio", "md5": "c", "baixado_em": "z"},
+                "26256": {"arquivo": "CB08090000011.REM", "tipo": "mp wj moreira Envio", "md5": "d", "baixado_em": "z"}}
+    assert r.falhas.exportar_controle(controle) == 3
+    mapa = json.loads((tmp_path / "remessas_geradas.json").read_text(encoding="utf-8"))
+    assert [(c["id"], c["md5"]) for c in mapa["CB09090000012.REM"]] == [(26271, "a")]
+    assert mapa["CB10090000013.REM"][0]["id"] == 26299
+    assert sorted((c["id"], c["md5"]) for c in mapa["CB08090000011.REM"]) == [(26249, "c"), (26256, "d")]
+
+
+def test_download_que_volta_html_nao_aponta_culpado_nem_grava_rem(robo, tmp_path):
+    """Sessao do Smart caida: o corpo e HTML, o arquivo no Smart esta integro. Cada linha do
+    HTML virava "registro com N bytes" e o vigia mandava consertar o que nao existe."""
+    r, ctx = robo
+    r.baixar_id.return_value = ("CB16090001832.REM", b"<html>\n<body>Sua sessao expirou</body>\n</html>\n")
+    r.processar(ctx, [{"id": 58, "rotulo": "mp cast Envio de cobranca registrado", "conta": "291",
+                       "titulos_grade": [{"documento": "125060-003", "sacado_cnpj": "1", "vencimento": "", "valor": ""}]}])
+    registro = json.loads((tmp_path / "falhas" / "58.json").read_text(encoding="utf-8"))
+    assert registro["culpados"] == [] and registro["arquivo"] is None and registro["conteudo_cnab"] is False
+    assert registro["titulos"][0]["documento"] == "125060-003"
+    assert not (tmp_path / "falhas" / "58.REM").exists()
+

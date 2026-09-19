@@ -135,6 +135,15 @@ ARQ_CONTROLE = _s("ARQ_CONTROLE", "/app/data/robo_remessa/controle_remessas.csv"
 # Lista mais velha que a validade declarada nela e ignorada, com aviso.
 ARQ_EXCLUSOES = _s("ARQ_EXCLUSOES_REM",
                    "/app/data/retornos_a_processar/remessa_cnab_400/exclusoes.json")
+# Remessa que o Smart GEROU e que nao chegou ao banco (download falhou, arquivo
+# descartado, POST incerto) deixa rastro aqui: <id>.json + <id>.REM (falhas.py). O
+# vigia do process-automation le e investiga. 15/09/2026: 60 titulos da MP PROSPERE
+# sumiram assim, com uma linha de log e mais nada.
+PASTA_FALHAS = _s("PASTA_FALHAS_REM", "/app/data/retornos_a_processar/remessa_cnab_400/falhas")
+# {arquivo: id no Smart} de tudo que o robo baixou — para quem precisa cancelar a
+# remessa na tela Download de Remessa saber qual e.
+ARQ_REMESSAS_GERADAS = _s("ARQ_REMESSAS_GERADAS_REM",
+                          "/app/data/retornos_a_processar/remessa_cnab_400/remessas_geradas.json")
 DEBUG_DIR = _s("DEBUG_DIR_REM", "/app/data/robo_remessa/debug")
 
 # Segundos entre pings de keep-alive quando o robo roda em modo sessao viva.

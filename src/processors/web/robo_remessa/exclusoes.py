@@ -68,12 +68,15 @@ def hoje_sp():
     return datetime.now(TZ_SP).date()
 
 
-def _coluna(titulo, nome):
+def coluna(titulo, nome):
     """O texto da coluna `nome` (comparada sem acento e em maiusculas) na linha, ou None."""
     for cabecalho, texto in (titulo.get("colunas") or {}).items():
         if _norm(cabecalho) == nome:
             return texto
     return None
+
+
+_coluna = coluna
 
 
 def vencimento_da_linha(titulo):

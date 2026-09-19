@@ -74,6 +74,7 @@ import _nextcloud as nuvem                        # noqa: E402
 import _sessao                                    # noqa: E402
 import gerar as ger                               # noqa: E402
 import exclusoes                                  # noqa: E402
+import falhas                                     # noqa: E402
 import login as autenticacao                      # noqa: E402
 import remessa_config as cfg                      # noqa: E402
 
@@ -362,11 +363,18 @@ def processar(ctx, itens, forcar=False):
 
         nome, dados = baixar_id(ctx, fid)
         if dados is None:
+            # O Smart ja considera os titulos despachados: sem rastro, eles somem.
+            falhas.registrar(fid, conta=item.get("conta"), rotulo=rotulo, motivo="download do Smart falhou",
+                             titulos=item.get("titulos_grade"), log=log)
             continue
 
         ok, msg, titulos = validar_cnab(dados)
         if not ok:
-            log(f"  id={fid} ({rotulo}): DESCARTADO - {msg}")
+            reg = falhas.registrar(fid, conta=item.get("conta"), rotulo=rotulo, motivo=f"DESCARTADO - {msg}",
+                                   dados=dados, titulos=item.get("titulos_grade"), nome_arquivo=nome, log=log)
+            quem = "; ".join(f"{c['documento'] or '?'} ({c['bytes']} bytes: {c['motivo']})"
+                             for c in (reg or {}).get("culpados") or [])
+            log(f"  id={fid} ({rotulo}): DESCARTADO - {msg}" + (f" - culpado(s): {quem}" if quem else ""))
             continue
 
         destino = os.path.join(cfg.PASTA_REMESSAS, nome)
@@ -495,6 +503,9 @@ def ciclo_conta(ctx, conta, rotulo, carteira, dry_run=True, forcar=False):
     afetados = exclusoes.aplicar(form, exclusoes.carregar(log=log), log=log)
     saida["excluidos"] = sum(1 for a in afetados if a["regra"] == "lista")
     saida["retidos"] = [a for a in afetados if a["regra"] == "vencimento"]
+    # O que esta geracao vai levar, lido da grade: se o arquivo nao chegar ao banco,
+    # e isto que fica despachado no Smart e precisa de rastro (falhas.py).
+    marcados = falhas.titulos_do_form(form)
     r = form["resumo"]
     saida["titulos"] = r["titulos_marcados"]
 
@@ -533,13 +544,15 @@ def ciclo_conta(ctx, conta, rotulo, carteira, dry_run=True, forcar=False):
             saida["motivo"] = (f"{res['motivo']} E a listagem nao mostrou remessa "
                                f"nova hoje - CONFERIR NO SMART")
             log(f"  {rotulo}: {saida['motivo']}")
+            falhas.registrar(f"incerto-{conta}-{datetime.now(exclusoes.TZ_SP):%Y%m%d%H%M%S}", conta=conta,
+                             rotulo=rotulo, motivo=saida["motivo"], titulos=marcados, log=log)
             return saida
         saida["gerou"] = True
         saida["ids"] = [a["id"] for a in novas]
         saida["motivo"] = "recuperado pela listagem"
         log(f"  {rotulo}: RECUPERADO -> ids {saida['ids']}")
         saida["baixados"] = processar(
-            ctx, [{"id": a["id"], "rotulo": f"{rotulo} (recuperado)"} for a in novas],
+            ctx, [{"id": a["id"], "rotulo": f"{rotulo} (recuperado)", "conta": conta} for a in novas],
             forcar)
         return saida
 
@@ -548,7 +561,9 @@ def ciclo_conta(ctx, conta, rotulo, carteira, dry_run=True, forcar=False):
     log(f"  {rotulo}: GEROU -> ids {saida['ids']}"
         + (f"  ATENCAO idsErro={res['erros']}" if res["erros"] else ""))
 
-    itens = [{"id": fid, "rotulo": f"{rotulo} {TIPOS.get(tipo, tipo)}"}
+    itens = [{"id": fid, "rotulo": f"{rotulo} {TIPOS.get(tipo, tipo)}", "conta": conta,
+              # a grade so descreve as ENTRADAS (tipo 1); baixas vao pelo campo instrucoes
+              "titulos_grade": marcados if str(tipo) == "1" else None}
              for tipo, fid in res["ids"]]
     saida["baixados"] = processar(ctx, itens, forcar)
 
@@ -625,6 +640,7 @@ def rodada_geracao(ctx, args, dry):
             f"ids={r['ids']} baixados={r['baixados']} {r['motivo']}"
             + (f" excluidos={r['excluidos']}" if r.get("excluidos") else "")
             + (f" retidos={len(r['retidos'])}" if r.get("retidos") else ""))
+    falhas.exportar_controle(ler_controle(), log=log)
     # Retido fica na fila do Smart ate alguem prorrogar no ERP: tem de aparecer na
     # saida da task todo dia, inclusive quando a conta ficou sem nada para gerar.
     for r in resumo:
