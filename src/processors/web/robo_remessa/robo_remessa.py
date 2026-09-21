@@ -638,6 +638,16 @@ def rodada_cancelamento(ctx, args, dry):
         + (f" | janela FIXA {janela(args)[0]} a {janela(args)[1]}" if (args.de or args.ate)
            else " | janela por remessa, da data em que o robo a baixou"))
 
+    ja_feitos = cancelar.ler_feitos()
+    pulados = [i for i in remessas if i in ja_feitos]
+    if pulados:
+        log(f"  {len(pulados)} remessa(s) ja cancelada(s) numa rodada anterior - pulando: "
+            f"{pulados[:6]}{'...' if len(pulados) > 6 else ''}")
+        remessas = {i: d for i, d in remessas.items() if i not in ja_feitos}
+        if not remessas:
+            log("CANCELAMENTO: tudo que estava apontado ja foi cancelado. Nada a fazer.")
+            return SAIU_OK
+
     feitos = incertos = falhos = 0
     for smart_id, dados in sorted(remessas.items(), key=lambda kv: int(kv[0])):
         arquivo = dados.get("arquivo", "?")
@@ -682,6 +692,7 @@ def rodada_cancelamento(ctx, args, dry):
         if sumiu is True:
             feitos += 1
             log(f"  {rotulo}: CANCELADA ({como})")
+            cancelar.registrar_feito(smart_id, arquivo)
         else:
             incertos += 1
             log(f"  {rotulo}: POST aceito mas {como} — CONFERIR no Smart")

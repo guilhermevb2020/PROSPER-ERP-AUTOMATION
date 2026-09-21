@@ -56,6 +56,49 @@ import login as autenticacao
 #: Quantos dias para tras quando o controle nao tem a data — larga de proposito.
 DIAS_SEM_DATA_NO_CONTROLE = 60
 
+#: Onde o robo registra o que JA cancelou. ⛔ Sem isso a remessa cancelada continua
+#: aparecendo na lista todo dia: o cancelamento acontece no SMART, e a nossa
+#: `cnab_remessa_enviada` nao fica sabendo — ela segue com `sucesso = false` para sempre.
+#: Cancelar de novo e inocuo (a remessa ja sumiu da grade), mas o log diria "CANCELADA"
+#: todo dia sobre coisa nenhuma, e ninguem saberia o que ainda falta fazer.
+FEITOS_PADRAO = os.environ.get(
+    "CANCELAMENTOS_FEITOS_JSON",
+    "/app/data/retornos_a_processar/remessa_cnab_400/cancelamentos_feitos.json")
+
+
+def ler_feitos(caminho=FEITOS_PADRAO):
+    """Os ids que este robo ja cancelou, para nao repetir. Ilegivel = vazio, e segue."""
+    try:
+        with open(caminho, encoding="utf-8") as fh:
+            dados = json.load(fh)
+    except (OSError, ValueError):
+        return {}
+    feitos = dados.get("feitos") if isinstance(dados, dict) else None
+    return feitos if isinstance(feitos, dict) else {}
+
+
+def registrar_feito(smart_id, arquivo, caminho=FEITOS_PADRAO, agora=None):
+    """Anota que ESTE id foi cancelado. Escrita atomica: o robo nunca le metade.
+
+    ⚠️ Falha ao anotar NAO derruba a rodada — o cancelamento ja aconteceu, e
+    perder a anotacao custa uma tentativa inocua amanha. Derrubar aqui custaria
+    as remessas seguintes da mesma rodada.
+    """
+    agora = agora or datetime.now(timezone.utc)
+    feitos = ler_feitos(caminho)
+    feitos[str(smart_id)] = {"arquivo": arquivo, "cancelada_em": agora.isoformat()}
+    try:
+        os.makedirs(os.path.dirname(caminho) or ".", exist_ok=True)
+        temporario = caminho + ".tmp"
+        with open(temporario, "w", encoding="utf-8") as fh:
+            json.dump({"versao": 1, "feitos": feitos}, fh, ensure_ascii=False, indent=1)
+        os.replace(temporario, caminho)
+        return True
+    except OSError as e:                                            # noqa: BLE001
+        log("  aviso: nao consegui anotar o cancelamento de %s (%s)" % (smart_id, e))
+        return False
+
+
 #: Onde o process-automation escreve a lista. Mesmo bind do `exclusoes.json`.
 ARQUIVO_PADRAO = os.environ.get(
     "CANCELAMENTOS_JSON",

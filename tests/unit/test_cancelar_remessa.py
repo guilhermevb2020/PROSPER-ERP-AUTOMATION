@@ -362,3 +362,64 @@ def test_o_nome_MAIS_LONGO_vence_a_colisao_de_prefixo(tipo, esperada):
     contas = {"293": "mp pradzia", "343": "mp pradzia papeis", "298": "mp tapayuna"}
 
     assert cancelar.conta_do_smart(tipo, contas) == esperada
+
+
+# ---------------------------------------------------------------------------
+# O que JA foi cancelado nao se cancela de novo — 21/09/2026
+# ---------------------------------------------------------------------------
+
+
+def test_o_robo_anota_o_que_cancelou(tmp_path):
+    """⛔ Sem a anotacao, a remessa cancelada aparece na lista TODO DIA.
+
+    O cancelamento acontece no SMART; a nossa `cnab_remessa_enviada` nao fica
+    sabendo e segue com `sucesso = false` para sempre. Cancelar de novo e inocuo
+    (a remessa ja sumiu da grade), mas o log diria "CANCELADA" sobre coisa
+    nenhuma e ninguem saberia o que ainda falta.
+    """
+    arq = tmp_path / "feitos.json"
+
+    assert cancelar.registrar_feito(26383, "CB15090000961.REM", caminho=str(arq)) is True
+
+    feitos = cancelar.ler_feitos(str(arq))
+    assert list(feitos) == ["26383"]
+    assert feitos["26383"]["arquivo"] == "CB15090000961.REM"
+    assert feitos["26383"]["cancelada_em"]
+
+
+def test_a_anotacao_ACUMULA_e_nao_sobrescreve(tmp_path):
+    arq = str(tmp_path / "feitos.json")
+    cancelar.registrar_feito(1, "A.REM", caminho=arq)
+    cancelar.registrar_feito(2, "B.REM", caminho=arq)
+
+    assert sorted(cancelar.ler_feitos(arq)) == ["1", "2"]
+
+
+def test_arquivo_ausente_ou_ilegivel_devolve_VAZIO_e_segue(tmp_path):
+    """⚠️ Nao saber o que ja foi cancelado custa uma tentativa inocua. Derrubar custa mais."""
+    assert cancelar.ler_feitos(str(tmp_path / "nao_existe.json")) == {}
+
+    quebrado = tmp_path / "quebrado.json"
+    quebrado.write_text("{nao e json", encoding="utf-8")
+    assert cancelar.ler_feitos(str(quebrado)) == {}
+
+    torto = tmp_path / "torto.json"
+    torto.write_text('{"feitos": ["26383"]}', encoding="utf-8")
+    assert cancelar.ler_feitos(str(torto)) == {}, "formato inesperado nao vira lista de ids"
+
+
+def test_falha_ao_anotar_NAO_derruba_a_rodada(tmp_path):
+    """O cancelamento ja aconteceu; derrubar aqui custaria as remessas seguintes."""
+    caminho_impossivel = str(tmp_path / "arquivo" / "que" / "nao" / "da")
+    (tmp_path / "arquivo").write_text("sou um arquivo, nao uma pasta", encoding="utf-8")
+
+    assert cancelar.registrar_feito(1, "A.REM", caminho=caminho_impossivel) is False
+
+
+def test_a_escrita_e_ATOMICA(tmp_path):
+    """O robo le este arquivo na rodada seguinte; meia escrita viraria lista vazia."""
+    arq = tmp_path / "feitos.json"
+    cancelar.registrar_feito(1, "A.REM", caminho=str(arq))
+
+    assert not (tmp_path / "feitos.json.tmp").exists(), "o temporario nao pode sobreviver"
+    assert json.loads(arq.read_text(encoding="utf-8"))["versao"] == 1
