@@ -13,7 +13,8 @@ services:
       - .env
       - .env.guardian
     ports:
-      - "6092:6092"
+      # 21/09/2026: a 6092 servia a API de controle de 2025 (src/api), removida com o
+      # legado; nada escutava nela. Sai do compose na proxima recriacao.
       - "5900:5900"   # x11vnc nativo (clientes RealVNC, TigerVNC, etc.)
       - "6080:6080"   # noVNC web (http://host:6080/vnc.html)
     volumes:

@@ -202,7 +202,7 @@ self.browser = await init_browser(
    ↓
    Tempo médio: 15-30 segundos
    ↓
-   Token: 0cAFcWeA5a3VRai9MeZH2PEfO-sr1GR8_4Z_E9kU...
+   Token: <token de desafio omitido em 21/09/2026>
 
 4. Injetar token no reCAPTCHA
    ↓

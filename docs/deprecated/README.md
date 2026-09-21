@@ -86,3 +86,27 @@ Para informações atualizadas, sempre consulte a documentação na pasta `docs/
 
 **Mantido para:** Histórico e auditoria
 **Última atualização:** 2025-11-15
+
+---
+
+## 21/09/2026 — a era 2025 sai do código
+
+Medição: grafo de imports a partir das 12 entradas que o hub e o `boot_vnc.sh`
+executam, conferido a mão com `grep`. Nada do que segue era alcançado por robô
+vivo. O código saiu do repositório (histórico no git, no commit da remoção) e
+está também em `backups/organizacao-20260921/legado-2025.tar.gz` (143 arquivos).
+
+| o que saiu | onde está a história |
+|---|---|
+| os 8 processadores de 2025 (`emissao_boleto_primeira_via`, `envio_boleto_operacao_*`, `envio_cobranca_boleto_oculto`, `relatorio_*`, `baixar_documentos_doc2you`) e `src/processors/web/backup/` | git + tar; docs em [`processors-2025/`](processors-2025/) e [`fluxos_processadores-2025/`](fluxos_processadores-2025/) |
+| o stack antibot: `src/common/{anti_detection,browser,captcha,fingerprinting,profiles,utils,base,deprecated}` e `src/common/core/{checkpoint_manager,database,execution_logger,screenshot_manager}` | git + tar; docs `*ANTIBOT*`, `WAIT_UTILS*`, `RELATORIO_ANTIBOT_2025_EMISSAOBOLETO.md` aqui |
+| módulos soltos de `src/common/`: `captcha_solver`, `column_mappings`, `database`, `file_utils`, `nodriver_utils`, `notification_utils`, `timezone_utils` | git + tar |
+| a API de controle (`src/api`, porta 6092), `src/config/settings.py`, `src/core/logging_config.py` | git + tar |
+| scripts do host pré-Docker e os units do systemd | [`host-legado/`](host-legado/) |
+| scripts de debug e mapeamento de 2025 | [`scripts-2025/`](scripts-2025/) |
+| `config/anti_detection.yaml` | [`config/`](config/) |
+| guias da era: `COMO_CRIAR_PROCESSADORES`, `CRIAR_PROCESSADOR`, `ESTRUTURA_DE_PASTAS`, `ARQUITETURA`, `TROUBLESHOOTING`, `ACESSO_VNC`, `SYSTEMD_VNC`, `SISTEMA_BACKUP`, `MIGRACAO_LOCAL_SERVIDOR`, `orchestracao` | aqui, com o nome original |
+
+O que ficou de propósito: `src/common/core/config_loader.py` e `config/processors.yaml`
+(o doc2you resolve credencial por eles), `doc2you/manter_sessao.py` e `login_manual.py`
+(ferramentas de 2026), `boletos/_emissao_html.py` (usado pela emissão).

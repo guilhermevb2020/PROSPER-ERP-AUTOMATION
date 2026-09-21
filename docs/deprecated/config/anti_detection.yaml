@@ -1,0 +1,83 @@
+# =============================================================================
+# CONFIGURAÇÕES ANTI-DETECÇÃO - PROSPER ERP AUTOMATION
+# =============================================================================
+#
+# Configurações globais de anti-detecção aplicadas a todos os processadores.
+# Baseado na documentação: docs/ANALISE_ANTI_BOT_SMARTSECURITIES.md
+#
+# =============================================================================
+
+# Timezone e Locale (da documentação - CRÍTICO)
+timezone: "America/Sao_Paulo"
+locale: "pt-BR"
+
+# Hardware Profile (da documentação - CRÍTICO)
+# Cada processador recebe um perfil único mas consistente (hash do nome)
+hardware:
+  # true = atribuição automática por hash do nome do processador
+  # false = usar default_index abaixo
+  auto_assign: true
+  # null = usar auto_assign, ou número 0-7 para perfil específico
+  default_index: null
+
+# Viewport (usa do hardware profile se auto_assign=true)
+# Se especificado aqui, sobrescreve o perfil
+viewport:
+  width: null  # null = usar do perfil
+  height: null  # null = usar do perfil
+
+# Proxy (BrightData, IPRoyal ou outros)
+# IMPORTANTE: Credenciais devem estar no .env (não commitadas)
+# BrightData: BRIGHTDATA_PROXY_USERNAME, BRIGHTDATA_PROXY_PASSWORD
+proxy:
+  enabled: true  # ATIVADO - Usar BrightData com sticky session por processador
+  type: "brightdata"  # brightdata | iproyal | custom
+  
+  # IPRoyal configuration
+  iproyal:
+    endpoint: "http://username:password@gate.iproyal.com:12321"
+  
+  # BrightData configuration (legacy)
+  brightdata:
+    endpoint: ""
+  
+  # Custom proxy
+  custom:
+    server: "http://proxy:port"
+    username: ""
+    password: ""
+
+# WebRTC (da documentação - CRÍTICO: Bloquear vazamento de IP)
+webrtc:
+  block: true  # Bloquear WebRTC leak (--disable-webrtc + JS)
+
+# Fingerprints (da documentação)
+fingerprints:
+  canvas: true      # Canvas fingerprint randomization
+  webgl: true       # WebGL fingerprint (vendor/renderer do perfil)
+  audio: true       # Audio fingerprint randomization
+  navigator: true   # Navigator overrides (webdriver, plugins, hardware)
+  chrome_runtime: true  # chrome.runtime simulation
+
+# Network (da documentação - CRÍTICO: Bypass Fetch interceptado)
+network:
+  restore_fetch: true  # Restaurar Fetch original (bypass interceptação)
+  use_xhr: false       # Usar XHR em vez de Fetch quando possível
+
+# Behavior humano (da documentação)
+behavior:
+  mouse_movements: true    # Simular movimentos de mouse (curvas Bezier)
+  typing_delays: true      # Delays ao digitar (velocidade variável)
+  scroll_simulation: true  # Scroll humano (aleatório)
+  min_delay_ms: 100        # Delay mínimo entre ações (ms)
+  max_delay_ms: 500        # Delay máximo entre ações (ms)
+
+# Headers HTTP (da documentação)
+headers:
+  accept_language: "pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7"
+  accept_encoding: "gzip, deflate, br"
+  accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
+  connection: "keep-alive"
+  cache_control: "max-age=0"
+  upgrade_insecure_requests: "1"
+
