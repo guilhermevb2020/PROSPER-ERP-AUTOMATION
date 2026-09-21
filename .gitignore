@@ -86,3 +86,23 @@ data/sandbox/
 *.pgpass
 backups/
 .cache/
+
+# 21/09/2026 — organizacao da raiz. Dados de execucao NUNCA entram: perfis de
+# Chrome, boletos, prints, CSVs de controle dos robos (881 MB em 4.290 arquivos
+# apareciam como "nao rastreados"). Ficam so data/assets/ e os .gitkeep.
+data/*
+!data/assets/
+!data/checkpoints/
+!data/processed_outputs/
+!data/raw_inputs/
+data/checkpoints/*
+data/processed_outputs/*
+data/raw_inputs/*
+!data/checkpoints/.gitkeep
+!data/processed_outputs/.gitkeep
+!data/raw_inputs/.gitkeep
+# Logs inteiros (antes so *.log; logs/vnc e logs/crm_visual vazavam).
+logs/
+# Caches de ferramenta
+.pytest_cache/
+.ruff_cache/

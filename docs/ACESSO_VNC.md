@@ -21,7 +21,7 @@ Este documento explica como acessar remotamente a interface gráfica (Chrome) da
 | **Endereço IP** | `3.148.126.73` |
 | **Porta Web (noVNC)** | `6080` |
 | **Porta VNC Direta** | `5900` |
-| **Senha** | `vetor2025` |
+| **Senha** | `<senha-do-VNC: entregue pelo Guardian, nunca no repositorio>` |
 | **URL Completa** | http://3.148.126.73:6080/vnc.html |
 
 ---
@@ -44,7 +44,7 @@ Esta é a forma **mais fácil e rápida** de acessar o VNC, sem precisar instala
    - Clique no botão **"Connect"**
 
 4. **Digite a Senha:**
-   - Senha: `vetor2025`
+   - Senha: `<senha-do-VNC: entregue pelo Guardian, nunca no repositorio>`
    - Pressione **Enter** ou clique em **"Send Credentials"**
 
 5. **Pronto!** 🎉
@@ -81,7 +81,7 @@ Se preferir usar um cliente VNC tradicional (mais estável para conexões longas
 
 3. **Conecte:**
    - Clique em "Connect"
-   - Digite a senha: `vetor2025`
+   - Digite a senha: `<senha-do-VNC: entregue pelo Guardian, nunca no repositorio>`
 
 4. **Pronto!** Você verá o desktop virtual
 
@@ -120,7 +120,7 @@ Se preferir usar um cliente VNC tradicional (mais estável para conexões longas
 **Solução:**
 
 1. **Verificar senha atual:**
-   - A senha padrão é: `vetor2025`
+   - A senha padrão é: `<senha-do-VNC: entregue pelo Guardian, nunca no repositorio>`
    - Certifique-se de estar digitando corretamente (case-sensitive)
 
 2. **Recriar senha** (no servidor via SSH):
@@ -283,7 +283,7 @@ Se você encontrar problemas não listados aqui:
   - Restringir acesso a IPs específicos no Security Group AWS
   - Considerar usar um túnel SSH para acesso mais seguro
 
-- 🔒 **Senha Padrão:** Altere a senha padrão `vetor2025` em produção
+- 🔒 **Senha Padrão:** Altere a senha padrão `<senha-do-VNC: entregue pelo Guardian, nunca no repositorio>` em produção
 
 - 🌐 **IP Dinâmico:** Se o IP AWS mudar, atualize este documento
 

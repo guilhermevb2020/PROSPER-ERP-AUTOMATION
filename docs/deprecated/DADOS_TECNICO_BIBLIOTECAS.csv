@@ -1,0 +1,9 @@
+Biblioteca,Status,Python,Stars,Manutenção,Licença,Humanização,Stealth,Compatibilidade,Esforço,Score,Recomendação
+playwright-stealth,Ativa,3.x,832,Ativa,MIT,Não,Sim,Compatível,1-2h,8.3/10,SIM - Complementar
+humanization-playwright,Ativa,3.8-3.12,Crescente,Ativa,MIT,Sim,Sim (Patchright),Breaking Changes,4-6h,6.3/10,NÃO
+botright,Ativa,3.8-3.10,870,Ativa,GPL-3.0,Básico,Sim,Python 3.12 Incompatível,N/A,5.0/10,NÃO
+python-ghost-cursor,Inativa,3.x,100+,Parada,MIT,Mouse Only,Não,Compatível,1-2h,5.0/10,NÃO
+undetected-playwright,Inativa,3.x,195,Parada,Desconhecido,Não,Sim,Compatível,N/A,4.0/10,NÃO
+emunium,Ativa,3.x,91,Ativa,MIT,Sim (OCR),Não,Compatível,2-3h,5.7/10,NÃO
+playwright-humanize,Inativa,JavaScript,6,Inativa,MIT,Sim,Não,N/A (JS),N/A,N/A,NÃO
+Seu_HumanBehavior,Custom,3.12,N/A,1 pessoa,N/A,Excelente,Não,Compatível,Manutenção,7.5/10,MANTER+MELHORAR

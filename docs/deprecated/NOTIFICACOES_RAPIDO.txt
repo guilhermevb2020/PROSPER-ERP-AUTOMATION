@@ -12,7 +12,7 @@ QUANDO RECEBER EMAIL:
 
 1. ACESSAR VNC (resolver problema):
    http://3.148.126.73:6080/vnc.html
-   Senha: vetor2025
+   Senha: <senha-do-VNC: entregue pelo Guardian, nunca no repositorio>
 
 2. CONTINUAR AUTOMAÇÃO (após resolver):
    http://3.148.126.73:6092/resume

@@ -6,7 +6,7 @@
    http://3.148.126.73:6080/vnc.html
 
 🔐 SENHA:
-   vetor2025
+   <senha-do-VNC: entregue pelo Guardian, nunca no repositorio>
 
 📖 DOCUMENTAÇÃO COMPLETA:
    docs/COMO_ACESSAR_VNC.md

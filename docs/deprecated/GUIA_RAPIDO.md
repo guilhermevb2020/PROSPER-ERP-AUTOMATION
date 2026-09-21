@@ -13,7 +13,7 @@ Abra no navegador:
 http://3.148.126.73:6080/vnc.html
 ```
 
-**Senha:** `vetor2025`
+**Senha:** `<senha-do-VNC: entregue pelo Guardian, nunca no repositorio>`
 
 ---
 
@@ -144,8 +144,8 @@ Xvfb :1 -screen 0 1920x1080x24 &
 
 | Serviço | URL | Senha |
 |---------|-----|-------|
-| **VNC Web (Display :1)** | http://3.148.126.73:6080/vnc.html | `vetor2025` |
-| **VNC Web (Display :2)** | http://3.148.126.73:6081/vnc.html | `vetor2025` |
+| **VNC Web (Display :1)** | http://3.148.126.73:6080/vnc.html | `<senha-do-VNC: entregue pelo Guardian, nunca no repositorio>` |
+| **VNC Web (Display :2)** | http://3.148.126.73:6081/vnc.html | `<senha-do-VNC: entregue pelo Guardian, nunca no repositorio>` |
 | **API Controle** | http://3.148.126.73:6092 | - |
 | **API Health Check** | http://3.148.126.73:6092/health | - |
 | **API Status** | http://3.148.126.73:6092/status | - |

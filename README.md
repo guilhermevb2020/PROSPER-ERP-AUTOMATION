@@ -217,14 +217,14 @@ python3 src/processors/web/titulos_abertos_e_marcados_recompras.py
 
 ```
 URL: http://3.148.126.73:6080/vnc.html
-Senha: vetor2025
+Senha: <senha-do-VNC: entregue pelo Guardian, nunca no repositorio>
 ```
 
 ### **Via Cliente VNC**
 
 ```
 Servidor: 3.148.126.73:5900
-Senha: vetor2025
+Senha: <senha-do-VNC: entregue pelo Guardian, nunca no repositorio>
 ```
 
 📖 **[Guia completo de acesso VNC](docs/ACESSO_VNC.md)**

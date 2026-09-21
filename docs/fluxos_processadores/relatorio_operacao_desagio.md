@@ -1109,7 +1109,7 @@ tail -f /tmp/proc_desagio.log
 http://3.148.126.73:6080/vnc.html
 ```
 
-**Senha:** `vetor2025`
+**Senha:** `<senha-do-VNC: entregue pelo Guardian, nunca no repositorio>`
 
 #### Controles
 

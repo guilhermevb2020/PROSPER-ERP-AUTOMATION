@@ -22,7 +22,7 @@ http://3.148.126.73:6080/vnc.html
 
 **Senha:**
 ```
-vetor2025
+<senha-do-VNC: entregue pelo Guardian, nunca no repositorio>
 ```
 
 **Clique em "Connect"**

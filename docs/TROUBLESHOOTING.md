@@ -112,12 +112,12 @@ ss -tlnp | grep -E "(5900|6080)"
 
 **Senha correta:**
 ```
-vetor2025
+<senha-do-VNC: entregue pelo Guardian, nunca no repositorio>
 ```
 
 **Recriar senha VNC:**
 ```bash
-x11vnc -storepasswd vetor2025 /home/ubuntu/.vnc/passwd
+x11vnc -storepasswd <senha-do-VNC: entregue pelo Guardian, nunca no repositorio> /home/ubuntu/.vnc/passwd
 chmod 600 /home/ubuntu/.vnc/passwd
 
 # Reiniciar x11vnc
