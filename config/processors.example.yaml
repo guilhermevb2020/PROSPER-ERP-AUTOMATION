@@ -1,0 +1,12 @@
+relatorio_desagio:
+  display: ":1"
+  api_port: 6090
+  interval_seconds: 300
+  cron: "0 */2 * * *"
+  login_policy: round_robin
+relatorio_titulos:
+  display: ":2"
+  api_port: 6091
+  interval_seconds: 1800
+  cron: "15 1-23/3 * * *"
+  login_policy: sequential

@@ -1,0 +1,263 @@
+# =========================================================================
+# CONFIGURAÇÕES DE PROCESSADORES - PROSPER ERP AUTOMATION
+# =========================================================================
+#
+# Este arquivo centraliza configurações de TODOS os processadores.
+#
+# Estrutura:
+#   <nome_processador>:
+#     # Orquestração
+#     display: Display VNC (ex: ":1")
+#     api_port: Porta da API de controle
+#     vnc_port: Porta VNC (opcional - calculada automaticamente se não especificado)
+#               Fórmula: 6080 + (display_num - 1)
+#               Exemplo: Display :3 → VNC 6082 (se não especificar, calcula automaticamente)
+#     execution_mode: "one-shot" | "loop"  # Modo de execução
+#     interval_seconds: Intervalo entre execuções (só usado se execution_mode = "loop")
+#     cron: Expressão cron (só usado se execution_mode = "one-shot")
+#
+#     # Features de Debug/Produção
+#     enable_screenshots: true/false
+#     screenshot_level: none | errors-only | milestones | full
+#     enable_execution_logs: true/false
+#     log_level: DEBUG | INFO | WARNING | ERROR
+#
+#     # Timeouts
+#     timeout_captcha: Segundos para aguardar CAPTCHA
+#     timeout_download: Segundos para aguardar download
+#
+# =========================================================================
+
+# =========================================================================
+# CONFIGURAÇÕES GLOBAIS (aplicadas a TODOS se não sobrescritas)
+# =========================================================================
+_global:
+  enable_screenshots: true
+  screenshot_level: full        # none | errors-only | milestones | full
+  enable_execution_logs: true
+  log_level: INFO               # DEBUG | INFO | WARNING | ERROR
+  timeout_captcha: 100
+  timeout_download: 90
+  
+  # Rate Limiting (HTTP 429)
+  rate_limit:
+    wait_time_seconds: 60      # Tempo de espera quando detecta 429 (padrão: 60s)
+    max_retries: 0             # Máximo de tentativas de retry (0 = ilimitado, padrão: 0)
+    enable_auto_retry: true    # Ativar retry automático (padrão: true)
+    check_interval: 5          # Intervalo entre verificações de conteúdo (segundos, padrão: 5)
+    post_callback_wait_seconds: 45  # Tempo adicional após callback de retry (padrão: 45s)
+    jitter_percent: 20         # Percentual de jitter para randomizar delays (padrão: 20%)
+    max_requests_per_minute: 10  # Limite de requisições críticas por minuto (padrão: 10)
+    circuit_breaker_enabled: false  # Ativar circuit breaker pattern (padrão: false - tentar até conseguir)
+    circuit_breaker_threshold: 3   # Número de falhas consecutivas para ativar (padrão: 3)
+    circuit_breaker_duration: 300  # Duração do circuit breaker em segundos (padrão: 300s = 5min)
+
+# =========================================================================
+# PROCESSADORES
+# =========================================================================
+
+relatorio_operacao_desagio:
+  # Orquestração
+  display: ":1"
+  api_port: 6092
+  vnc_port: 6080
+  interval_seconds: 300
+  cron: "0 */2 * * *"
+  login_policy: round_robin
+
+  # Features de Debug (sobrescreve _global)
+  enable_screenshots: true
+  screenshot_level: milestones  # milestones = login_ok, download_ok, erros
+  enable_execution_logs: true
+  log_level: DEBUG              # DEBUG para ver tudo durante desenvolvimento
+
+  # Timeouts (sobrescreve _global)
+  timeout_captcha: 100
+  timeout_download: 3600        # 1 hora em modo debug
+
+baixar_documentos_doc2you:
+  # Orquestração (agendamento real = último dia útil, via hub-orchestration)
+  display: ":5"
+  api_port: 6097
+  vnc_port: 6085
+  execution_mode: "one-shot"    # baixa 1x o último dia útil e fecha
+  interval_seconds: 3600
+  cron: "0 19 * * 1-5"          # placeholder; cadência final definida no hub-orchestration
+  login_policy: round_robin     # CRÍTICO: registra o processor (popula credential_index)
+
+  # Features de Debug
+  enable_screenshots: true
+  screenshot_level: milestones  # login_ok, download_ok, erros
+  enable_execution_logs: true
+  log_level: INFO
+
+  # Timeouts
+  timeout_captcha: 100
+  timeout_download: 600         # download HTTP de PDFs (lote do dia)
+
+emissao_boleto_primeira_via:
+  # Orquestração
+  display: ":2"
+  api_port: 6093
+  vnc_port: 6081
+  execution_mode: "one-shot"    # "one-shot" (executa 1x e fecha) ou "loop" (executa continuamente)
+  interval_seconds: 3600        # 1 hora (só usado se execution_mode = "loop")
+  cron: "0 7 * * *"            # Todo dia às 7h da manhã (só usado se execution_mode = "one-shot")
+  login_policy: round_robin
+
+  # Features de Debug
+  enable_screenshots: true
+  screenshot_level: milestones  # none | errors-only | milestones | full
+  enable_execution_logs: true
+  log_level: INFO
+
+  # Timeouts
+  timeout_captcha: 100
+  timeout_download: 300         # 5 minutos (não faz download real)
+
+envio_boleto_operacao_padrao:
+  # Orquestração
+  display: ":3"
+  api_port: 6094
+  vnc_port: 6082
+  execution_mode: "one-shot"    # "one-shot" (executa 1x e fecha) ou "loop" (executa continuamente)
+  interval_seconds: 3600        # 1 hora (só usado se execution_mode = "loop")
+  cron: "0 8 * * *"            # Todo dia às 8h da manhã (só usado se execution_mode = "one-shot")
+  login_policy: round_robin
+
+  # Features de Debug
+  enable_screenshots: true
+  screenshot_level: milestones  # none | errors-only | milestones | full
+  enable_execution_logs: true
+  log_level: INFO
+
+  # Timeouts
+  timeout_captcha: 100
+  timeout_download: 300         # 5 minutos (não faz download real)
+
+envio_boleto_operacao_oculto:
+  # Orquestração
+  display: ":4"
+  api_port: 6095
+  vnc_port: 6083
+  execution_mode: "one-shot"    # "one-shot" (executa 1x e fecha) ou "loop" (executa continuamente)
+  interval_seconds: 3600        # 1 hora (só usado se execution_mode = "loop")
+  cron: "0 9 * * *"            # Todo dia às 9h da manhã (só usado se execution_mode = "one-shot")
+  # login_policy não é usado aqui, pois credenciais vêm do banco de dados
+
+  # Anti-Detecção
+  hardware_profile_index: 4    # Perfil 4: 1280x720 (viewport reduzido para inspeção F12)
+
+  # Features de Debug
+  enable_screenshots: true
+  screenshot_level: milestones  # none | errors-only | milestones | full
+  enable_execution_logs: true
+  log_level: INFO
+
+  # Timeouts
+  timeout_captcha: 100
+  timeout_download: 300         # 5 minutos (não faz download real)
+  
+  # Rate Limiting (HTTP 429)
+  rate_limit:
+    wait_time_seconds: 120     # Tempo de espera quando detecta 429 (AUMENTADO: 2 minutos)
+    max_retries: 0             # Máximo de tentativas de retry (0 = ilimitado até conseguir)
+    enable_auto_retry: true    # Ativar retry automático
+    check_interval: 5          # Intervalo entre verificações de conteúdo (segundos)
+    post_callback_wait_seconds: 90  # Tempo adicional após callback de retry (AUMENTADO: 90s = 1.5min)
+    jitter_percent: 20         # Percentual de jitter para randomizar delays
+    max_requests_per_minute: 10  # Limite de requisições críticas por minuto
+    circuit_breaker_enabled: false  # Desativar circuit breaker (queremos tentar até conseguir)
+    circuit_breaker_threshold: 3   # Número de falhas consecutivas para ativar
+    circuit_breaker_duration: 300  # Duração do circuit breaker em segundos (5min)
+
+envio_boleto_operacao_oculto_retry:
+  # Orquestração
+  display: ":4"
+  api_port: 6096
+  vnc_port: 6083
+  execution_mode: "one-shot"    # "one-shot" (executa 1x e fecha) ou "loop" (executa continuamente)
+  interval_seconds: 3600        # 1 hora (só usado se execution_mode = "loop")
+  cron: "0 10 * * *"           # Todo dia às 10h da manhã (1 hora após o principal)
+  # login_policy não é usado aqui, pois credenciais vêm dos arquivos JSON de retry
+
+  # Features de Debug
+  enable_screenshots: true
+  screenshot_level: milestones  # none | errors-only | milestones | full
+  enable_execution_logs: true
+  log_level: INFO
+
+  # Timeouts
+  timeout_captcha: 100
+  timeout_download: 300         # 5 minutos (não faz download real)
+
+envio_cobranca_boleto_oculto:
+  # Orquestração
+  display: ":5"
+  api_port: 6097
+  vnc_port: 6084
+  execution_mode: "one-shot"    # "one-shot" (executa 1x e fecha) ou "loop" (executa continuamente)
+  interval_seconds: 3600        # 1 hora (só usado se execution_mode = "loop")
+  cron: "30 9 * * *"           # Todo dia às 9h30 da manhã (após envio_boleto_operacao_oculto)
+  # login_policy não é usado aqui, pois credenciais vêm do banco de dados (api.erp_financeiro_logins_atrasos_oculto)
+
+  # Anti-Detecção
+  hardware_profile_index: 5    # Perfil 5: 1280x720 (viewport reduzido para inspeção F12)
+
+  # Features de Debug
+  enable_screenshots: true
+  screenshot_level: milestones  # none | errors-only | milestones | full
+  enable_execution_logs: true
+  log_level: INFO
+
+  # Timeouts
+  timeout_captcha: 100
+  timeout_download: 300         # 5 minutos (não faz download real)
+
+  # Rate Limiting (HTTP 429) - Configuração conservadora igual ao envio_boleto_operacao_oculto
+  rate_limit:
+    wait_time_seconds: 120     # Tempo de espera quando detecta 429 (2 minutos)
+    max_retries: 0             # Máximo de tentativas de retry (0 = ilimitado até conseguir)
+    enable_auto_retry: true    # Ativar retry automático
+    check_interval: 5          # Intervalo entre verificações de conteúdo (segundos)
+    post_callback_wait_seconds: 90  # Tempo adicional após callback de retry (90s = 1.5min)
+    jitter_percent: 20         # Percentual de jitter para randomizar delays
+    max_requests_per_minute: 10  # Limite de requisições críticas por minuto
+    circuit_breaker_enabled: false  # Desativar circuit breaker (queremos tentar até conseguir)
+    circuit_breaker_threshold: 3   # Número de falhas consecutivas para ativar
+    circuit_breaker_duration: 300  # Duração do circuit breaker em segundos (5min)
+
+# relatorio_titulos_aberto:
+#   # Orquestração
+#   display: ":2"
+#   api_port: 6091
+#   interval_seconds: 1800
+#   cron: "15 1-23/3 * * *"
+#   login_policy: sequential
+#
+#   # Features de Debug (usa _global se não especificado)
+#   enable_screenshots: true
+#   screenshot_level: errors-only  # Apenas erros
+#   log_level: INFO
+
+# =========================================================================
+# NOTAS DE USO
+# =========================================================================
+#
+# Para DESENVOLVIMENTO (ver tudo):
+#   screenshot_level: full
+#   log_level: DEBUG
+#
+# Para DEPURAÇÃO DE ERROS (só problemas):
+#   screenshot_level: errors-only
+#   log_level: ERROR
+#
+# Para PRODUÇÃO (otimizado):
+#   screenshot_level: milestones
+#   log_level: INFO
+#
+# Para TESTES DE PERFORMANCE (mínimo):
+#   enable_screenshots: false
+#   enable_execution_logs: false
+#
+# =========================================================================
