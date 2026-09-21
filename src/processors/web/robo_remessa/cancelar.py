@@ -53,6 +53,9 @@ from datetime import datetime, timedelta, timezone
 import remessa_config as cfg
 import login as autenticacao
 
+#: Quantos dias para tras quando o controle nao tem a data — larga de proposito.
+DIAS_SEM_DATA_NO_CONTROLE = 60
+
 #: Onde o process-automation escreve a lista. Mesmo bind do `exclusoes.json`.
 ARQUIVO_PADRAO = os.environ.get(
     "CANCELAMENTOS_JSON",
@@ -107,6 +110,39 @@ def ler_lista(caminho=ARQUIVO_PADRAO, agora=None):
 # ---------------------------------------------------------------------------
 # O POST
 # ---------------------------------------------------------------------------
+
+def conta_do_smart(tipo, contas_mapa):
+    """A CONTA do Smart (287, 291, 298...) a partir do `tipo` do controle do robo.
+
+    ⛔ **Nao confundir com o `numero_cedente` do CNAB.** Sao duas chaves diferentes e
+    ambas parecem "o cedente":
+
+        numero_cedente  1026716   o numero do cedente NO BANCO (header do .REM)
+        conta do Smart  298       a conta no ERP, que e o que `contaSelected` espera
+
+    Mandar a primeira no POST monta a grade de uma conta que nao existe, a remessa
+    nao aparece nela, e o cancelamento silenciosamente nao acha o id. O `tipo` do
+    `remessas_geradas.json` traz o nome ("mp tapayuna Envio de cobranca registrado")
+    e o `contas_carteiras.json` mapeia nome -> numero.
+
+    ⛔ **E o casamento e pelo nome MAIS LONGO que serve, nunca pelo primeiro achado.**
+    Medido em 21/09/2026 sobre o `contas_carteiras.json` real: das 57 contas, 4 tem nome
+    que e PREFIXO de outra — `293 "mp pradzia"` de `343 "mp pradzia papeis"`,
+    `286 "Banco do Brasil"` de duas, `285 "SICOOB"` de `288 "SICOOB ATIVOS"`. Varrendo o
+    dicionario na ordem, `"mp pradzia papeis Envio..."` devolvia **293**: conta errada,
+    grade errada, o id nao aparece nela, o POST nao faz nada — e o `sumiu_da_grade`,
+    que lista a MESMA grade errada, confirma que sumiu. Falso sucesso, exit 0.
+    """
+    if not tipo:
+        return None
+    alvo = str(tipo).strip().lower()
+    melhor = None
+    for numero, nome in (contas_mapa or {}).items():
+        n = str(nome).strip().lower()
+        if n and alvo.startswith(n) and (melhor is None or len(n) > len(melhor[1])):
+            melhor = (str(numero), n)
+    return melhor[0] if melhor else None
+
 
 def montar_post(smart_id, conta, de, ate):
     """O corpo do POST de cancelamento - o mesmo da listagem, com dois campos.
@@ -175,3 +211,54 @@ def sumiu_da_grade(ctx, smart_id, conta, de, ate, listar):
     except Exception as e:                                          # noqa: BLE001
         return None, "nao deu para reconferir a grade (%s)" % type(e).__name__
     return (not ainda), ("sumiu da grade" if not ainda else "AINDA aparece na grade")
+
+#: Folga em dias dos dois lados da data em que o robo baixou a remessa. O `baixado_em`
+#: e o horario do robo (UTC no container) e a grade mostra o horario do Smart: um dia de
+#: cada lado cobre a virada sem alargar a grade a ponto de trazer remessa de outra conta.
+FOLGA_DA_GRADE_DIAS = 1
+
+
+def entrada_do_controle(controle, arquivo, smart_id):
+    """A entrada do `remessas_geradas.json` DAQUELE id — nunca a primeira do nome.
+
+    ⛔ O nome se repete entre contas: em 18/09/2026 o `CB08090000011` era da MP PROSPERE
+    e da WJ MOREIRA ao mesmo tempo. Pegar `entrada[0]` devolve o `tipo` de uma conta e o
+    id de outra — e o POST vai para a grade errada, onde o id nao existe.
+    """
+    candidatos = controle.get(arquivo) or []
+    if isinstance(candidatos, dict):                      # formato anterior: um por nome
+        candidatos = [candidatos]
+    alvo = str(smart_id).strip()
+    for c in candidatos:
+        if isinstance(c, dict) and str(c.get("id") or "").strip() == alvo:
+            return c
+    return {}
+
+
+def janela_da_remessa(entrada, de=None, ate=None):
+    """O periodo que a grade do Smart precisa receber para conter ESTA remessa.
+
+    ⛔ **A janela do job nao e a do robo, e confundi-las produz falso sucesso.** O
+    `apontar_cancelamentos` olha 45 dias para tras; o padrao do robo e `DIAS_REMESSA=7`.
+    Medido em 21/09/2026: das 21 remessas apontadas, **18 eram anteriores a 14/09** e
+    portanto ficavam fora da grade que o POST montava. O POST nao achava o id, nao
+    cancelava nada — e o `sumiu_da_grade`, que lista a MESMA janela curta, confirmava
+    que a remessa sumiu. O log diria "CANCELADA" em 18 remessas ainda paradas.
+
+    ⭐ A data vem do proprio controle do robo (`baixado_em`), que e de quando ele a
+    baixou — minutos depois de o Smart a gerar, que e a data que a grade mostra.
+    ⚠️ `de`/`ate` explicitos mandam: o operador que quer uma janela propria tem a dele.
+    """
+    if de and ate:
+        return de, ate
+    bruto = str((entrada or {}).get("baixado_em") or "").strip()
+    try:
+        dia = datetime.fromisoformat(bruto).date()
+    except (TypeError, ValueError):
+        # ⛔ Sem data no controle, NAO se inventa janela curta: a larga so deixa a grade
+        # maior, a curta esconde a remessa e vira falso sucesso.
+        hoje = datetime.now(timezone.utc).date()
+        return (de or (hoje - timedelta(days=DIAS_SEM_DATA_NO_CONTROLE)).isoformat(),
+                ate or hoje.isoformat())
+    folga = timedelta(days=FOLGA_DA_GRADE_DIAS)
+    return (de or (dia - folga).isoformat(), ate or (dia + folga).isoformat())

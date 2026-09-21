@@ -593,6 +593,15 @@ def janela(args):
     return de, ate
 
 
+def _ler_controle():
+    """O `remessas_geradas.json` do robo — traz o `tipo`, de onde sai a conta do Smart."""
+    try:
+        with open(cfg.ARQ_REMESSAS_GERADAS, encoding="utf-8") as fh:
+            return json.load(fh) or {}
+    except (OSError, ValueError):
+        return {}
+
+
 def rodada_cancelamento(ctx, args, dry):
     """Cancela no Smart as remessas que o process-automation apontou. Exit code.
 
@@ -622,19 +631,41 @@ def rodada_cancelamento(ctx, args, dry):
         log("CANCELAMENTO: nada apontado — nenhuma remessa recusada esta liberada hoje.")
         return SAIU_OK
 
-    de, ate = janela(args)
+    contas_mapa, _carteiras = carregar_contas_carteiras()
+    controle = _ler_controle()
     log(f"CANCELAMENTO {'(DRY_RUN - nao cancela nada)' if dry else '*** PRA VALER ***'}"
-        f" | {len(remessas)} remessa(s) apontada(s) | janela {de} a {ate}")
+        f" | {len(remessas)} remessa(s) apontada(s)"
+        + (f" | janela FIXA {janela(args)[0]} a {janela(args)[1]}" if (args.de or args.ate)
+           else " | janela por remessa, da data em que o robo a baixou"))
 
     feitos = incertos = falhos = 0
     for smart_id, dados in sorted(remessas.items(), key=lambda kv: int(kv[0])):
         arquivo = dados.get("arquivo", "?")
-        conta = str(dados.get("numero_cedente") or args.conta)
+        # ⛔ A conta do POST e a do SMART (287, 291, 298...), NUNCA o `numero_cedente`
+        # do CNAB (1026716) — sao duas chaves que parecem a mesma. Mandar a errada
+        # monta a grade de outra conta, o id nao aparece nela, e o cancelamento
+        # silenciosamente nao acha nada.
+        entrada = cancelar.entrada_do_controle(controle, arquivo, smart_id)
+        tipo = entrada.get("tipo") if isinstance(entrada, dict) else None
+        conta = cancelar.conta_do_smart(tipo, contas_mapa)
+        # ⛔ A JANELA e por REMESSA, da data em que o robo a baixou. O job olha 45 dias
+        # para tras e o padrao do robo e 7: em 21/09/2026, 18 das 21 remessas apontadas
+        # ficavam FORA da janela, o POST nao alcancava a grade em que o id existe, e o
+        # `sumiu_da_grade` — que lista a MESMA janela — confirmava que sumiu. Falso
+        # sucesso em 18 de 21. `--de`/`--ate` explicitos mandam, para o caso manual.
+        de, ate = cancelar.janela_da_remessa(entrada, de=args.de, ate=args.ate)
         excluir = dados.get("excluir_da_geracao") or []
-        rotulo = f"id {smart_id} ({arquivo}, conta {conta})"
+        rotulo = f"id {smart_id} ({arquivo}, conta {conta}, grade {de}..{ate})"
+        if not conta:
+            falhos += 1
+            log(f"  {rotulo}: SEM conta do Smart (tipo={tipo!r}) - pulando, nao adivinho conta")
+            continue
         if excluir:
+            docs = [e.get("documento") for e in excluir]
+            # o corte e so do LOG: mostrar 5 e escrever "6" parece contradicao, entao diz.
+            mostra = docs[:5] + (["..."] if len(docs) > 5 else [])
             log(f"  {rotulo}: ⚠️ {len(excluir)} titulo(s) NAO podem voltar a fila "
-                f"(ja tem boleto no banco) — {[e.get('documento') for e in excluir][:5]}")
+                f"(ja tem boleto no banco) — {mostra}")
 
         res = cancelar.cancelar_uma(ctx, smart_id, conta, de, ate, dry_run=dry)
         if res["ok"] is None:
