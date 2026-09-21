@@ -3,9 +3,12 @@
 Confere cada operação na etapa **"Aguardando Ass."** e, se passar em duas
 verificações, finaliza no Smart. Se não passar, **não finaliza** e avisa.
 
-> ⚠️ **Estado: EM VALIDAÇÃO.** Sobe com `R7_DRY_RUN=1` e a task do hub
-> **desabilitada**. A finalização real nunca foi executada por este servidor —
-> ver "O que NÃO foi validado".
+> ⚠️ **Estado (21/09/2026): EM DRY, agendado.** Task
+> `finalizar_operacao_aguardando_assinatura` habilitada no hub (`*/15 8-18 * * 1-5`),
+> comando sem `--executar` e `R7_DRY_RUN=1` no `.env`: confere, registra e **não
+> clica**. Primeira rodada em produção: 21/09 19:30 (login via CapSolver OK, fila
+> vazia àquela hora). A finalização real continua com **zero execuções** neste
+> servidor — ver "O que NÃO foi validado".
 
 Origem: pacote trazido de uma máquina Windows em 01/09/2026, adaptado aqui.
 
@@ -74,7 +77,16 @@ sh /app/src/processors/web/robo_finalizar/run_agendado.sh
 sh /app/src/processors/web/robo_finalizar/run_agendado.sh --executar
 ```
 
-`--executar` é **ignorado** se `R7_DRY_RUN=1`.
+`--executar` é **ignorado** se `R7_DRY_RUN=1` — e, desde 21/09/2026, a trava vale
+**dentro de `finalizar_da_grade()`**: nenhum caminho clica com `R7_DRY_RUN=1`, nem o
+`scripts/sandbox/finalizar_op_executar.py --confirmar` (teste `test_finalizar_trava_dry`).
+
+Desde 21/09/2026 o robô **sobe a própria sessão** do Smart pelo
+`src/common/clients/smart_sessao` (o mesmo do `robo_pagamento`): abre o Chrome no
+display `:92`, loga via CapSolver com a credencial do finalizador e fecha ao terminar.
+`--cdp` anexa num Chrome já aberto (desenvolvimento pelo VNC). Antes ele exigia um
+Chrome pré-aberto na porta 9228 que, no container, ninguém subia — a primeira rodada
+morreu em 4 s antes de logar.
 
 ---
 
@@ -128,11 +140,12 @@ Perde-se a evidência visual exatamente quando o login quebra.
 
 ## Pendências para produção
 
-- [ ] `config/robo_finalizar.env` (600) a partir do `.example.env`
-- [ ] Task no hub, `--timeout-seconds` explícito, **começando `--disabled`**
-- [ ] Conferir `R7_DRY_RUN` efetivo **depois** de escrever o `.env`
-- [ ] Primeira finalização **supervisionada**, uma operação de valor baixo
-- [ ] `placar.py` por alguns dias antes de sair do DRY
+- [x] `config/robo_finalizar.env` (600) a partir do `.example.env` — 07/09/2026; em 21/09 ganhou aspas nos dois valores com espaço (o `sh` os deixava vazios)
+- [x] Task no hub, `--timeout-seconds 1500`, começou `--disabled` em 21/09 09:21 e foi habilitada em DRY às 19:32
+- [x] `R7_DRY_RUN` efetivo conferido pelo container em 21/09 — `1`
+- [ ] `placar.py` por alguns dias úteis antes de sair do DRY (nunca rodou)
+- [ ] Limite de hora para clicar (`R7_HORA_LIMITE_FINALIZAR=18:30`): a remessa de pagamento sai a cada 5 min até 18:55 e exige vencimento = hoje
+- [ ] Primeira finalização **supervisionada**, uma operação de valor baixo, acompanhada até o retorno do banco
 - [ ] Corrigir o timeout de 15s → espera compatível + diagnóstico "operação em uso"
 - [ ] `notificar.py` ainda aponta para um `email_config.json` de Windows
 - [ ] Renomear `r7_config.py` → `finalizar_config.py` (convenção do guia §2)
