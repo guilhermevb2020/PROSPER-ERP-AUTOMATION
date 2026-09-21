@@ -44,6 +44,13 @@ services:
       - /home/prospere/docker/infrastructure/access-guardian/runtime/erp-automation:/run/guardian:ro
     environment:
       - DISPLAY=:99
+      # 21/09/2026: o container rodava em UTC (sem TZ; process-automation, hub e
+      # data-hub ja tinham America/Sao_Paulo) e todo datetime.now() dos robos -
+      # logs, CSVs de controle, prints - saia 3 h adiantado. Quem precisa de BRT
+      # no codigo ja converte com ZoneInfo/offset explicito (healthcheck, credito,
+      # remessa, retorno), entao ligar isto nao compensa duas vezes.
+      # ⚠️ Linhas de CSV/log anteriores a esta data continuam em UTC.
+      - TZ=America/Sao_Paulo
       # VNC_PASSWORD e entregue pelo Guardian via .env.guardian. Nao reintroduzir
       # aqui: `environment:` sobrescreve `env_file:` e o valor iria pro repo.
       #
