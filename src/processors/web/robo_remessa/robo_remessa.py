@@ -75,6 +75,7 @@ import _sessao                                    # noqa: E402
 import gerar as ger                               # noqa: E402
 import exclusoes                                  # noqa: E402
 import falhas                                     # noqa: E402
+import cancelar
 import login as autenticacao                      # noqa: E402
 import remessa_config as cfg                      # noqa: E402
 
@@ -579,6 +580,88 @@ def ciclo_conta(ctx, conta, rotulo, carteira, dry_run=True, forcar=False):
     return saida
 
 
+def janela(args):
+    """A janela (de, ate) que a tela de Download de Remessa recebe.
+
+    ⭐ Extraida do `executar()` em 21/09/2026, quando o cancelamento passou a
+    precisar da MESMA janela: a remessa so aparece na grade dentro do periodo, e
+    duas contas diferentes do mesmo intervalo produziriam ids que existem numa e
+    nao na outra.
+    """
+    ate = args.ate or datetime.now().strftime("%Y-%m-%d")
+    de = args.de or (datetime.now() - timedelta(days=args.dias)).strftime("%Y-%m-%d")
+    return de, ate
+
+
+def rodada_cancelamento(ctx, args, dry):
+    """Cancela no Smart as remessas que o process-automation apontou. Exit code.
+
+    ⛔ **A lista vem PRONTA, e este robo nao a discute.** Cancelar devolve a fila
+    TODOS os titulos da remessa; um titulo que ja tenha boleto registrado no banco
+    sairia de novo e o sacado receberia dois boletos do mesmo titulo. Quem sabe
+    disso e quem pergunta ao banco — o process-automation, em
+    `apontar_cancelamentos_remessa_400`. Varrer a tela e decidir aqui seria refazer
+    essa conta sem os dados.
+
+    ⭐ **Cada id e conferido DEPOIS do POST**, pela grade: HTTP 200 diz que o Smart
+    respondeu, nao que cancelou. A remessa cancelada some da listagem, e e isso que
+    confirma. Sem essa leitura o robo afirmaria um cancelamento que pode nao ter
+    acontecido — e a rodada seguinte nao tentaria de novo.
+
+    ⚠️ **Rodada com id incerto sai `SAIU_RODADA_INCOMPLETA`**, nao 0. E a licao do
+    BUG-681: naquele dia dois timeouts fizeram duas contas serem puladas em
+    silencio, com a task marcada como sucesso, e os titulos esperaram de sexta a
+    segunda. Aqui o hub precisa saber que alguem tem de olhar.
+    """
+    caminho = args.cancelamentos_json or cancelar.ARQUIVO_PADRAO
+    remessas, recusa = cancelar.ler_lista(caminho)
+    if recusa:
+        log(f"CANCELAMENTO: {recusa}")
+        return SAIU_OK if "nao existe" in recusa else SAIU_RODADA_INCOMPLETA
+    if not remessas:
+        log("CANCELAMENTO: nada apontado — nenhuma remessa recusada esta liberada hoje.")
+        return SAIU_OK
+
+    de, ate = janela(args)
+    log(f"CANCELAMENTO {'(DRY_RUN - nao cancela nada)' if dry else '*** PRA VALER ***'}"
+        f" | {len(remessas)} remessa(s) apontada(s) | janela {de} a {ate}")
+
+    feitos = incertos = falhos = 0
+    for smart_id, dados in sorted(remessas.items(), key=lambda kv: int(kv[0])):
+        arquivo = dados.get("arquivo", "?")
+        conta = str(dados.get("numero_cedente") or args.conta)
+        excluir = dados.get("excluir_da_geracao") or []
+        rotulo = f"id {smart_id} ({arquivo}, conta {conta})"
+        if excluir:
+            log(f"  {rotulo}: ⚠️ {len(excluir)} titulo(s) NAO podem voltar a fila "
+                f"(ja tem boleto no banco) — {[e.get('documento') for e in excluir][:5]}")
+
+        res = cancelar.cancelar_uma(ctx, smart_id, conta, de, ate, dry_run=dry)
+        if res["ok"] is None:
+            log(f"  {rotulo}: DRY_RUN — POST teria {len(res['corpo'])} bytes "
+                f"| {dados.get('titulos_que_voltam', '?')} titulo(s) voltariam")
+            continue
+        if not res["ok"]:
+            incertos += 1 if res.get("enviado") else 0
+            falhos += 0 if res.get("enviado") else 1
+            log(f"  {rotulo}: {res['motivo']}")
+            continue
+
+        sumiu, como = cancelar.sumiu_da_grade(ctx, smart_id, conta, de, ate, listar_remessas)
+        if sumiu is True:
+            feitos += 1
+            log(f"  {rotulo}: CANCELADA ({como})")
+        else:
+            incertos += 1
+            log(f"  {rotulo}: POST aceito mas {como} — CONFERIR no Smart")
+
+    log(f"RESUMO CANCELAMENTO: {feitos} cancelada(s) | {incertos} incerta(s) | {falhos} falha(s)")
+    if dry:
+        log("(DRY_RUN: nada foi cancelado. Use --pra-valer quando quiser valer.)")
+        return SAIU_OK
+    return SAIU_RODADA_INCOMPLETA if (incertos or falhos) else SAIU_OK
+
+
 def rodada_geracao(ctx, args, dry):
     """Percorre as contas alvo gerando e baixando. Retorna o exit code."""
     contas_mapa, carteiras_mapa = carregar_contas_carteiras()
@@ -750,6 +833,13 @@ def montar_parser():
                     help="segundos entre ciclos no modo --vigiar (padrao 60)")
     ap.add_argument("--forcar", action="store_true",
                     help="rebaixa mesmo se ja constar no controle")
+    # --- cancelamento de remessa recusada pelo banco ---
+    ap.add_argument("--cancelar", action="store_true",
+                    help="CANCELA no Smart as remessas que o process-automation apontou "
+                         "em cancelamentos.json. ⛔ So executa com --pra-valer.")
+    ap.add_argument("--cancelamentos-json", default=None,
+                    help="caminho da lista (padrao: o do bind compartilhado)")
+
     # --- geracao ---
     ap.add_argument("--gerar", action="store_true",
                     help="GERA a remessa (e baixa). Respeita DRY_RUN.")
@@ -820,6 +910,16 @@ def executar(ctx, args):
             print(f"    {num:>5}  {rotulo}")
         return SAIU_OK
 
+    if args.cancelar:
+        # ⛔ O cancelamento NAO herda o DRY_RUN do ambiente, e essa e a unica acao
+        # deste robo que nao herda. No container o `robo_remessa.env` poe
+        # DRY_RUN_REM=false — e com isso `--gerar` sem flag GERA DE VERDADE (medido
+        # em 08/09/2026, comentario logo abaixo). Gerar de novo e recuperavel:
+        # a remessa sai e alguem a cancela. Cancelar NAO e: os titulos voltam a
+        # fila e o sequencial daquela remessa morre. Por isso aqui a regra e
+        # invertida — so executa com --pra-valer EXPLICITO.
+        return rodada_cancelamento(ctx, args, dry=not args.pra_valer)
+
     if args.gerar:
         # --pra-valer manda; --simular forca a simulacao; sem os dois vale o
         # DRY_RUN_REM do ambiente. ATENCAO: no container o robo_remessa.env poe
@@ -858,8 +958,7 @@ def executar(ctx, args):
     conta, rotulo_conta = resolver_conta(ctx, args.conta)
     if conta is None:
         return SAIU_CONTA_NAO_RESOLVIDA
-    ate = args.ate or datetime.now().strftime("%Y-%m-%d")
-    de = args.de or (datetime.now() - timedelta(days=args.dias)).strftime("%Y-%m-%d")
+    de, ate = janela(args)
 
     def um_ciclo():
         achadas = listar_remessas(ctx, conta, de, ate)
