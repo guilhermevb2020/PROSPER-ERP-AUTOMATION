@@ -162,10 +162,11 @@ túnel ssh ao IP do container (ver `docs/COMO_SUBIR_UM_JOB.md`).
   da execução. As views `vw_controle_*` têm as colunas dos CSVs; `vw_job_execucao_ultima`
   responde "rodou?". A paridade CSV × banco é medida todo dia útil pela task
   `comparar_controle_csv_banco` (19:35; exit 3 = divergência). As leituras de idempotência
-  ainda são do CSV (Fase 2): os quatro jobs já sabem ler do banco atrás de `CONTROLE_FONTE_RETPAG`/
-  `_PAG`/`_RET`/`_REM` (padrão `csv`, inerte; a carga histórica de 45 dias das remessas foi feita em
-  22/09/2026, execução #166; nos dois retornos, `banco` = banco ∪ histórico do CSV até a Fase 4,
-  porque a memória evita baixa em duplicidade); quem mexer nos quatro jobs mantém os dois lados.
+  vêm do banco desde 22/09/2026 11h47 (Fase 2) em `_RET`, `_RETPAG` e `_REM` — linha
+  `CONTROLE_FONTE_*=banco` no `config/<job>.env`; `_PAG` segue `csv` (env de `operacional2`). Nos
+  dois retornos, `banco` = banco ∪ histórico do CSV até a Fase 4 (a memória evita baixa em
+  duplicidade); a carga histórica de 45 dias das remessas foi feita (execução #166). O CSV continua
+  sendo escrito: quem mexer nos quatro jobs mantém os dois lados.
 - **Execução manual em modo real diz quem e por quê:** `docker exec -e ERP_OPERADOR=nome
   -e ERP_MOTIVO="..." erp-automation sh .../run_agendado.sh`. Desde 22/09/2026 ~11h15 o hub
   passa `HUB_RUN_ID` (o id de lock do run, 32 hex) e `HUB_TASK_NOME` no exec: execução dele

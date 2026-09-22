@@ -34,6 +34,13 @@ cada operação com eventos; tudo imutável por dono separado e gatilho.
 
 ## 3. As fases
 
+> **Ligadas em 22/09/2026 às 11h47** (linha `CONTROLE_FONTE_*=banco` no `config/<job>.env`;
+> reverter = apagar a linha): `_RET` (`retorno_cobranca.env`, vale para retorno, BB e depósito),
+> `_RETPAG` (`retorno_pagamento.env`), `_REM` (`remessa_cobranca.env`, vale para remessa, BB e
+> cancelamento). **`_PAG` continua `csv`**: `config/remessa_pagamento.env` é de `operacional2`
+> (600) e só esse usuário (ou root) acrescenta a linha — a remessa de pagamento é a de menor
+> risco (controle informativo).
+
 | fase | o que | estado |
 |---|---|---|
 | **0** | Paridade CSV × banco automática, diária: job `comparar_controle_csv_banco` (`src/processors/db/controle/`), task no hub 19:35, exit 3 = divergência | **feita em 22/09/2026** |
