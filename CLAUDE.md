@@ -163,8 +163,8 @@ túnel ssh ao IP do container (ver `docs/COMO_SUBIR_UM_JOB.md`).
   responde "rodou?". A paridade CSV × banco é medida todo dia útil pela task
   `comparar_controle_csv_banco` (19:35; exit 3 = divergência). As leituras de idempotência
   ainda são do CSV (Fase 2): os quatro jobs já sabem ler do banco atrás de `CONTROLE_FONTE_RETPAG`/
-  `_PAG`/`_RET`/`_REM` (padrão `csv`, inerte; `_REM` só depois da carga histórica de 45 dias —
-  `carregar_remessas_historicas.py`); quem mexer nos quatro jobs de arquivo mantém os dois lados.
+  `_PAG`/`_RET`/`_REM` (padrão `csv`, inerte; a carga histórica de 45 dias das remessas foi feita em
+  22/09/2026, execução #166); quem mexer nos quatro jobs de arquivo mantém os dois lados.
 - **Execução manual em modo real diz quem e por quê:** `docker exec -e ERP_OPERADOR=nome
   -e ERP_MOTIVO="..." erp-automation sh .../run_agendado.sh`. O hub ainda não se identifica
   no exec (`HUB_RUN_ID`/`HUB_TASK_NOME` não chegam), então toda execução dele aparece como
