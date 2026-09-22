@@ -152,6 +152,8 @@ def test_execucao_abandonada_e_divergencia_e_aparece_no_relatorio():
     assert cmp.codigo_de_saida([r], abandonadas) == cmp.SAIU_DIVERGENTE
     texto = cmp.relatorio(DIA, [r], abandonadas)
     assert "EXECUCOES ABANDONADAS: 1" in texto and "#164 remessa_cobranca/gerar_remessa_cobranca_cnab_400" in texto
+    assert "encerrar_abandonada.py <id> --pra-valer" in texto  # o caminho para sair do exit 3 diario
+    assert "ABANDONADAS" not in cmp.relatorio(DIA, [r], [])
     assert cmp.codigo_de_saida([r], []) == cmp.SAIU_OK
 
 

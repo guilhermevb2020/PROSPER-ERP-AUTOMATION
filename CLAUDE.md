@@ -148,7 +148,11 @@ túnel ssh ao IP do container (ver `docs/COMO_SUBIR_UM_JOB.md`).
   (`database/erp_004`, **aplicada em produção em 21/09/2026**): abre `job_execucao`, grava
   `operacao_evento`/`arquivo*`, fecha uma vez. Em DRY o banco pode faltar (degrada e avisa);
   em modo real é **obrigatório** — sem registro o job recusa antes de abrir o navegador,
-  porque ação irreversível sem rastro é pior do que ação nenhuma.
+  porque ação irreversível sem rastro é pior do que ação nenhuma. Execução que ficou `ativa`
+  (processo morto, fechamento perdido) só se encerra por
+  `src/processors/db/controle/encerrar_abandonada.py <id> --pra-valer` com `ERP_OPERADOR`/
+  `ERP_MOTIVO` — grava `abandonada`, nunca `sucesso`; sem isso a paridade das 19:35 sai com
+  exit 3 todo dia. Nunca `UPDATE` à mão em `job_execucao`.
 - **Dupla escrita, desde 22/09/2026.** Os quatro jobs de arquivo (retorno e remessa, de
   cobrança e de pagamento) gravam o CSV de controle **e** as tabelas, no mesmo ponto do
   código. Nada foi retirado do CSV: o corte vem depois de semanas comparando as duas

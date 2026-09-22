@@ -225,6 +225,9 @@ def relatorio(dia: str, resultados: list, abandonadas: list = ()) -> str:
         out.append(f"EXECUCOES ABANDONADAS: {len(abandonadas)} (ativa alem do limite da automacao)")
         for ident, automacao, job, gatilho, quando_ in abandonadas[:20]:
             out.append(f"      #{ident} {automacao}/{job} · {gatilho} · desde {quando_}")
+        out.append("      apure o que houve e encerre com autor e motivo: docker exec -e ERP_OPERADOR=nome "
+                   "-e ERP_MOTIVO=... erp-automation python /app/src/processors/db/controle/"
+                   "encerrar_abandonada.py <id> --pra-valer (nunca UPDATE a mao)")
     return "\n".join(out)
 
 

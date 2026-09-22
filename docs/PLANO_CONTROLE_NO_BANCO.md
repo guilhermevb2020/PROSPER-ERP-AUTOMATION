@@ -83,7 +83,12 @@ cada operação com eventos; tudo imutável por dono separado e gatilho.
 (crédito 13 h, doc2you e boletos 1 h, demais 2 h — folga sobre o timeout do hub). É onde
 aparece o job que morreu sem fechar e o fechamento que falhou (o cliente deixa a linha
 `ativa` de propósito). A paridade diária lista essas linhas e trata qualquer uma como
-divergência (exit 3).
+divergência (exit 3) — **todo dia, até alguém encerrar**. O encerramento é administrativo e
+tem autor: `encerrar_abandonada.py <id> --pra-valer` com `ERP_OPERADOR`/`ERP_MOTIVO`
+(`execucao_job.encerrar_abandonada`), que grava `abandonada` (nunca `sucesso`) e deixa
+quem/por quê no `detalhe_json` da linha. Só o que a view lista se encerra; nunca `UPDATE` à
+mão. Caso concreto: #164 (remessa das 11h30 de 22/09, conexão caída no fechamento; as 9
+remessas estão no banco pela carga `--dias 1`, execução #176).
 
 ## 5. Como conferir
 

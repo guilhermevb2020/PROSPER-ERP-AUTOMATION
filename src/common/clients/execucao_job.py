@@ -31,6 +31,10 @@ Uso:
                            flag_ensaio=True)
     ej.registrar_evento_operacao(ex, 65071, "avaliada", resultado="FINALIZARIA", pendencias=[])
     ej.fechar_execucao(ex, "sucesso", codigo_saida=0, qtd_itens=1)
+
+Execucao que ficou `ativa` (processo morto, fechamento perdido) so se encerra por
+`encerrar_abandonada(ex, id, operador=..., motivo=...)` — CLI em
+src/processors/db/controle/encerrar_abandonada.py; nunca por UPDATE a mao.
 """
 from __future__ import annotations
 
@@ -768,3 +772,40 @@ def fechar_execucao(ex: Execucao, status: str, *, codigo_saida: int | None = Non
                 pass
             ex._conn = None
     return ok
+
+
+# --------------------------------------------------------------------------- #
+# encerramento administrativo (22/09/2026)
+# --------------------------------------------------------------------------- #
+#: "Esta abandonada" = a view diz que sim E nao e o ciclo diario do credito ainda dentro das
+#: 13 h — a mesma regra da erp_007, repetida aqui (como na paridade) enquanto a view antiga
+#: (2 h para tudo) estiver em producao: sem isto, o credito das 07:45 seria "encerravel" as
+#: 09:45 com o processo vivo. `id` e da linha candidata (job_execucao j).
+SQL_ELEGIVEL_ABANDONADA = (
+    "id IN (SELECT a.id FROM erp_automation.vw_job_execucao_abandonada a "
+    "        WHERE NOT (a.automacao = 'credito' AND a.iniciado_em > now() - interval '13 hours'))")
+
+
+def encerrar_abandonada(ex: Execucao, id_alvo: int, *, operador: str, motivo: str, log=print) -> int | None:
+    """Fecha como `abandonada`, com autor e motivo, a execucao id_alvo que ficou `ativa`
+    porque o processo morreu ou o fechamento se perdeu (#164, 22/09/2026: a conexao caiu
+    no fechamento; a linha fica ativa de proposito e a vw_job_execucao_abandonada a mostra
+    — e a paridade diaria sai com exit 3 todo dia ate alguem dizer o que houve).
+
+    So encerra o que a VIEW lista como abandonada (ja fechada ou ainda dentro do limite da
+    automacao: nao mexe). Nunca grava `sucesso`: esta funcao nao prova o que o processo fez;
+    o que se sabe vai no motivo. Devolve o id encerrado, ou None (nada elegivel; degradada).
+    E o unico caminho para fechar uma execucao de fora dela — nunca UPDATE a mao."""
+    operador = (operador or "").strip()
+    motivo = (motivo or "").strip()
+    if not operador or not motivo:
+        raise ValueError("encerramento administrativo exige operador e motivo (ERP_OPERADOR/ERP_MOTIVO)")
+    detalhe = {"encerramento_administrativo": {
+        "operador": operador, "motivo": motivo,
+        "por_execucao": ex.id if ex is not None else None}}
+    return _executar(
+        ex, log, f"encerramento administrativo da execucao #{id_alvo}",
+        "UPDATE erp_automation.job_execucao SET terminado_em = now(), status = 'abandonada', "
+        " detalhe_json = detalhe_json || %s "
+        "WHERE id = %s AND status = 'ativa' AND " + SQL_ELEGIVEL_ABANDONADA + " RETURNING id",
+        (_json(detalhe), int(id_alvo)), devolve=True)
