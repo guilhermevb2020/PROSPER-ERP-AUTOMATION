@@ -80,8 +80,8 @@ def log(msg):
 # --------------------------------------------------------------------------- #
 # controle (idempotencia e trilha)
 # --------------------------------------------------------------------------- #
-def ler_controle():
-    """{md5: linha} do que ja foi gravado."""
+def ler_controle_do_csv():
+    """{md5: linha} do que ja foi gravado, lido do CSV."""
     if not os.path.exists(cfg.ARQ_CONTROLE):
         return {}
     try:
@@ -90,6 +90,23 @@ def ler_controle():
     except Exception as e:                                          # noqa: BLE001
         log(f"  (aviso ao ler o controle: {e})")
         return {}
+
+
+def ler_controle(execucao=None):
+    """{md5: linha} do que ja foi gravado. Fonte por cfg.CONTROLE_FONTE (Fase 2 de
+    docs/PLANO_CONTROLE_NO_BANCO.md): `csv` le o controle; `banco` le a
+    vw_controle_pagamento com as mesmas colunas — e volta ao CSV, avisando, se o banco
+    nao responder (execucao degradada, so no ensaio)."""
+    fonte = getattr(cfg, "CONTROLE_FONTE", "csv")
+    if fonte == "banco":
+        do_banco = execucao_job.listar_controle(execucao, "pagamento", chave="md5", log=log)
+        if do_banco is not None:
+            log(f"  controle: fonte BANCO ({len(do_banco)} remessa(s) registradas)")
+            return do_banco
+        log("  controle: fonte BANCO indisponivel nesta execucao — usando o CSV de reserva")
+    elif fonte != "csv":
+        log(f"  controle: CONTROLE_FONTE={fonte!r} desconhecida — usando o CSV")
+    return ler_controle_do_csv()
 
 
 def gravar_controle(registro):
@@ -161,7 +178,7 @@ def rodada(ctx, args, dry, execucao=None):
         f"gerou={r['gerou']} | arquivo={r['arquivo'] or '-'} | {r['motivo']}")
 
     if r["gerou"] and r["md5"]:
-        controle = ler_controle()
+        controle = ler_controle(execucao)
         if r["md5"] in controle:
             log(f"  (md5 ja no controle — mesmo conteudo de "
                 f"{controle[r['md5']]['arquivo']} em {controle[r['md5']]['quando']})")

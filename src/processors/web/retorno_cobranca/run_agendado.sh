@@ -107,6 +107,24 @@ for _a in "$@"; do
     case "$_a" in --pasta|--pasta=*) TEM_PASTA=1 ;; esac
 done
 
+# BEGIN DESCOBERTA_RET
+# Fase 2 (docs/PLANO_CONTROLE_NO_BANCO.md): com CONTROLE_FONTE_RET=banco a memoria "ja
+# processei" vem de erp_automation.arquivo (md5 dos retornos registrados), lida UMA vez
+# para uma lista; se o banco nao responder, volta ao CSV e diz. `csv` (padrao) e o grep
+# de sempre. O md5 e o de MODO TEXTO nos dois lados (o job grava o mesmo valor no banco).
+CONTROLE_FONTE_RET="${CONTROLE_FONTE_RET:-${CONTROLE_FONTE:-csv}}"
+MEMORIA_RET="$CONTROLE_RET"
+LISTA_MD5_RET="/tmp/robo_retorno_md5_banco.$$"
+if [ "$CONTROLE_FONTE_RET" = "banco" ]; then
+    export PYTHONPATH=/app
+    if python /app/src/processors/db/controle/listar_md5.py retorno_cobranca_cnab_400 retorno_bb \
+            > "$LISTA_MD5_RET" 2>/dev/null; then
+        MEMORIA_RET="$LISTA_MD5_RET"
+        echo "controle: fonte BANCO ($(wc -l < "$LISTA_MD5_RET" | tr -d ' ') md5 registrados)"
+    else
+        echo "controle: fonte BANCO indisponivel — usando o CSV de reserva $CONTROLE_RET"
+    fi
+fi
 PASTAS_RET="/tmp/robo_retorno_pastas.$$"
 : > "$PASTAS_RET"
 if [ "$TEM_PASTA" -eq 0 ]; then
@@ -119,9 +137,11 @@ if [ "$TEM_PASTA" -eq 0 ]; then
     } | while IFS= read -r _f; do
         [ -n "$_f" ] || continue
         _h=$(tr -d '\r' < "$_f" | md5sum | cut -d' ' -f1)
-        grep -qa "$_h" "$CONTROLE_RET" 2>/dev/null || dirname "$_f"
+        grep -qa "$_h" "$MEMORIA_RET" 2>/dev/null || dirname "$_f"
     done | sort -u > "$PASTAS_RET"
 fi
+rm -f "$LISTA_MD5_RET"
+# END DESCOBERTA_RET
 
 # 8) roda o robo — uma vez por pasta com novidade — e sai. `tee` grava um log AO
 #    VIVO alem do stdout capturado pelo hub.

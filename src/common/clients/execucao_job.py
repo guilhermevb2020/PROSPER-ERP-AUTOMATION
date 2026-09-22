@@ -155,8 +155,8 @@ def _ambiente_padrao() -> str:
 
 
 def _gatilho_padrao() -> str:
-    # O hub injeta HUB_RUN_ID/HUB_TASK_NOME no docker exec desde 22/09/2026 11:05
-    # (hub 7bc6af1), entao execucao dele cai em "cron" sozinha. Sem as duas, foi gente.
+    # O hub ainda nao injeta identificacao no docker exec; quando passar HUB_RUN_ID
+    # (ou HUB_TASK_NOME), o gatilho vira cron sozinho.
     return "cron" if (os.environ.get("HUB_RUN_ID") or os.environ.get("HUB_TASK_NOME")) else "manual"
 
 
@@ -311,10 +311,10 @@ def abrir_execucao(automacao: str, job: str, *, flag_ensaio: bool, gatilho: str 
 
     ex = Execucao(id=None, automacao=automacao, job=job, flag_ensaio=flag_ensaio, estrito=obrigatoria)
     _ATUAL = ex
-    # Sem aviso quando faltam operador/motivo. O motivo original caducou em 22/09/2026
-    # 11:05: o hub passou a injetar HUB_RUN_ID/HUB_TASK_NOME e a execucao dele ja cai em
-    # "cron", entao o aviso nao viraria mais ruido em cada job. Avisar quando
-    # gatilho == "manual" e falta ERP_OPERADOR ficou como melhoria desta frente, NAO feita.
+    # Sem aviso quando faltam operador/motivo: o hub (22/09/2026) ainda nao injeta
+    # HUB_RUN_ID/HUB_TASK_NOME no docker exec, entao TODA execucao dele chega como
+    # "manual" e o aviso viraria ruido em cada job. Quando o hub passar a identificar-se,
+    # o gatilho vira cron sozinho e o aviso para execucao manual sem autor passa a valer.
     campos = {"automacao": automacao, "job": job, "task_nome": task_nome, "run_id": run_id,
               "gatilho": gatilho, "ambiente": ambiente, "flag_ensaio": flag_ensaio,
               "apelido_credencial": apelido, "versao_codigo": versao_codigo,
@@ -585,6 +585,61 @@ def listar_md5(ex: Execucao, tipo_arquivo: str, log=print) -> set | None:
     if linhas is None:
         return None
     return {str(l[0]).lower() for l in linhas if l and l[0]}
+
+
+#: As views de controle da erp_005: as colunas do CSV de cada familia, lidas do banco.
+#: (nome da view, colunas na ordem em que o CSV as tem — o que o job espera encontrar.)
+VIEWS_CONTROLE = {
+    "retorno": ("vw_controle_retorno",
+                ("arquivo", "nome_smart", "hash", "conta", "titulos", "processado", "motivo", "quando")),
+    "remessa": ("vw_controle_remessa",
+                ("id", "arquivo", "tipo", "conta", "bytes", "md5", "titulos", "baixado_em", "ultimo_evento")),
+    "pagamento": ("vw_controle_pagamento",
+                  ("arquivo", "bytes", "md5", "titulos", "ids", "pix", "quando")),
+    "retorno_pagamento": ("vw_controle_retorno_pagamento",
+                          ("arquivo", "hash", "status_http", "quando")),
+}
+_TZ_CASA = "America/Sao_Paulo"
+
+
+def _texto_como_no_csv(valor) -> str:
+    """O CSV so tem texto: bool vira True/False, data vira 'AAAA-MM-DD HH:MM:SS' local."""
+    if valor is None:
+        return ""
+    if isinstance(valor, bool):
+        return "True" if valor else "False"
+    if isinstance(valor, datetime):
+        if valor.tzinfo is not None:
+            from zoneinfo import ZoneInfo
+            valor = valor.astimezone(ZoneInfo(_TZ_CASA))
+        return valor.strftime("%Y-%m-%d %H:%M:%S")
+    return str(valor)
+
+
+def listar_controle(ex: Execucao, familia: str, *, chave: str, log=print) -> dict | None:
+    """O controle de uma familia lido do banco, no formato em que o job le o CSV:
+    {chave: {coluna: texto}}. Fase 2 de docs/PLANO_CONTROLE_NO_BANCO.md — e o que permite
+    trocar `ler_controle()` de fonte sem tocar em quem consome. None sem banco ou se a
+    consulta falhar (fato consumado): quem chama volta ao CSV e avisa."""
+    if ex is None:
+        return None
+    if familia not in VIEWS_CONTROLE:
+        raise ValueError(f"familia desconhecida: {familia!r} (aceitas: {tuple(VIEWS_CONTROLE)})")
+    view, colunas = VIEWS_CONTROLE[familia]
+    if chave not in colunas:
+        raise ValueError(f"chave {chave!r} nao e coluna de {view}")
+    linhas = _fato_consumado(ex, log, f"controle {familia}", lambda: _consultar(
+        ex, log, f"controle {familia}",
+        f"SELECT {', '.join(colunas)} FROM erp_automation.{view}", ()))
+    if linhas is None:
+        return None
+    controle = {}
+    for linha in linhas:
+        registro = {c: _texto_como_no_csv(v) for c, v in zip(colunas, linha)}
+        k = registro.get(chave, "")
+        if k:
+            controle[k.lower() if chave in ("md5", "hash") else k] = registro
+    return controle
 
 
 def anotar(ex: Execucao, chave: str, valor) -> None:

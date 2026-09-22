@@ -170,3 +170,27 @@ def test_listar_md5_devolve_a_memoria_de_idempotencia(execucao):
                                        detalhe={"md5": md5})
     lidos = execucao_job.listar_md5(execucao, "retorno_pagamento_cnab_240")
     assert hashes <= lidos, "os md5 recem-registrados estao na memoria lida do banco"
+
+
+def test_listar_controle_devolve_as_colunas_do_csv(execucao):
+    """Fase 2, passos 2 e 3: os jobs leem o controle da view, no formato do CSV."""
+    dados = _unico(b"c")
+    md5 = hashlib.md5(dados).hexdigest()
+    arq = execucao_job.registrar_arquivo(
+        execucao, "remessa_pagamento_cnab_240", "gerado", nome_arquivo="CP2209000777.REM",
+        conteudo=dados, qtd_registros=2, conta_id="404", detalhe={"md5": md5, "qtd_pix": 1},
+        titulos=[{"numero_linha": 1, "id_titulo": "1001"}, {"numero_linha": 2, "id_titulo": "1002"}])
+    execucao_job.registrar_evento_arquivo(execucao, arq, "gerado")
+    pag = execucao_job.listar_controle(execucao, "pagamento", chave="md5")
+    assert pag[md5]["arquivo"] == "CP2209000777.REM" and pag[md5]["ids"] == "1001,1002"
+    assert pag[md5]["pix"] == "1" and pag[md5]["titulos"] == "2"
+    assert len(pag[md5]["quando"]) == 19, "data como no CSV: AAAA-MM-DD HH:MM:SS"
+
+    dados = _unico(b"d")
+    md5 = hashlib.md5(dados).hexdigest()
+    arq = execucao_job.registrar_arquivo(
+        execucao, "retorno_cobranca_cnab_400", "recebido", nome_arquivo="CP2209000778.RET",
+        conteudo=dados, qtd_registros=1, conta_id="291", detalhe={"md5": md5, "nome_smart": "CP2209000778.RET"})
+    execucao_job.registrar_evento_arquivo(execucao, arq, "processado", resultado="OK")
+    ret = execucao_job.listar_controle(execucao, "retorno", chave="hash")
+    assert ret[md5]["processado"] == "True" and ret[md5]["nome_smart"] == "CP2209000778.RET"

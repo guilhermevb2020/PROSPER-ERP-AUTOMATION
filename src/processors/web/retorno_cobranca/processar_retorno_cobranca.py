@@ -136,13 +136,35 @@ def _gravar_criticas(caminho, res):
             w.writerow({"arquivo": res["arquivo"], "conta": res.get("conta"), **c})
 
 
-def historico_controle():
+def historico_controle(execucao=None):
     """Le o controle -> (hashes ja processados, nome_smart -> {hashes vistos}).
 
     Serve a regra do negocio: arquivo com o MESMO NOME e conteudo DIFERENTE tem
     que ser processado como NOVO. Como o Smart so compara nome, quem sabe
     diferenciar e o hash guardado aqui.
+
+    Fonte por cfg.CONTROLE_FONTE (Fase 2 de docs/PLANO_CONTROLE_NO_BANCO.md): `banco` le a
+    vw_controle_retorno (uma linha por arquivo, `processado` = ultimo evento) e volta ao
+    CSV, avisando, se o banco nao responder; `csv` (padrao) le o controle como sempre.
     """
+    fonte = getattr(cfg, "CONTROLE_FONTE", "csv")
+    if fonte == "banco":
+        do_banco = execucao_job.listar_controle(execucao, "retorno", chave="hash", log=log)
+        if do_banco is not None:
+            hashes = {h for h, r in do_banco.items() if r.get("processado") == "True"}
+            por_nome = {}
+            for h, r in do_banco.items():
+                por_nome.setdefault(r.get("nome_smart") or "", set()).add(h)
+            log(f"  controle: fonte BANCO ({len(do_banco)} arquivo(s) registrados, "
+                f"{len(hashes)} processados)")
+            return hashes, por_nome
+        log("  controle: fonte BANCO indisponivel nesta execucao — usando o CSV de reserva")
+    elif fonte != "csv":
+        log(f"  controle: CONTROLE_FONTE={fonte!r} desconhecida — usando o CSV")
+    return historico_controle_do_csv()
+
+
+def historico_controle_do_csv():
     hashes, por_nome = set(), {}
     if not os.path.exists(cfg.ARQ_CONTROLE):
         return hashes, por_nome
@@ -336,7 +358,7 @@ def rodada(ctx, args, dry, execucao=None):
         f"  |  {len(alvos)} arquivo(s)")
     log("=" * 66)
 
-    hashes_feitos, hashes_por_nome = historico_controle()
+    hashes_feitos, hashes_por_nome = historico_controle(execucao)
     resultados, abortou = [], False
 
     for i, nome in enumerate(alvos, 1):

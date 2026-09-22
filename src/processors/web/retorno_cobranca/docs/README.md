@@ -180,3 +180,5 @@ auto-login CapSolver no display `:95` funcionou de primeira.
   segue.
 
 **Desempenho medido:** ~4s por arquivo em DRY_RUN; 71 arquivos em ~5 min.
+
+**Fonte do "já processei" (Fase 2 de `docs/PLANO_CONTROLE_NO_BANCO.md`):** `CONTROLE_FONTE_RET` = `csv` (padrão) ou `banco`: o Python lê `erp_automation.vw_controle_retorno` (uma linha por arquivo, `processado` = último evento) e o wrapper lê a lista de md5 do banco (`src/processors/db/controle/listar_md5.py`) em vez do `grep` no CSV; sem banco, os dois voltam ao CSV avisando. O CSV é escrito nos dois modos até o corte. Vale para `run_agendado.sh`, `run_bb.sh` e `run_deposito.sh` (os três chamam o mesmo Python).

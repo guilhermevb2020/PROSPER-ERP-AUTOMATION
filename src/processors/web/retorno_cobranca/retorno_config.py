@@ -108,6 +108,11 @@ MOVER_PROCESSADOS = _b("MOVER_PROCESSADOS_RET", "True")
 # TEM que ser processado como novo (o Smart so compara nome e diria "ja
 # processado"). Fica em data/, que sobrevive a recriacao do container.
 ARQ_CONTROLE = _s("ARQ_CONTROLE_RET", "/app/data/robo_retorno/controle_processados.csv")
+# Fase 2 de docs/PLANO_CONTROLE_NO_BANCO.md: de onde vem o "ja processei". `csv`
+# (padrao) le o controle acima; `banco` le erp_automation.vw_controle_retorno (e o wrapper
+# le a lista de md5 do banco na descoberta) e, sem banco, volta ao CSV avisando. O CSV e
+# escrito nos dois modos ate o corte (Fase 4).
+CONTROLE_FONTE = _s("CONTROLE_FONTE_RET", _s("CONTROLE_FONTE", "csv")).strip().lower()
 DEBUG_DIR = _s("DEBUG_DIR_RET", "/app/data/robo_retorno/debug")
 PAUSA_ENTRE_ARQUIVOS = float(_s("PAUSA_ENTRE_ARQUIVOS_RET", "1.0"))
 

@@ -195,6 +195,10 @@ PASTA_SAIDA = _s("PASTA_SAIDA_PAG", "/app/temp/remessas de pagamento")
 # Controle de idempotencia. Fica em data/, que sobrevive a recriacao do
 # container (temp/ tambem sobrevive, mas e pasta de trabalho: some sem aviso).
 ARQ_CONTROLE = _s("ARQ_CONTROLE_PAG", "/app/data/robo_pagamento/controle_pagamentos.csv")
+# Fase 2 de docs/PLANO_CONTROLE_NO_BANCO.md: de onde vem o "ja gerei este arquivo".
+# `csv` (padrao) le o controle acima; `banco` le erp_automation.vw_controle_pagamento e,
+# sem banco, volta ao CSV avisando. O CSV e escrito nos dois modos ate o corte (Fase 4).
+CONTROLE_FONTE = _s("CONTROLE_FONTE_PAG", _s("CONTROLE_FONTE", "csv")).strip().lower()
 DEBUG_DIR = _s("DEBUG_DIR_PAG", "/app/data/robo_pagamento/debug")
 
 

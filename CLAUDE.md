@@ -162,14 +162,13 @@ túnel ssh ao IP do container (ver `docs/COMO_SUBIR_UM_JOB.md`).
   da execução. As views `vw_controle_*` têm as colunas dos CSVs; `vw_job_execucao_ultima`
   responde "rodou?". A paridade CSV × banco é medida todo dia útil pela task
   `comparar_controle_csv_banco` (19:35; exit 3 = divergência). As leituras de idempotência
-  ainda são do CSV (Fase 2) — exceto o retorno de pagamento, que já sabe ler do banco atrás
-  de `CONTROLE_FONTE_RETPAG` (padrão `csv`): quem mexer nos quatro jobs de arquivo mantém os dois lados.
+  ainda são do CSV (Fase 2): retorno de pagamento, remessa de pagamento e retorno de cobrança já
+  sabem ler do banco atrás de `CONTROLE_FONTE_RETPAG`/`_PAG`/`_RET` (padrão `csv`, inerte); quem mexer
+  nos quatro jobs de arquivo mantém os dois lados.
 - **Execução manual em modo real diz quem e por quê:** `docker exec -e ERP_OPERADOR=nome
-  -e ERP_MOTIVO="..." erp-automation sh .../run_agendado.sh`. Desde 22/09/2026 11:05
-  (hub `7bc6af1`) **o hub se identifica no exec**: `HUB_RUN_ID`/`HUB_TASK_NOME` chegam, a
-  execução dele entra como `gatilho cron` e o `run_id` aponta para
-  `hub_orchestration.task_execucao`. Então `gatilho manual` sem `ERP_OPERADOR` agora quer
-  dizer pessoa que não se declarou — não mais o hub.
+  -e ERP_MOTIVO="..." erp-automation sh .../run_agendado.sh`. O hub ainda não se identifica
+  no exec (`HUB_RUN_ID`/`HUB_TASK_NOME` não chegam), então toda execução dele aparece como
+  `gatilho manual` — pendência da frente do hub, não deste repositório.
 - **O nome do job na execução tem de casar com a task do hub.** `run_bb.sh` é
   `gerar_remessa_bb`/`processar_retorno_bb`, `run_deposito.sh` é `baixar_deposito_no_erp`.
   Errar isso faz a execução apontar para o job errado, e ninguém percebe até procurar. Tabela de evento nunca muda: corrigir é outro evento.

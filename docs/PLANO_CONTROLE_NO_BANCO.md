@@ -38,7 +38,7 @@ cada operação com eventos; tudo imutável por dono separado e gatilho.
 |---|---|---|
 | **0** | Paridade CSV × banco automática, diária: job `comparar_controle_csv_banco` (`src/processors/db/controle/`), task no hub 19:35, exit 3 = divergência | **feita em 22/09/2026** |
 | **1** | `erp_005`: `md5`/`id_no_smart` como colunas geradas e indexadas; eventos `intencao_envio`, `descartado`, `cancelado`, `movido`; eventos do crédito; `operador`/`motivo` na execução manual (`ERP_OPERADOR`, `ERP_MOTIVO`); automação `controle`; views com as colunas dos CSVs (`vw_controle_retorno`, `vw_controle_remessa`, `vw_controle_pagamento`, `vw_controle_retorno_pagamento`), `vw_arquivo_dia`, `vw_job_execucao_ultima`. Cliente: `atual()`, `anotar()`, `buscar_arquivo()`, evento de arquivo estrito, evento de operação como fato. Jobs: remessa registra descarte, perdida e cancelamento; BB registra a intenção; crédito registra documentos e etapa | **feita em 22/09/2026** (código); migration em produção: ver `database/README.md` |
-| **2** | As **leituras** de idempotência migram para o banco, um job por vez, atrás de `CONTROLE_FONTE=csv|banco` (CSV de reserva): retorno de pagamento → remessa de pagamento → retorno de cobrança (o wrapper consulta o banco em vez do grep) → remessa e cancelamento. A intenção do BB vira estrita (sem registro, sem POST) e o recibo em disco deixa de ser a prova. Decidir o ensaio sem banco (banco obrigatório sempre, ou ensaio sem memória) | **em andamento**: retorno de pagamento já lê do banco atrás de `CONTROLE_FONTE_RETPAG` (padrão `csv`; publicado inerte em 22/09/2026 — ligar é pôr `CONTROLE_FONTE_RETPAG=banco` em `config/retorno_pagamento.env` depois de ≥ 1 semana de paridade). Os demais, depois de 2–3 semanas |
+| **2** | As **leituras** de idempotência migram para o banco, um job por vez, atrás de `CONTROLE_FONTE=csv|banco` (CSV de reserva): retorno de pagamento → remessa de pagamento → retorno de cobrança (o wrapper consulta o banco em vez do grep) → remessa e cancelamento. A intenção do BB vira estrita (sem registro, sem POST) e o recibo em disco deixa de ser a prova. Decidir o ensaio sem banco (banco obrigatório sempre, ou ensaio sem memória) | **em andamento**, tudo publicado inerte em 22/09/2026 (padrão `csv`): retorno de pagamento (`CONTROLE_FONTE_RETPAG`), remessa de pagamento (`CONTROLE_FONTE_PAG`), retorno de cobrança e BB (`CONTROLE_FONTE_RET`, no Python e na descoberta do wrapper, que lê a lista de md5 do banco por `src/processors/db/controle/listar_md5.py`). Ligar = pôr a chave em `banco` no `config/<job>.env` depois de ≥ 1 semana de paridade. Falta: remessa de cobrança e cancelamento (id/tipo/data pela `vw_controle_remessa`; exige carregar no banco as remessas dos últimos 45 dias, que só o CSV e o disco têm) e a intenção do BB estrita |
 | **3** | Contratos entre projetos (`cancelamentos.json`, `exclusoes.json`) viram tabelas em `financeiro.*`; process-automation escreve, ERP lê | a fazer, com o process-automation |
 | **4** | Parar de escrever os CSVs; arquivos congelados como histórico | a fazer, ao fim da Fase 2 |
 
@@ -46,12 +46,12 @@ cada operação com eventos; tudo imutável por dono separado e gatilho.
 
 - Execução **manual em modo real** informa quem e por quê: `ERP_OPERADOR=nome ERP_MOTIVO="..."`
   no ambiente (`docker exec -e ...`). Sem isso o job roda; a auditoria fica sem autor.
-- ✅ **O hub se identifica** desde 22/09/2026 11:05 (hub `7bc6af1`): o `docker exec` passa
-  `HUB_RUN_ID` — que é o `task_execucao.run_id`, o **mesmo em todas as tentativas do run**,
-  e é por isso que a `erp_006` teve de vir antes — e `HUB_TASK_NOME`. A execução dele entra
-  como `gatilho cron` e a ligação `job_execucao` ↔ `hub_orchestration.task_execucao` fecha
-  pelo `run_id`. Medido no mesmo dia, mesma task: às 09:53 o retorno de pagamento registrava
-  `gatilho manual`; às 11:08:18, `gatilho cron`.
+- ⚠️ **O hub ainda não se identifica** (medido em 22/09/2026): o `docker exec` do
+  hub-orchestration não passa `HUB_RUN_ID`/`HUB_TASK_NOME`, então toda execução dele é
+  registrada como `gatilho manual` e `run_id` fica nulo — a ligação `job_execucao` ↔
+  `hub_orchestration.task_execucao` não fecha. Pendência para a frente do hub: passar
+  `-e HUB_RUN_ID=<id> -e HUB_TASK_NOME=<task>` no exec; o cliente já lê os dois e o gatilho
+  vira `cron` sozinho. Até lá, quem quiser saber se foi o hub olha o horário contra o cron.
 - O que aconteceu com um arquivo é **evento**, não coluna do arquivo: o processamento
   grava ocorrências, críticas e divergências no `detalhe_json` do evento `processado`/`retido`.
 - Fato sem tabela própria (remessa que não baixou, cancelamento de remessa anterior ao
