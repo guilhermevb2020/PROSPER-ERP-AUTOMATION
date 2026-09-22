@@ -46,14 +46,27 @@ psql_q() { psql -v ON_ERROR_STOP=1 -qtAX -c "$1"; }
 
 # Bootstrap do ledger. Idempotente; erp_001 repete o CREATE SCHEMA por ser o passo
 # que o documenta.
+# Guardado por existencia, nao por IF NOT EXISTS: o Postgres checa o privilegio de CREATE
+# no banco/schema ANTES de ver que o objeto ja existe, e a sessao do Guardian nao tem
+# (nem precisa de) CREATE no banco. Medido na bancada em 21/09/2026.
 psql_q "
-CREATE SCHEMA IF NOT EXISTS erp_automation AUTHORIZATION app_erp_automation;
-CREATE TABLE IF NOT EXISTS erp_automation.migration_aplicada (
-    arquivo     TEXT PRIMARY KEY,
-    sha256      TEXT        NOT NULL,
-    aplicada_em TIMESTAMPTZ NOT NULL DEFAULT now(),
-    aplicada_por TEXT       NOT NULL DEFAULT current_user
-);" >/dev/null
+DO \$\$
+BEGIN
+    IF to_regnamespace('erp_automation') IS NULL THEN
+        CREATE SCHEMA erp_automation AUTHORIZATION app_erp_automation;
+    END IF;
+    IF to_regclass('erp_automation.migration_aplicada') IS NULL THEN
+        CREATE TABLE erp_automation.migration_aplicada (
+            arquivo      TEXT PRIMARY KEY,
+            sha256       TEXT        NOT NULL,
+            aplicada_em  TIMESTAMPTZ NOT NULL DEFAULT now(),
+            aplicada_por TEXT        NOT NULL DEFAULT current_user
+        );
+        -- o ledger e do projeto, nunca da sessao que o criou: uma tmp_ do Guardian que o
+        -- deixasse de posse dela o perderia no revogar (DROP OWNED). Medido na bancada.
+        ALTER TABLE erp_automation.migration_aplicada OWNER TO app_erp_automation;
+    END IF;
+END \$\$;" >/dev/null
 
 pendentes=0
 for caminho in "$DIR_MIGRATIONS"/erp_*.sql; do

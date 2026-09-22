@@ -52,9 +52,15 @@ O controle dos jobs sai do CSV e entra no banco, com o vocabulário do Learn:
 `vw_job_execucao_ativa`, `vw_job_execucao_abandonada`, `vw_operacao_finalizacao_aberta`,
 `vw_operacao_ciclo` e `vw_operacao_placar` (esta só onde `trs.operacao_desagio` existe).
 
-- **Dono:** `app_erp_automation_evento`, sem login. O schema `erp_automation` passa a ser
-  dela: dono de schema derruba qualquer tabela dele (medido na bancada), e o runtime não
-  pode ser dono do próprio histórico. `app_erp_automation` fica com `USAGE` + `CREATE`.
+- **Dono das tabelas:** `app_erp_automation_evento`, sem login — o runtime não é dono do
+  próprio histórico: não altera estrutura nem desliga gatilho. **Limite conhecido:** o
+  schema continua da `app_erp_automation` (erp_001), e dono de schema pode dar `DROP TABLE`
+  explícito; mudar o dono do schema exige `CREATE` no banco, que a sessão do Guardian não
+  tem — só superusuário: `ALTER SCHEMA erp_automation OWNER TO app_erp_automation_evento;`.
+- **Quem aplica:** sob o Guardian, DDL num schema de projeto exige sessão que herde
+  `access_admin` (para criar a role) **e** `app_erp_automation` (dona do schema). Nada fica
+  de posse da sessão: os objetos nascem da role dona (`SET ROLE`), porque o revogar da
+  `tmp_` faz `DROP OWNED`. A bancada ensaia exatamente essa sessão (`tmp_teste`).
 - **Imutável por gatilho:** `UPDATE`, `DELETE` e `TRUNCATE` são recusados nas tabelas de
   evento até para o superusuário; corrigir é gravar outro evento. A execução fecha uma
   vez, só nas colunas de fechamento.
@@ -66,10 +72,23 @@ O controle dos jobs sai do CSV e entra no banco, com o vocabulário do Learn:
 
 ### Aplicar em produção
 
-Exige o Guardian no modelo de administração (a senha fica no `.pgpass`, nunca na tela):
+Exige um modelo do Guardian que herde a camada 1 **e** a dona do schema — o
+`administracao` sozinho não faz DDL em schema de projeto. Uma vez no `roles.yaml`
+(curadoria da Gerência):
+
+```yaml
+  erp-automation-ddl:
+    herda: [access_admin, app_erp_automation]
+    conexoes: 2
+    horas_max: 2
+    permanente: false
+    nota: aplicar database/erp_*.sql; DDL em schema de projeto exige ser dona do schema
+```
+
+A senha fica no `.pgpass`, nunca na tela:
 
 ```bash
-bin/guardian conceder-banco NOME --modelo administracao --horas 1 --para /caminho/NOME.pgpass
+bin/guardian conceder-banco NOME --modelo erp-automation-ddl --horas 1 --para /caminho/NOME.pgpass
 DB_ADMIN_HOST=127.0.0.1 DB_ADMIN_USER=tmp_NOME \
   DB_ADMIN_PASSWORD="$(cut -d: -f5 /caminho/NOME.pgpass)" ./database/aplicar.sh --dry-run
 DB_ADMIN_HOST=127.0.0.1 DB_ADMIN_USER=tmp_NOME \

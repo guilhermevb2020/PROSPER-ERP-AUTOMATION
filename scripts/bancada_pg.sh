@@ -35,11 +35,13 @@ subir() {
     fi
     mkdir -p "$(dirname "$ENV_ARQ")"
     local admin_pw app_pw
-    admin_pw="$(gerar_senha)"; app_pw="$(gerar_senha)"
+    local tmp_pw
+    admin_pw="$(gerar_senha)"; app_pw="$(gerar_senha)"; tmp_pw="$(gerar_senha)"
     umask 077
     cat > "$ENV_ARQ" <<EOF
 BANCADA_ADMIN_DSN=postgresql://postgres:${admin_pw}@127.0.0.1:${PORTA}/prosperedb
 ERP_BANCADA_DSN=postgresql://app_erp_automation:${app_pw}@127.0.0.1:${PORTA}/prosperedb
+BANCADA_TMP_DSN=postgresql://tmp_teste:${tmp_pw}@127.0.0.1:${PORTA}/prosperedb
 EOF
     docker run -d --name "$NOME" -p "127.0.0.1:${PORTA}:5432" \
         -e POSTGRES_PASSWORD="$admin_pw" -e POSTGRES_DB=prosperedb \
@@ -66,6 +68,12 @@ CREATE ROLE app_crm NOLOGIN;
 CREATE ROLE app_metas NOLOGIN;
 CREATE ROLE app_scatambulo NOLOGIN;
 CREATE SCHEMA erp_automation AUTHORIZATION app_erp_automation;
+-- A camada 1 do Guardian, igual ao access-guardian/db/009: CREATEROLE + os 4 pg_*.
+CREATE ROLE access_admin NOLOGIN NOSUPERUSER NOBYPASSRLS NOREPLICATION CREATEROLE NOCREATEDB CONNECTION LIMIT 0;
+GRANT pg_read_all_data, pg_write_all_data, pg_maintain, pg_signal_backend TO access_admin;
+-- A sessao que aplica migrations: como a tmp_ de um modelo `herda: [access_admin, app_erp_automation]`.
+CREATE ROLE tmp_teste LOGIN PASSWORD '${tmp_pw}';
+GRANT access_admin, app_erp_automation, pg_monitor TO tmp_teste;
 EOF
     echo "bancada no ar: $NOME em 127.0.0.1:${PORTA}"
     echo "aplicando database/erp_*.sql pelo aplicar.sh..."
@@ -73,8 +81,13 @@ EOF
     # existem, e a 001 aborta por desenho ("nao existe e o destino tambem nao").
     # So a 004 em diante e aplicavel do zero; registra as tres no ledger como
     # "nao aplicaveis na bancada" para o aplicar.sh nao tentar.
+    # Por padrao aplica como a tmp_ do Guardian (o caminho de producao); BANCADA_APLICAR_COMO=postgres
+    # ensaia o caminho de superusuario.
+    local quem="${BANCADA_APLICAR_COMO:-tmp_teste}" senha
+    if [[ "$quem" == "postgres" ]]; then senha="$admin_pw"; else senha="$tmp_pw"; fi
+    echo "aplicando como: $quem"
     DB_ADMIN_HOST=127.0.0.1 DB_PORT="$PORTA" DB_NAME=prosperedb \
-    DB_ADMIN_USER=postgres DB_ADMIN_PASSWORD="$admin_pw" \
+    DB_ADMIN_USER="$quem" DB_ADMIN_PASSWORD="$senha" \
     BANCADA_PULAR="erp_001_schema_erp_automation.sql erp_002_revogar_heranca_dev_user.sql erp_003_limpar_acl_herdada_da_mudanca.sql" \
         "$RAIZ/database/aplicar.sh"
     echo

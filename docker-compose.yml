@@ -7,6 +7,10 @@ services:
       dockerfile: Dockerfile
     container_name: erp-automation
     restart: unless-stopped
+    # 21/09/2026: o PID 1 era o boot_vnc.sh -> tail, que nao recolhe orfaos; cada Chrome
+    # que fecha deixava zumbis (3.290 medidos em 18/09, ~100/h). init: true poe o tini
+    # como PID 1 e resolve na raiz. Vale a partir da recriacao.
+    init: true
     env_file:
       # .env.guardian: gerado pelo access-guardian (infrastructure/access-guardian),
       # 47 chaves, so o que este codigo le. Substituiu o shared.env em 04/09/2026.

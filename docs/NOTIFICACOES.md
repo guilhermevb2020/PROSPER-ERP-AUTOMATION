@@ -102,7 +102,7 @@ src/processors/web/titulos_abertos_e_marcados_recompras.py
 SMTP_SERVER=smtp.mailersend.net
 SMTP_PORT=2525
 SMTP_USER=MS_D9Skx2@prosperfidc.online
-SMTP_PASSWORD=__REMOVIDO_GUARDIAN__
+SMTP_PASSWORD=
 EMAIL_FROM=prosperito@prosperfidc.online
 EMAIL_RECIPIENT=guilherme@prosperinvest.com.br
 
@@ -130,7 +130,7 @@ A porta **6092** já está aberta no Security Group AWS (range 6080-6095).
    - Botão "▶️ Continuar Automação"
 5. **Usuário clica em "Acessar VNC":**
    - Abre http://3.148.126.73:6080/vnc.html
-   - Senha: `vetor2025`
+   - Senha: `<senha-do-VNC: entregue pelo Guardian, nunca no repositorio>`
    - Resolve CAPTCHA manualmente
 6. **Usuário clica em "Continuar Automação":**
    - Abre http://3.148.126.73:6092/resume
@@ -270,7 +270,7 @@ curl http://localhost:6092/health
 1. **Receba o email** no app de email
 2. **Clique em "Acessar VNC"**
    - Abre o navegador
-   - Digite senha: `vetor2025`
+   - Digite senha: `<senha-do-VNC: entregue pelo Guardian, nunca no repositorio>`
    - Veja o Chrome rodando
 3. **Resolva o problema** (touch funciona!)
 4. **Volte ao email**
@@ -284,7 +284,7 @@ curl http://localhost:6092/health
 ### **Recomendações**
 
 1. ✅ **Email já protegido** - SMTP com autenticação
-2. ✅ **VNC com senha** - `vetor2025`
+2. ✅ **VNC com senha** - `<senha-do-VNC: entregue pelo Guardian, nunca no repositorio>`
 3. ⚠️ **API sem autenticação** - Apenas IPs confiáveis devem acessar
 4. ⚠️ **Porta 6092 pública** - Considerar adicionar token de segurança
 
@@ -444,3 +444,12 @@ Se tiver problemas:
 **Última atualização:** 2025-10-20
 **Versão:** 1.0
 **Status:** ✅ Funcionando
+
+
+### Credenciais após a migração para o Guardian (07/09/2026)
+
+A credencial SMTP pertence à fonte cifrada do Access Guardian. O ERP usa o
+relay configurado pelo Guardian e mantém `SMTP_PASSWORD` vazio. Não preencher
+senha real neste exemplo nem em arquivos locais. Uma senha literal foi retirada
+desta página na auditoria; versões antigas permanecem no histórico Git e exigem
+conferência de rotação/revogação da credencial no provedor.

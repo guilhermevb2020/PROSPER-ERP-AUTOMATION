@@ -19,7 +19,18 @@
 --
 -- Dono das tabelas: app_erp_automation_evento (sem login). app_erp_automation
 -- so INSERE e LE - e fecha a execucao, uma vez, nas colunas de fechamento.
--- Sem posse, o runtime nao consegue devolver a si mesmo um UPDATE nem um DROP.
+-- Sem posse, o runtime nao altera estrutura nem desliga gatilho; ver o limite sobre
+-- o dono do SCHEMA mais abaixo.
+--
+-- QUEM APLICA (medido em 21/09/2026): sob o access-guardian, DDL num schema de projeto
+-- exige uma sessao que seja (a) membro de access_admin - CREATEROLE, que nao se herda
+-- e por isso se veste com SET ROLE - e (b) membro de app_erp_automation, a dona do
+-- schema (so o dono cria tabela, concede no schema e muda o dono dele). Um modelo do
+-- roles.yaml com `herda: [access_admin, app_erp_automation]` da isso. Superusuario
+-- tambem serve (e o caminho da propria ferramenta do Guardian). Em nenhum caso um
+-- objeto fica de posse da sessao: o revogar da tmp_ faz DROP OWNED, entao tudo nasce
+-- ja como app_erp_automation_evento (SET ROLE) - e a view do placar como
+-- app_erp_automation, a unica com leitura em trs.
 --
 -- Re-executavel: IF NOT EXISTS / OR REPLACE em tudo; o ledger de aplicar.sh e quem
 -- garante a aplicacao unica.
@@ -32,24 +43,65 @@ SET LOCAL client_min_messages TO warning;
 -- 1. A role dona das tabelas imutaveis
 -- ---------------------------------------------------------------------------
 DO $$
+DECLARE
+    eu_super boolean := (SELECT rolsuper FROM pg_roles WHERE rolname = session_user);
 BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'app_erp_automation_evento') THEN
+        IF NOT eu_super THEN
+            -- CREATEROLE nao se herda: a sessao veste o cargo para criar a role
+            EXECUTE 'SET LOCAL ROLE access_admin';
+        END IF;
         CREATE ROLE app_erp_automation_evento NOLOGIN;
         COMMENT ON ROLE app_erp_automation_evento IS
           'Dona das tabelas de execucao e evento do erp_automation. Sem login: existe '
-          'para que app_erp_automation nao seja dona do proprio historico.';
+          'para que app_erp_automation (o runtime) nao seja dona do proprio historico.';
+        IF eu_super AND EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'access_admin') THEN
+            -- criada por superusuario: o Guardian precisa poder geri-la no futuro
+            GRANT app_erp_automation_evento TO access_admin WITH ADMIN OPTION;
+        END IF;
+        EXECUTE 'RESET ROLE';
+    END IF;
+    -- A sessao precisa VESTIR a role dona (SET ROLE). Superusuario nao precisa; a tmp_ do
+    -- Guardian precisa - e quem tem ADMIN OPTION (o criador, access_admin) concede.
+    -- 'SET', nao 'MEMBER': a ADMIN OPTION do access_admin ja conta como membership
+    -- indireta da tmp_ e faria 'MEMBER' responder sim sem dar o direito de SET ROLE.
+    IF NOT eu_super AND NOT pg_has_role(session_user, 'app_erp_automation_evento', 'SET') THEN
+        EXECUTE 'SET LOCAL ROLE access_admin';
+        EXECUTE format('GRANT app_erp_automation_evento TO %I', session_user);
+        EXECUTE 'RESET ROLE';
     END IF;
 END $$;
 
-GRANT USAGE ON SCHEMA erp_automation TO app_erp_automation_evento;
+-- LIMITE CONHECIDO (medido na bancada em 21/09/2026): o DONO DO SCHEMA derruba qualquer
+-- tabela dele, inclusive as que nao possui - e a erp_001 fez app_erp_automation (o
+-- runtime) dona do erp_automation. Mudar o dono do schema exige CREATE no BANCO
+-- (regra do PostgreSQL), que a sessao do Guardian nao tem nem deve ter; so um
+-- superusuario faz isso:  ALTER SCHEMA erp_automation OWNER TO app_erp_automation_evento;
+-- Enquanto nao for feito, o runtime NAO altera estrutura nem desliga gatilho (as
+-- tabelas sao de outra dona) e NAO muda nem apaga linha (gatilhos) - mas um DROP
+-- TABLE explicito continua possivel. E ato barulhento, nao reescrita silenciosa.
+--
+-- Concessoes NO SCHEMA saem de quem e dona dele (a sessao herda app_erp_automation;
+-- superusuario tambem pode). A role dos eventos precisa de CREATE para as tabelas
+-- nascerem dela.
+GRANT USAGE, CREATE ON SCHEMA erp_automation TO app_erp_automation_evento;
+DO $$
+DECLARE
+    leitor text;
+BEGIN
+    -- USAGE no schema para os leitores: a erp_001 ja dava, mas a ACL real divergiu dela
+    -- (medido em 18/09/2026: scatambulo tinha, data_hub e hub nao). Aqui fica explicito.
+    FOREACH leitor IN ARRAY ARRAY['dev_user', 'app_process_automation', 'app_data_hub',
+                                  'app_hub_orch', 'app_forms_hub', 'app_crm', 'app_metas'] LOOP
+        IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = leitor) THEN
+            EXECUTE format('GRANT USAGE ON SCHEMA erp_automation TO %I', leitor);
+        END IF;
+    END LOOP;
+END $$;
 
--- O DONO DO SCHEMA derruba qualquer tabela dele - inclusive as que nao possui. A
--- erp_001 fez app_erp_automation dona do schema; com isso o runtime conseguiria um
--- DROP TABLE nas tabelas de evento (medido na bancada em 21/09/2026). O schema passa
--- para a role dos eventos; o runtime segue com USAGE e CREATE (o que ele usava).
--- As migrations continuam rodando como administrador, entao nada muda para elas.
-ALTER SCHEMA erp_automation OWNER TO app_erp_automation_evento;
-GRANT USAGE, CREATE ON SCHEMA erp_automation TO app_erp_automation;
+-- Daqui ate o RESET ROLE do fim, tudo nasce da role dona: nenhum objeto fica de posse
+-- da sessao que aplica (o revogar da tmp_ faz DROP OWNED).
+SET LOCAL ROLE app_erp_automation_evento;
 
 -- ---------------------------------------------------------------------------
 -- 2. job_execucao - uma linha por execucao de job (a tabela de controle)
@@ -80,7 +132,6 @@ CREATE TABLE IF NOT EXISTS erp_automation.job_execucao (
     -- "execucao ativa" = comecou e nao terminou; qualquer outro status exige o fim
     CONSTRAINT ck_job_execucao_fechamento CHECK ((status = 'ativa') = (terminado_em IS NULL))
 );
-ALTER TABLE erp_automation.job_execucao OWNER TO app_erp_automation_evento;
 
 CREATE UNIQUE INDEX IF NOT EXISTS uq_job_execucao_run_id
     ON erp_automation.job_execucao (run_id) WHERE run_id IS NOT NULL;
@@ -161,7 +212,6 @@ CREATE TABLE IF NOT EXISTS erp_automation.operacao_evento (
     CONSTRAINT ck_operacao_evento_resultado_avaliada CHECK (
         tipo_evento <> 'avaliada' OR resultado IN ('FINALIZARIA', 'BARRADA', 'ERRO'))
 );
-ALTER TABLE erp_automation.operacao_evento OWNER TO app_erp_automation_evento;
 
 -- uma finalizacao confirmada por operacao; cliques podem repetir (retentativa)
 CREATE UNIQUE INDEX IF NOT EXISTS uq_operacao_evento_finalizada
@@ -219,7 +269,6 @@ CREATE TABLE IF NOT EXISTS erp_automation.operacao_pagamento_linha (
     flag_sp             boolean,
     PRIMARY KEY (fk_operacao_evento, numero_linha)
 );
-ALTER TABLE erp_automation.operacao_pagamento_linha OWNER TO app_erp_automation_evento;
 COMMENT ON TABLE erp_automation.operacao_pagamento_linha IS
   'Foto da grade de pagamento no instante da avaliacao (uma op pode ter pagamento '
   'dividido). Dado sensivel: sem SELECT para os leitores gerais do schema.';
@@ -260,7 +309,6 @@ CREATE TABLE IF NOT EXISTS erp_automation.arquivo (
     CONSTRAINT ck_arquivo_sha256 CHECK (sha256 ~ '^[0-9a-f]{64}$'),
     CONSTRAINT uq_arquivo_tipo_sha256 UNIQUE (tipo_arquivo, sha256)
 );
-ALTER TABLE erp_automation.arquivo OWNER TO app_erp_automation_evento;
 CREATE INDEX IF NOT EXISTS ix_arquivo_tipo_registrado_em
     ON erp_automation.arquivo (tipo_arquivo, registrado_em DESC);
 COMMENT ON TABLE erp_automation.arquivo IS
@@ -287,7 +335,6 @@ CREATE TABLE IF NOT EXISTS erp_automation.arquivo_titulo (
     flag_pix            boolean,
     PRIMARY KEY (fk_arquivo, numero_linha)
 );
-ALTER TABLE erp_automation.arquivo_titulo OWNER TO app_erp_automation_evento;
 CREATE INDEX IF NOT EXISTS ix_arquivo_titulo_titulo ON erp_automation.arquivo_titulo (id_titulo);
 CREATE INDEX IF NOT EXISTS ix_arquivo_titulo_operacao ON erp_automation.arquivo_titulo (id_operacao);
 COMMENT ON TABLE erp_automation.arquivo_titulo IS 'Um titulo dentro de um arquivo; o que hoje e a coluna ids separada por virgula no CSV.';
@@ -308,7 +355,6 @@ CREATE TABLE IF NOT EXISTS erp_automation.arquivo_evento (
     CONSTRAINT ck_arquivo_evento_tipo CHECK (tipo_evento IN (
         'gerado', 'enviado', 'recebido', 'processado', 'rejeitado', 'retido'))
 );
-ALTER TABLE erp_automation.arquivo_evento OWNER TO app_erp_automation_evento;
 CREATE INDEX IF NOT EXISTS ix_arquivo_evento_arquivo ON erp_automation.arquivo_evento (fk_arquivo, ocorrido_em DESC);
 COMMENT ON TABLE erp_automation.arquivo_evento IS 'O que aconteceu com o arquivo, na ordem: gerado, enviado, recebido, processado, rejeitado, retido.';
 
@@ -362,9 +408,16 @@ CREATE OR REPLACE VIEW erp_automation.vw_operacao_ciclo AS
      GROUP BY id_operacao;
 COMMENT ON VIEW erp_automation.vw_operacao_ciclo IS 'Uma linha por operacao: do veredito ao aviso.';
 
+RESET ROLE;
+
 -- O placar compara o job com o operador, pelo espelho do Smart. So existe onde o
--- espelho existe (na bancada nao existe; em producao e trs.operacao_desagio).
+-- espelho existe (na bancada nao existe; em producao e trs.operacao_desagio). Uma view
+-- executa com os privilegios do DONO, e so app_erp_automation le trs: a view nasce dela.
+-- (Aqui a sessao volta a ser ela mesma; superusuario e a tmp_ do Guardian sao membros.)
+SET LOCAL ROLE app_erp_automation;
 DO $$
+DECLARE
+    leitor text;
 BEGIN
     IF to_regclass('trs.operacao_desagio') IS NOT NULL THEN
         EXECUTE $v$
@@ -384,8 +437,18 @@ BEGIN
         EXECUTE 'COMMENT ON VIEW erp_automation.vw_operacao_placar IS '
                 '''O veredito do job comparado com o que o operador fez, pelo espelho do Smart '
                 '(que atrasa: a data_finalizacao la e so data, sem hora).''';
+        -- leitores do placar: o GRANT sai do dono da view
+        FOR leitor IN SELECT unnest(ARRAY['dev_user', 'app_process_automation', 'app_data_hub',
+                                          'app_hub_orch', 'app_forms_hub', 'app_crm', 'app_metas']) LOOP
+            IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = leitor) THEN
+                EXECUTE format('GRANT SELECT ON erp_automation.vw_operacao_placar TO %I', leitor);
+            END IF;
+        END LOOP;
     END IF;
 END $$;
+
+RESET ROLE;
+SET LOCAL ROLE app_erp_automation_evento;
 
 -- ---------------------------------------------------------------------------
 -- 8. Permissoes
@@ -398,7 +461,8 @@ GRANT SELECT, INSERT ON erp_automation.operacao_evento,
                        erp_automation.arquivo,
                        erp_automation.arquivo_titulo,
                        erp_automation.arquivo_evento TO app_erp_automation;
-GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA erp_automation TO app_erp_automation;
+GRANT USAGE, SELECT ON SEQUENCE erp_automation.job_execucao_id_seq, erp_automation.operacao_evento_id_seq,
+    erp_automation.arquivo_id_seq, erp_automation.arquivo_evento_id_seq TO app_erp_automation;
 GRANT SELECT ON erp_automation.vw_job_execucao_ativa,
                 erp_automation.vw_job_execucao_abandonada,
                 erp_automation.vw_operacao_finalizacao_aberta,
@@ -411,16 +475,10 @@ BEGIN
     FOREACH leitor IN ARRAY ARRAY['dev_user', 'app_process_automation', 'app_data_hub',
                                   'app_hub_orch', 'app_forms_hub', 'app_crm', 'app_metas'] LOOP
         IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = leitor) THEN
-            -- USAGE no schema: a erp_001 ja dava, mas a ACL real divergiu dela (medido em
-            -- 18/09/2026: scatambulo tinha, data_hub e hub nao). Aqui fica explicito.
-            EXECUTE format('GRANT USAGE ON SCHEMA erp_automation TO %I', leitor);
             EXECUTE format('GRANT SELECT ON erp_automation.job_execucao, erp_automation.operacao_evento, '
                            'erp_automation.arquivo, erp_automation.arquivo_titulo, erp_automation.arquivo_evento, '
                            'erp_automation.vw_job_execucao_ativa, erp_automation.vw_job_execucao_abandonada, '
                            'erp_automation.vw_operacao_finalizacao_aberta, erp_automation.vw_operacao_ciclo TO %I', leitor);
-            IF to_regclass('erp_automation.vw_operacao_placar') IS NOT NULL THEN
-                EXECUTE format('GRANT SELECT ON erp_automation.vw_operacao_placar TO %I', leitor);
-            END IF;
         END IF;
     END LOOP;
 END $$;
@@ -430,4 +488,5 @@ END $$;
 -- esse default NAO as alcanca - e e por isso que a grade de pagamento fica fechada.
 REVOKE ALL ON erp_automation.operacao_pagamento_linha FROM PUBLIC;
 
+RESET ROLE;
 COMMIT;

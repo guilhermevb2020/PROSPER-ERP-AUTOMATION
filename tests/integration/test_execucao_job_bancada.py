@@ -142,17 +142,24 @@ def test_truncate_e_recusado_pelo_gatilho(admin, comando):
         _q(admin, comando)
 
 
-def test_o_schema_nao_e_do_runtime(admin):
-    """Dono de schema derruba qualquer tabela dele; por isso o schema e da role dos eventos."""
+def test_o_limite_conhecido_o_schema_segue_do_runtime(admin):
+    """Mudar o dono do schema exige CREATE no banco: a sessao do Guardian nao tem. Fica
+    documentado na erp_004; so um superusuario fecha isso (ALTER SCHEMA ... OWNER TO)."""
     dono = _q(admin, "SELECT pg_get_userbyid(nspowner) FROM pg_namespace WHERE nspname = 'erp_automation'")[0][0]
-    assert dono == "app_erp_automation_evento"
+    assert dono == "app_erp_automation"
 
 
-def test_o_runtime_nao_e_dono_e_nao_consegue_derrubar_a_tabela(app):
-    with pytest.raises(psycopg2.errors.InsufficientPrivilege):
-        _q(app, "DROP TABLE erp_automation.operacao_evento")
+def test_o_runtime_nao_e_dono_e_nao_mexe_na_estrutura_nem_nos_gatilhos(app):
+    """Nao ser dona das tabelas e o que impede o runtime de desligar o gatilho ou alterar
+    a estrutura. (O DROP TABLE explicito segue possivel enquanto o schema for dela.)"""
     with pytest.raises(psycopg2.errors.InsufficientPrivilege):
         _q(app, "ALTER TABLE erp_automation.operacao_evento DISABLE TRIGGER ALL")
+    with pytest.raises(psycopg2.errors.InsufficientPrivilege):
+        _q(app, "ALTER TABLE erp_automation.operacao_evento ADD COLUMN furo text")
+    # GRANT sem direito de conceder nao e erro no PostgreSQL - e um WARNING "no privileges
+    # were granted". A prova e o privilegio continuar ausente depois da tentativa.
+    _q(app, "GRANT UPDATE ON erp_automation.operacao_evento TO app_erp_automation")
+    assert _q(app, "SELECT has_table_privilege('app_erp_automation', 'erp_automation.operacao_evento', 'UPDATE')")[0][0] is False
 
 
 def test_uma_finalizacao_confirmada_por_operacao(admin):
@@ -266,3 +273,35 @@ def test_execucao_abandonada_e_a_ativa_velha(admin):
                      "RETURNING id")[0][0]
     assert _q(admin, "SELECT count(*) FROM erp_automation.vw_job_execucao_abandonada WHERE id = %s", (exid,))[0][0] == 1
     assert _q(admin, "SELECT count(*) FROM erp_automation.vw_job_execucao_ativa WHERE id = %s", (exid,))[0][0] == 1
+
+
+# --------------------------------------------------------------------------- #
+# a sessao que aplica (tmp_ do Guardian) nao pode ficar dona de nada
+# --------------------------------------------------------------------------- #
+TMP = os.environ.get("BANCADA_TMP_DSN", "")
+
+
+@pytest.mark.skipif(not TMP, reason="bancada sem tmp_teste (aplicada como superusuario)")
+def test_a_sessao_que_aplicou_nao_e_dona_de_nada_e_pode_sumir(admin):
+    """O revogar do Guardian faz DROP OWNED da tmp_: se a migration deixasse um objeto
+    de posse dela, ele sumiria no prazo. Aqui a tmp_teste aplicou a erp_004."""
+    quem = _q(admin, "SELECT aplicada_por FROM erp_automation.migration_aplicada WHERE arquivo LIKE 'erp_004%%'")[0][0]
+    if quem != "tmp_teste":
+        pytest.skip(f"a bancada foi aplicada como {quem}, nao como a tmp_ do Guardian")
+    n = _q(admin, "SELECT count(*) FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace "
+                  "WHERE n.nspname = 'erp_automation' AND pg_get_userbyid(c.relowner) = 'tmp_teste'")[0][0]
+    assert n == 0, "objeto de posse da tmp_ sumiria no revogar"
+    fn = _q(admin, "SELECT count(*) FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace "
+                   "WHERE n.nspname = 'erp_automation' AND pg_get_userbyid(p.proowner) = 'tmp_teste'")[0][0]
+    assert fn == 0
+    dono_schema = _q(admin, "SELECT pg_get_userbyid(nspowner) FROM pg_namespace WHERE nspname = 'erp_automation'")[0][0]
+    assert dono_schema == "app_erp_automation", "o limite conhecido: so superusuario muda o dono do schema"
+    # o que o revogar faz: DROP OWNED + DROP ROLE, sem levar nada do schema
+    antes = _q(admin, "SELECT count(*) FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace WHERE n.nspname = 'erp_automation'")[0][0]
+    _q(admin, "DROP OWNED BY tmp_teste")
+    depois = _q(admin, "SELECT count(*) FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace WHERE n.nspname = 'erp_automation'")[0][0]
+    assert antes == depois
+    # e a role dona dos eventos continua administravel pelo Guardian (access_admin com ADMIN OPTION)
+    adm = _q(admin, "SELECT admin_option FROM pg_auth_members m JOIN pg_roles r ON r.oid = m.roleid "
+                    "JOIN pg_roles g ON g.oid = m.member WHERE r.rolname = 'app_erp_automation_evento' AND g.rolname = 'access_admin'")
+    assert adm and adm[0][0] is True
