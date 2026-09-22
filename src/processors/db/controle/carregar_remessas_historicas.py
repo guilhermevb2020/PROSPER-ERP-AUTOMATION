@@ -28,6 +28,7 @@ import argparse
 import csv
 import hashlib
 import os
+import re
 import sys
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
@@ -88,11 +89,22 @@ def quando(texto: str) -> datetime:
     return datetime.strptime(texto.strip()[:19], "%Y-%m-%d %H:%M:%S").replace(tzinfo=TZ)
 
 
+#: Nome local com sufixo `_dupHHMMSS`: mesmo nome do Smart, outro conteudo (outra conta).
+#: No Nextcloud o arquivo sobe com o nome do SMART (ver remessa_cobranca/_nextcloud.py),
+#: entao a busca e pelo nome sem o sufixo e o md5 escolhe entre os candidatos. Medido no
+#: ensaio de 22/09/2026: 2 de 671 nao eram achadas so por isso.
+_SUFIXO_DUP = re.compile(r"_dup\d{6}(?=\.REM$)", re.I)
+
+
+def nome_do_smart(arquivo: str) -> str:
+    return _SUFIXO_DUP.sub("", arquivo)
+
+
 def carregar(linhas: list[dict], indice: dict, execucao, *, ensaio: bool, log=print) -> Resultado:
     r = Resultado(ensaio=ensaio)
     for l in linhas:
         fid, arquivo, md5_csv = l["id"].strip(), (l.get("arquivo") or "").strip(), (l.get("md5") or "").strip().lower()
-        candidatos = indice.get(arquivo) or []
+        candidatos = indice.get(nome_do_smart(arquivo)) or []
         dados, caminho = None, None
         for c in candidatos:
             with open(c, "rb") as fh:
@@ -118,7 +130,7 @@ def carregar(linhas: list[dict], indice: dict, execucao, *, ensaio: bool, log=pr
             continue
         quando_ = quando(l.get("baixado_em") or "")
         arq = execucao_job.registrar_arquivo(
-            execucao, "remessa_cobranca_cnab_400", "gerado", nome_arquivo=arquivo, conteudo=dados,
+            execucao, "remessa_cobranca_cnab_400", "gerado", nome_arquivo=nome_do_smart(arquivo), conteudo=dados,
             qtd_registros=int(l["titulos"]) if (l.get("titulos") or "").strip().isdigit() else None,
             conta_label=l.get("tipo") or None, destino_caminho=caminho,
             detalhe={"md5": md5_csv, "id_no_smart": fid, "nome_no_disco": arquivo,

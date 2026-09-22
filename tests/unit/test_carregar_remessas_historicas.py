@@ -104,3 +104,20 @@ def test_main_abre_execucao_de_controle_e_devolve_3_quando_incompleta(cenario, t
     abrir = next(c for c in chamadas if c[0] == "abrir")
     assert abrir[1] == ("controle", "carregar_remessas_historicas") and abrir[2]["flag_ensaio"] is True
     assert chamadas[-1][1] == "falha" and chamadas[-1][2]["codigo_saida"] == 3
+
+
+def test_nome_local_com_dup_e_achado_pelo_nome_do_smart_e_o_md5_escolhe(tmp_path, monkeypatch):
+    """No disco: CB08090000011_dup212306.REM; no Nextcloud: `<empresa> - CB08090000011.REM`, e o
+    mesmo nome existe para outra conta — o md5 do CSV diz qual e."""
+    a = b"0" * 400 + b"\r\n" + b"A" * 400 + b"\r\n"
+    b = b"0" * 400 + b"\r\n" + b"B" * 400 + b"\r\n"
+    arvore = _arvore(tmp_path, {"MP PROSPERE - CB08090000011.REM": a, "WJ MOREIRA - CB08090000011.REM": b})
+    linha = {"id": "26256", "arquivo": "CB08090000011_dup212306.REM", "tipo": "mp wj moreira Envio",
+             "bytes": str(len(b)), "md5": hashlib.md5(b).hexdigest(), "titulos": "1", "baixado_em": "2026-09-08 21:23:06"}
+    cliente = _Cliente()
+    monkeypatch.setattr(carga, "execucao_job", cliente)
+    r = carga.carregar([linha], carga.indexar_arvore(arvore), "EX", ensaio=False, log=lambda m: None)
+    assert r.registradas == ["26256"] and r.completa
+    kw = next(c[3] for c in cliente.chamadas if c[0] == "arquivo")
+    assert kw["conteudo"] == b and kw["nome_arquivo"] == "CB08090000011.REM"
+    assert kw["detalhe"]["nome_no_disco"] == "CB08090000011_dup212306.REM"
