@@ -20,6 +20,10 @@ RAIZ="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 NOME="${BANCADA_NOME:-erp-bancada-pg}"
 PORTA="${BANCADA_PORTA:-55432}"
 IMAGEM="${BANCADA_IMAGEM:-postgres-postgres}"
+# BANCADA_REDE: rede Docker a que a bancada tambem se liga (ex.: prospere-network), para um
+# container de producao alcancar a bancada pelo nome - e como o ensaio entra pela porta
+# de producao (run_agendado.sh no container) com ERP_EXECUCAO_DSN apontando para ca.
+REDE="${BANCADA_REDE:-}"
 ENV_ARQ="$RAIZ/data/bancada_pg.env"
 
 # sem pipe: `tr </dev/urandom | head` leva SIGPIPE e, com pipefail, mata o script em silencio
@@ -41,6 +45,9 @@ EOF
         -e POSTGRES_PASSWORD="$admin_pw" -e POSTGRES_DB=prosperedb \
         -e TZ=America/Sao_Paulo --shm-size=256m "$IMAGEM" \
         -c timezone=America/Sao_Paulo -c log_timezone=America/Sao_Paulo >/dev/null
+    if [[ -n "$REDE" ]]; then
+        docker network connect "$REDE" "$NOME" && echo "ligada tambem a rede $REDE (nome: $NOME:5432)"
+    fi
     echo "aguardando o Postgres..."
     for _ in $(seq 1 60); do
         docker exec "$NOME" pg_isready -U postgres -d prosperedb >/dev/null 2>&1 && break
