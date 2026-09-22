@@ -155,8 +155,8 @@ def _ambiente_padrao() -> str:
 
 
 def _gatilho_padrao() -> str:
-    # O hub ainda nao injeta identificacao no docker exec; quando passar HUB_RUN_ID
-    # (ou HUB_TASK_NOME), o gatilho vira cron sozinho.
+    # O hub injeta HUB_RUN_ID/HUB_TASK_NOME no docker exec desde 22/09/2026 11:05
+    # (hub 7bc6af1), entao execucao dele cai em "cron" sozinha. Sem as duas, foi gente.
     return "cron" if (os.environ.get("HUB_RUN_ID") or os.environ.get("HUB_TASK_NOME")) else "manual"
 
 
@@ -311,10 +311,10 @@ def abrir_execucao(automacao: str, job: str, *, flag_ensaio: bool, gatilho: str 
 
     ex = Execucao(id=None, automacao=automacao, job=job, flag_ensaio=flag_ensaio, estrito=obrigatoria)
     _ATUAL = ex
-    # Sem aviso quando faltam operador/motivo: o hub (22/09/2026) ainda nao injeta
-    # HUB_RUN_ID/HUB_TASK_NOME no docker exec, entao TODA execucao dele chega como
-    # "manual" e o aviso viraria ruido em cada job. Quando o hub passar a identificar-se,
-    # o gatilho vira cron sozinho e o aviso para execucao manual sem autor passa a valer.
+    # Sem aviso quando faltam operador/motivo. O motivo original caducou em 22/09/2026
+    # 11:05: o hub passou a injetar HUB_RUN_ID/HUB_TASK_NOME e a execucao dele ja cai em
+    # "cron", entao o aviso nao viraria mais ruido em cada job. Avisar quando
+    # gatilho == "manual" e falta ERP_OPERADOR ficou como melhoria desta frente, NAO feita.
     campos = {"automacao": automacao, "job": job, "task_nome": task_nome, "run_id": run_id,
               "gatilho": gatilho, "ambiente": ambiente, "flag_ensaio": flag_ensaio,
               "apelido_credencial": apelido, "versao_codigo": versao_codigo,

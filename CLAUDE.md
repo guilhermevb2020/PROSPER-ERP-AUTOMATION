@@ -165,9 +165,11 @@ túnel ssh ao IP do container (ver `docs/COMO_SUBIR_UM_JOB.md`).
   ainda são do CSV (Fase 2) — exceto o retorno de pagamento, que já sabe ler do banco atrás
   de `CONTROLE_FONTE_RETPAG` (padrão `csv`): quem mexer nos quatro jobs de arquivo mantém os dois lados.
 - **Execução manual em modo real diz quem e por quê:** `docker exec -e ERP_OPERADOR=nome
-  -e ERP_MOTIVO="..." erp-automation sh .../run_agendado.sh`. O hub ainda não se identifica
-  no exec (`HUB_RUN_ID`/`HUB_TASK_NOME` não chegam), então toda execução dele aparece como
-  `gatilho manual` — pendência da frente do hub, não deste repositório.
+  -e ERP_MOTIVO="..." erp-automation sh .../run_agendado.sh`. Desde 22/09/2026 11:05
+  (hub `7bc6af1`) **o hub se identifica no exec**: `HUB_RUN_ID`/`HUB_TASK_NOME` chegam, a
+  execução dele entra como `gatilho cron` e o `run_id` aponta para
+  `hub_orchestration.task_execucao`. Então `gatilho manual` sem `ERP_OPERADOR` agora quer
+  dizer pessoa que não se declarou — não mais o hub.
 - **O nome do job na execução tem de casar com a task do hub.** `run_bb.sh` é
   `gerar_remessa_bb`/`processar_retorno_bb`, `run_deposito.sh` é `baixar_deposito_no_erp`.
   Errar isso faz a execução apontar para o job errado, e ninguém percebe até procurar. Tabela de evento nunca muda: corrigir é outro evento.
