@@ -209,8 +209,12 @@ desses arquivos o conteúdo já não está no disco, então não cabem em `arqui
 sha256). Carga: `src/processors/db/controle/carregar_historico_csv.py` (um comando por família,
 tudo ou nada, repetível). Com ela feita, `listar_md5` une as duas tabelas e os retornos param de
 ler o CSV sozinhos (`historico_carregado`); sem ela, continuam no CSV congelado. Prova:
-`tests/integration/test_erp_008_historico.py` (bancada, 22/09/2026). **Aplicação em produção
-pendente da credencial `tmp_erpddl`.**
+`tests/integration/test_erp_008_historico.py` (bancada, 22/09/2026). **Aplicada em produção em
+22/09/2026 às 19:31** (credencial `tmp_erpddl`, modelo `erp-automation-ddl`, revogada em
+seguida). Carga no mesmo minuto, execução #457: 1.885 md5 do retorno de cobrança (102 do BB) e 416
+do retorno de pagamento. Prova no container com as funções dos jobs: a memória nova é igual à que
+vinha do CSV — 1.795 processados e 1.878 nomes no retorno de cobrança, 418 md5 no de pagamento,
+zero diferenças; `listar_md5 --com-historico` sai com 0 (1.890 md5).
 
 ### Quando o ledger diz que o conteúdo mudou
 

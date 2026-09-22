@@ -156,15 +156,17 @@ túnel ssh ao IP do container (ver `docs/COMO_SUBIR_UM_JOB.md`).
 - **Só o banco, desde 22/09/2026 às 18h10 (Fase 4, a pedido da Gerência).** Os quatro jobs de
   arquivo (retorno e remessa, de cobrança e de pagamento) gravam só nas tabelas:
   `ESCREVER_CSV_*=False` no `config/<job>.env` (voltar = apagar a linha). Os CSVs ficaram
-  congelados no disco como histórico, e os dois retornos ainda consultam essas linhas antigas
-  para não dar baixa em duplicidade num `.RET` de antes de 21/09. O `arquivo` é identificado
-  pelo **conteúdo** (sha256): reprocessar o mesmo arquivo devolve a linha existente.
+  congelados no disco como histórico; o que eles sabiam de antes de 21/09 está em
+  `erp_automation.arquivo_historico` (`erp_008`, carga de 22/09 às 19:31), e é dali que os dois
+  retornos lembram o `.RET` já tratado. O `arquivo` é identificado pelo **conteúdo** (sha256):
+  reprocessar o mesmo arquivo devolve a linha existente.
 - **Nenhum CSV de controle, desde 22/09/2026 à noite (Fase 5).** O crédito (`documentos_baixados`/
   `etapa_movida`) e o finalizador (`finalizada`, `aviso_enviado` com `hash_aviso`/`n_avisos`)
   leem e gravam só os eventos de `operacao_evento`; `controle_downloads.csv`,
   `finalizadas.csv` e `avisos_enviados.csv` saíram. O histórico que só os CSVs sabiam entra
   por `src/processors/db/controle/carregar_historico_csv.py`; os retornos leem o deles de
-  `arquivo_historico` (`erp_008`) quando a carga existe, e do CSV congelado até lá.
+  `arquivo_historico` (`erp_008`, desde 19:31). **Nenhum job lê nem grava CSV de controle.** Se a
+  tabela sumir ou vier vazia, os retornos voltam sozinhos ao CSV congelado e dizem no log.
 - **Contratos com o process-automation pelo banco, desde 22/09/2026 às 18h31 (Fase 3).** A
   remessa de cobrança e o cancelamento leem as listas de exclusão e de cancelamento de
   `financeiro.remessa_exclusao_apontada`/`remessa_cancelamento_apontado`
@@ -179,7 +181,7 @@ túnel ssh ao IP do container (ver `docs/COMO_SUBIR_UM_JOB.md`).
   a comparação antiga). As leituras de idempotência
   vêm do banco (Fase 2) nos quatro jobs de arquivo: `_RET`, `_RETPAG` e `_REM` desde 22/09/2026
   11h47, `_PAG` desde 17h41 — linha `CONTROLE_FONTE_*=banco` no `config/<job>.env`. Nos
-  dois retornos, `banco` = banco ∪ histórico do CSV até a Fase 4 (a memória evita baixa em
+  dois retornos, `banco` = `arquivo` ∪ `arquivo_historico` (a memória evita baixa em
   duplicidade); a carga histórica de 45 dias das remessas foi feita (execução #166).
 - **Execução manual em modo real diz quem e por quê:** `docker exec -e ERP_OPERADOR=nome
   -e ERP_MOTIVO="..." erp-automation sh .../run_agendado.sh`. Desde 22/09/2026 ~11h15 o hub
