@@ -128,8 +128,8 @@ def robo(tmp_path, monkeypatch):
     importlib.reload(analise)
     importlib.reload(gerar)
     import gerar_remessa_pagamento
-    importlib.reload(remessa_pagamento)
-    return remessa_pagamento, gerar, tmp_path
+    importlib.reload(gerar_remessa_pagamento)
+    return gerar_remessa_pagamento, gerar, tmp_path
 
 
 # --------------------------------------------------------------------------- #

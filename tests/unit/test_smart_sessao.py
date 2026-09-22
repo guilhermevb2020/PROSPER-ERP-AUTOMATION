@@ -138,7 +138,7 @@ def test_pagamento_aborta_com_codigo_correto_sem_gerar(monkeypatch, tmp_path, er
     import pagamento_config
     import gerar_remessa_pagamento
     importlib.reload(pagamento_config)
-    rp = importlib.reload(remessa_pagamento)
+    rp = importlib.reload(gerar_remessa_pagamento)
     monkeypatch.setattr(sys, "argv", ["gerar_remessa_pagamento.py"])
     monkeypatch.setattr(rp, "sync_playwright", lambda: nullcontext(None))
     monkeypatch.setattr(rp.cfg, "exigir_tela", lambda: None)
