@@ -103,7 +103,6 @@ def _armar(job, monkeypatch, etapa):
                         {"ok": True, "situacao": "finalizada", "detalhe": "Smart confirma", "dialogos": []}))
     monkeypatch.setattr(job.execucao_job, "registrar_evento_operacao",
                         lambda ex, op, tipo, **kw: eventos.append(tipo))
-    monkeypatch.setattr(job, "_registrar_finalizada", lambda op, cedente: None)
     monkeypatch.setattr(job, "_avisar_finalizacao",
                         lambda op, cedente, valor, detalhes, confirmacao, execucao=None: None)
     return cliques, eventos, grades

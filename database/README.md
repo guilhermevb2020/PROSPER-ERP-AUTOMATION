@@ -198,6 +198,20 @@ todo dia —, doc2you e boletos 1 h, demais 2 h). Só a view muda. Prova:
 abandonado. O filtro do crédito que a paridade e `encerrar_abandonada.py` repetem no código
 ficou redundante e é inofensivo.
 
+## erp_008 — o histórico dos CSVs de controle
+
+`database/erp_008_historico_do_csv.sql`: `erp_automation.arquivo_historico`, o que só os CSVs
+de controle sabiam dos arquivos tratados antes do registro no banco (21/09/2026): md5 do
+conteúdo, nome, quando (`tratado_em`) e o que a memória do job usa (`detalhe_json`:
+`processado`, `nomes_smart` no retorno de cobrança). Uma linha por (`tipo_arquivo`, `md5`),
+append-only como os eventos; o ERP insere e lê, os leitores de sempre leem. Para a maioria
+desses arquivos o conteúdo já não está no disco, então não cabem em `arquivo` (que exige o
+sha256). Carga: `src/processors/db/controle/carregar_historico_csv.py` (um comando por família,
+tudo ou nada, repetível). Com ela feita, `listar_md5` une as duas tabelas e os retornos param de
+ler o CSV sozinhos (`historico_carregado`); sem ela, continuam no CSV congelado. Prova:
+`tests/integration/test_erp_008_historico.py` (bancada, 22/09/2026). **Aplicação em produção
+pendente da credencial `tmp_erpddl`.**
+
 ### Quando o ledger diz que o conteúdo mudou
 
 Migration aplicada é imutável e a guarda barra — é isso que se quer. Só existe uma saída,

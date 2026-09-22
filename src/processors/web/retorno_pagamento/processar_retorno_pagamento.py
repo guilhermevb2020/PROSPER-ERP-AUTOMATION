@@ -92,9 +92,14 @@ def hashes_ja_tratados(execucao=None) -> set:
     if fonte == "banco":
         do_banco = execucao_job.listar_md5(execucao, "retorno_pagamento_cnab_240", log=log)
         if do_banco is not None:
-            # ⛔ banco ∪ historico do CSV, ate a Fase 4: esta memoria evita INSERIR DE NOVO um
-            # arquivo re-entregue (baixa em duplicidade no Smart), e o banco so conhece o que
-            # entrou desde 22/09/2026. O CSV entra como historia congelada, nao como decisao.
+            # ⛔ esta memoria evita INSERIR DE NOVO um arquivo re-entregue (baixa em
+            # duplicidade no Smart), e o `arquivo` so conhece o que entrou desde 22/09/2026.
+            # O historico de antes mora no banco desde a carga da erp_008 (listar_md5 ja o
+            # une); enquanto ela nao existir, vem do CSV congelado.
+            if execucao_job.historico_carregado(execucao, "retorno_pagamento_cnab_240", log=log):
+                log(f"  controle: fonte BANCO ({len(do_banco)} hash(es), com o historico "
+                    f"no banco)")
+                return do_banco
             do_csv = hashes_do_csv()
             log(f"  controle: fonte BANCO ({len(do_banco)} hash(es)) + historico do CSV "
                 f"({len(do_csv - do_banco)} so no CSV)")

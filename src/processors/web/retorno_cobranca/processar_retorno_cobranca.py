@@ -158,22 +158,48 @@ def historico_controle(execucao=None):
             por_nome = {}
             for h, r in do_banco.items():
                 por_nome.setdefault(r.get("nome_smart") or "", set()).add(h)
-            # ⛔ banco ∪ historico do CSV, ate a Fase 4: esta memoria e o que impede tratar
-            # como NOVO um arquivo de mesmo nome que o Smart ja processou (baixa em
-            # duplicidade), e o banco so conhece o que entrou desde 21/09/2026. O CSV entra
-            # como historia congelada, nao como decisao.
-            h_csv, n_csv = historico_controle_do_csv()
-            so_csv = len(h_csv - hashes)
-            hashes |= h_csv
-            for nome, hs in n_csv.items():
+            n_processados = len(hashes)
+            # ⛔ banco ∪ historico: esta memoria e o que impede tratar como NOVO um arquivo
+            # de mesmo nome que o Smart ja processou (baixa em duplicidade), e o `arquivo`
+            # so conhece o que entrou desde 21/09/2026. O historico de antes mora no banco
+            # desde a carga da erp_008 (arquivo_historico); enquanto ela nao existir, vem do
+            # CSV congelado.
+            historico = execucao_job.listar_historico(execucao, TIPOS_RETORNO, log=log)
+            if historico:
+                h_hist, n_hist = historico_do_banco(historico)
+                de_onde = "historico no banco"
+            else:
+                h_hist, n_hist = historico_controle_do_csv()
+                de_onde = "historico do CSV"
+            so_hist = len(h_hist - hashes)
+            hashes |= h_hist
+            for nome, hs in n_hist.items():
                 por_nome.setdefault(nome, set()).update(hs)
-            log(f"  controle: fonte BANCO ({len(do_banco)} arquivo(s), {len(hashes) - so_csv} "
-                f"processados) + historico do CSV ({so_csv} so no CSV)")
+            log(f"  controle: fonte BANCO ({len(do_banco)} arquivo(s), {n_processados} "
+                f"processados) + {de_onde} ({so_hist} so no "
+                f"{'historico' if historico else 'CSV'})")
             return hashes, por_nome
         log("  controle: fonte BANCO indisponivel nesta execucao — usando o CSV de reserva")
     elif fonte != "csv":
         log(f"  controle: CONTROLE_FONTE={fonte!r} desconhecida — usando o CSV")
     return historico_controle_do_csv()
+
+
+#: os tipos de arquivo deste job no banco (a entrada BB API registra retorno_bb)
+TIPOS_RETORNO = ("retorno_cobranca_cnab_400", "retorno_bb")
+
+
+def historico_do_banco(linhas):
+    """As linhas da erp_008 (listar_historico) no formato da memoria: (hashes processados,
+    nome_smart -> {hashes}) — o mesmo par que o CSV dava."""
+    hashes, por_nome = set(), {}
+    for l in linhas:
+        d = l.get("detalhe") or {}
+        if d.get("processado"):
+            hashes.add(l["md5"])
+        for nome in d.get("nomes_smart") or [""]:
+            por_nome.setdefault(nome, set()).add(l["md5"])
+    return hashes, por_nome
 
 
 def historico_controle_do_csv():

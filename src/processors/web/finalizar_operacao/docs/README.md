@@ -134,8 +134,11 @@ O aviso de pagamento é o que importa: só o operador corrige a grade PIX, e enq
 corrige o dinheiro não sai. Esperar assinatura é o estado normal da etapa (horas ou dias);
 avisar isso a cada ciclo só gerava ruído, e foi retirado em 22/09/2026. A mesma operação com
 as mesmas pendências é avisada de novo cada vez mais espaçado (na hora, 2 h, 4 h, … até
-1x/dia); pendência diferente zera o contador (`avisos_enviados.csv`). Cada envio vira
-`aviso_enviado` no banco.
+1x/dia); pendência diferente zera o contador. A memória é o banco desde 22/09/2026: cada
+envio vira `aviso_enviado` com `hash_aviso` e `n_avisos` no detalhe, e o ciclo seguinte lê o
+último (`notificar._ultimo_aviso`). Sem banco não se avisa — sem saber o que já foi mandado,
+avisar seria repetir. `avisos_enviados.csv` e `finalizadas.csv` saíram no mesmo dia (a
+finalização é o evento `finalizada`).
 
 **E-mail desligado de propósito.** Até 22/09/2026 o `notificar.py` lia a senha SMTP de um
 `email_config.json` da máquina Windows de origem, que não existe no servidor: nenhum e-mail

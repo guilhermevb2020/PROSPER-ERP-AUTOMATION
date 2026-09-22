@@ -297,9 +297,9 @@ INTERVALO_CICLO_S = int(_s("R7_INTERVALO_CICLO_S", "600"))
 # ZERA e o aviso sai na hora.
 AVISO_INTERVALO_BASE_MIN = int(_s("R7_AVISO_INTERVALO_BASE_MIN", "120"))  # 2h
 AVISO_INTERVALO_TETO_H = int(_s("R7_AVISO_INTERVALO_TETO_H", "24"))       # 1x/dia no limite
-ARQ_AVISOS = _s("R7_ARQ_AVISOS", os.path.join(_AQUI, "avisos_enviados.csv"))
-# Ops finalizadas pelo job (trilha de auditoria).
-ARQ_FINALIZADAS = _s("R7_ARQ_FINALIZADAS", os.path.join(_AQUI, "finalizadas.csv"))
+# A memoria dos avisos e das finalizacoes e o banco desde 22/09/2026 (eventos
+# aviso_enviado e finalizada em erp_automation.operacao_evento): avisos_enviados.csv e
+# finalizadas.csv sairam.
 DEBUG_DIR = _s("DEBUG_DIR_R7", "debug_r7")
 
 

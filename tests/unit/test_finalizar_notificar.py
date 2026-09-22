@@ -9,7 +9,8 @@ E o desenho avisava tambem "falta assinatura", que e o estado normal da etapa: o
 operacional seria cobrado a cada ciclo por algo que nao depende dele. O aviso de
 pagamento sai por WhatsApp e/ou e-mail, cada canal com a sua chave.
 
-Sem rede: SMTP e WhatsApp sao dubles. Nenhum teste manda mensagem.
+Sem rede: SMTP e WhatsApp sao dubles. Nenhum teste manda mensagem. A memoria do
+espacamento e o banco desde 22/09/2026 (eventos aviso_enviado): aqui, uma lista.
 """
 from __future__ import annotations
 
@@ -43,7 +44,18 @@ def n(monkeypatch, tmp_path):
               "R7_SMTP_REMETENTE", "R7_SMTP_STARTTLS"):
         monkeypatch.delenv(k, raising=False)
     mod = _importar(monkeypatch, "notificar")
-    monkeypatch.setattr(mod.cfg, "ARQ_AVISOS", str(tmp_path / "avisos.csv"))
+    mod._banco = []   # os eventos aviso_enviado que o job gravaria; None = banco fora
+
+    def _listar(ex, tipos, *, ops=None, log=print):
+        if mod._banco is None:
+            return None
+        tipos = [tipos] if isinstance(tipos, str) else list(tipos)
+        alvo = None if ops is None else {int(o) for o in ops}
+        return [e for e in sorted(mod._banco, key=lambda e: e["ocorrido_em"])
+                if e["tipo_evento"] in tipos and (alvo is None or e["id_operacao"] in alvo)]
+
+    monkeypatch.setattr(mod.execucao_job, "atual", lambda: object())
+    monkeypatch.setattr(mod.execucao_job, "listar_eventos_operacao", _listar)
     monkeypatch.setattr(mod.cfg, "EMAIL_ATIVO", True)
     monkeypatch.setattr(mod.cfg, "WHATSAPP_ATIVO", True)
     monkeypatch.setattr(mod.cfg, "AVISO_PENDENCIA_CANAIS", ["email"])
@@ -184,6 +196,27 @@ def test_pendencia_curta_no_whatsapp(n, pendencia, curta):
     assert n._pendencia_curta(pendencia) == curta
 
 
+def _avisar_como_o_job(n, op, pendencias, quando=None):
+    """O que finalizar_operacao._avisar_pagamento faz: avisa e, se tentou, grava o evento
+    aviso_enviado com o hash e o numero do aviso — a memoria do proximo ciclo."""
+    r = n.avisar_pagamento_pendente(op, "SPEED PACK", pendencias, _CTX)
+    if r["tentou"]:
+        n._banco.append({"id_operacao": int(op), "tipo_evento": "aviso_enviado",
+                         "resultado": "ok" if r["enviado"] else "falhou",
+                         "ocorrido_em": quando or datetime.now().astimezone(),
+                         "detalhe": {"motivo_aviso": "pagamento_pendente",
+                                     "pendencias": list(pendencias),
+                                     "hash_aviso": r["hash_aviso"], "n_avisos": r["n_avisos"]}})
+    return r
+
+
+def _evento(op, detalhe, horas_atras, resultado="ok"):
+    from datetime import timedelta
+    return {"id_operacao": int(op), "tipo_evento": "aviso_enviado", "resultado": resultado,
+            "ocorrido_em": (datetime.now() - timedelta(hours=horas_atras)).astimezone(),
+            "detalhe": detalhe}
+
+
 def test_um_canal_que_falha_nao_impede_o_outro(n, smtp, monkeypatch):
     monkeypatch.setattr(n.cfg, "AVISO_PENDENCIA_CANAIS", ["whatsapp", "email"])
     smtp.falhar = True
@@ -194,29 +227,65 @@ def test_um_canal_que_falha_nao_impede_o_outro(n, smtp, monkeypatch):
 def test_todos_os_canais_falhando_nao_conta_como_aviso(n, smtp, monkeypatch):
     monkeypatch.setattr(n.cfg, "AVISO_PENDENCIA_CANAIS", ["whatsapp", "email"])
     smtp.falhar, n._wpp_falhar = True, True
-    r = n.avisar_pagamento_pendente("65879", "SPEED PACK", _PEND, _CTX)
+    r = _avisar_como_o_job(n, "65879", _PEND)
     assert r["tentou"] and not r["enviado"] and "nenhum canal entregou" in r["motivo"]
     smtp.falhar, n._wpp_falhar = False, False
-    assert n.avisar_pagamento_pendente("65879", "SPEED PACK", _PEND, _CTX)["enviado"]
+    assert _avisar_como_o_job(n, "65879", _PEND)["enviado"]
 
 
 def test_espacamento_entre_avisos_e_zerar_quando_muda(n, smtp):
-    r1 = n.avisar_pagamento_pendente("65879", "SPEED PACK", _PEND, _CTX)
+    r1 = _avisar_como_o_job(n, "65879", _PEND)
     assert r1["enviado"] and r1["destinatarios"] == ["operacional@exemplo.test"]
+    assert r1["n_avisos"] == 1 and r1["hash_aviso"] == n._hash(_PEND)
     assert "PAGAMENTO impede" in smtp.instancias[0].enviados[0][2]
-    r2 = n.avisar_pagamento_pendente("65879", "SPEED PACK", _PEND, _CTX)
+    r2 = _avisar_como_o_job(n, "65879", _PEND)
     assert not r2["tentou"] and "espacamento" in r2["motivo"], "mesmo aviso de novo, na hora, nao"
-    r3 = n.avisar_pagamento_pendente("65879", "SPEED PACK", _PEND + ["Pagamento: SP nao marcado"], _CTX)
-    assert r3["enviado"], "pendencia nova e cobranca nova"
+    r3 = _avisar_como_o_job(n, "65879", _PEND + ["Pagamento: SP nao marcado"])
+    assert r3["enviado"] and r3["n_avisos"] == 1, "pendencia nova e cobranca nova"
+    assert _avisar_como_o_job(n, "65880", _PEND)["enviado"], "outra operacao tem a sua memoria"
 
 
 def test_falha_de_envio_nao_conta_como_aviso(n, smtp):
     smtp.falhar = True
-    r = n.avisar_pagamento_pendente("65879", "SPEED PACK", _PEND, _CTX)
+    r = _avisar_como_o_job(n, "65879", _PEND)
     assert r["tentou"] and not r["enviado"]
     smtp.falhar = False
-    assert n.avisar_pagamento_pendente("65879", "SPEED PACK", _PEND, _CTX)["enviado"], \
-        "sem registro da falha, o proximo ciclo tenta de novo"
+    assert _avisar_como_o_job(n, "65879", _PEND)["enviado"], \
+        "aviso que nao entregou nao conta: o proximo ciclo tenta de novo"
+
+
+def test_espacamento_dobra_a_cada_aviso_entregue(n, smtp):
+    h = n._hash(_PEND)
+    n._banco.append(_evento("65879", {"motivo_aviso": "pagamento_pendente", "hash_aviso": h,
+                                      "n_avisos": 1}, horas_atras=3))
+    r = _avisar_como_o_job(n, "65879", _PEND)
+    assert r["enviado"] and r["n_avisos"] == 2, "2h cumpridas depois do 1o: reenvio #2"
+    n._banco[:] = [_evento("65879", {"motivo_aviso": "pagamento_pendente", "hash_aviso": h,
+                                     "n_avisos": 2}, horas_atras=3)]
+    r = _avisar_como_o_job(n, "65879", _PEND)
+    assert not r["tentou"] and "faltam 1.0h" in r["motivo"], "depois do 2o, espera 4h"
+
+
+def test_evento_de_antes_do_hash_usa_as_pendencias_do_detalhe(n, smtp):
+    n._banco.append(_evento("65879", {"motivo_aviso": "pagamento_pendente",
+                                      "pendencias": list(_PEND)}, horas_atras=1))
+    r = _avisar_como_o_job(n, "65879", _PEND)
+    assert not r["tentou"] and "espacamento" in r["motivo"]
+
+
+def test_so_o_aviso_de_pagamento_entregue_conta(n, smtp):
+    h = n._hash(_PEND)
+    n._banco += [_evento("65879", {"motivo_aviso": "corte_18h30", "hash_aviso": h}, 0.1),
+                 _evento("65879", {"motivo_aviso": "pagamento_pendente", "hash_aviso": h},
+                         0.1, resultado="falhou")]
+    assert _avisar_como_o_job(n, "65879", _PEND)["enviado"]
+
+
+def test_sem_banco_nao_avisa_para_nao_repetir(n, smtp):
+    n._banco = None
+    r = n.avisar_pagamento_pendente("65879", "SPEED PACK", _PEND, _CTX)
+    assert not r["tentou"] and "sem memoria dos avisos" in r["motivo"]
+    assert smtp.instancias == []
 
 
 # --------------------------------------------------------------------------- #
@@ -262,7 +331,8 @@ def _armar(job, monkeypatch, docs_pend, pag_pend, resposta=None):
         avisos.append((op, list(pendencias)))
         return resposta or {"enviado": True, "tentou": True, "motivo": "enviado",
                             "destinatarios": ["operacional@exemplo.test"],
-                            "canais": {"whatsapp": {"ok": True, "detalhe": "OK"}}}
+                            "canais": {"whatsapp": {"ok": True, "detalhe": "OK"}},
+                            "hash_aviso": "abc123def456", "n_avisos": 3}
 
     monkeypatch.setattr(job.notificar, "avisar_pagamento_pendente", _avisar)
     monkeypatch.setattr(job.execucao_job, "registrar_evento_operacao",
@@ -289,6 +359,8 @@ def test_documentos_ok_e_pagamento_travando_avisa_e_registra(job, monkeypatch):
     assert kw["detalhe"]["motivo_aviso"] == "pagamento_pendente"
     assert kw["detalhe"]["canais"] == {"whatsapp": {"ok": True, "detalhe": "OK"}}
     assert kw["detalhe"]["pendencias"] == _PEND
+    assert kw["detalhe"]["hash_aviso"] == "abc123def456" and kw["detalhe"]["n_avisos"] == 3, \
+        "o evento e a memoria do espacamento: leva o hash e o numero do aviso"
 
 
 def test_sem_email_no_comando_nao_avisa(job, monkeypatch):

@@ -27,13 +27,11 @@ Uso (rodar da RAIZ; o job sobe a PROPRIA sessao do Smart - `--cdp` anexa numa ja
   python finalizar_operacao/finalizar_operacao.py --loop             # ciclo continuo
 """
 import argparse
-import csv
 import os
 import re
 import sys
 import time
 import traceback
-from datetime import datetime
 from html import unescape
 
 _AQUI = os.path.dirname(os.path.abspath(__file__))
@@ -125,15 +123,6 @@ def _fmt_valor(valor):
     if valor is None:
         return None
     return f"R$ {valor:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
-
-
-def _registrar_finalizada(op, cedente):
-    novo = not os.path.exists(cfg.ARQ_FINALIZADAS)
-    with open(cfg.ARQ_FINALIZADAS, "a", encoding="utf-8", newline="") as fh:
-        w = csv.writer(fh, delimiter=";")
-        if novo:
-            w.writerow(["quando", "op", "cedente"])
-        w.writerow([datetime.now().strftime("%Y-%m-%d %H:%M:%S"), str(op), cedente or ""])
 
 
 def processar(ctx, op, executar=False, mandar_email=False, execucao=None):
@@ -313,7 +302,8 @@ def processar(ctx, op, executar=False, mandar_email=False, execucao=None):
         for d in r_fin["dialogos"]:
             print(f"        [dialogo] {d}")
         if r_fin["ok"]:
-            _registrar_finalizada(op, cedente)
+            # a trilha da finalizacao e o evento `finalizada` gravado acima (o
+            # finalizadas.csv saiu em 22/09/2026: ninguem o lia)
             try:
                 # CPF/CNPJ + valor de cada linha: e o que casa com o retorno do banco
                 rotina_avisos.registrar_finalizada(
@@ -356,8 +346,10 @@ def _avisar_pagamento(op, cedente, valor, r_pag, laudo, mandar_email, execucao):
             execucao_job.registrar_evento_operacao(
                 execucao, op, "aviso_enviado", resultado="ok" if r["enviado"] else "falhou",
                 cedente=cedente, valor_liquido=valor,
-                detalhe={"motivo_aviso": "pagamento_pendente", "canais": r.get("canais"),
-                         "pendencias": r_pag["pendencias"], "detalhe": r["motivo"]})
+                detalhe={"motivo_aviso": notificar.MOTIVO_PAGAMENTO_PENDENTE,
+                         "canais": r.get("canais"), "pendencias": r_pag["pendencias"],
+                         "hash_aviso": r.get("hash_aviso"), "n_avisos": r.get("n_avisos"),
+                         "detalhe": r["motivo"]})
         except Exception as e:  # noqa: BLE001
             print(f"     registro do aviso FALHOU: {str(e)[:120]}")
     return "avisado" if r["enviado"] else "avisar"

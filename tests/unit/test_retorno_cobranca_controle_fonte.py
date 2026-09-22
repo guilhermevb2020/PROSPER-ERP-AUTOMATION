@@ -34,6 +34,8 @@ def robo(monkeypatch, tmp_path):
     linhas = []
     monkeypatch.setattr(r, "log", lambda m: linhas.append(m))
     r._linhas = linhas
+    # sem a carga da erp_008 (o padrao destes testes): o historico vem do CSV congelado
+    monkeypatch.setattr(r.execucao_job, "listar_historico", lambda ex, tipos, log=print: [])
     with open(cfg.ARQ_CONTROLE, "w", newline="", encoding="utf-8") as f:
         w = csv.writer(f)
         w.writerow(["arquivo", "nome_smart", "hash", "conta", "titulos", "ja_processado", "processado",
@@ -84,3 +86,31 @@ def test_banco_indisponivel_volta_ao_csv_e_avisa(robo, monkeypatch):
     hashes, _ = robo.historico_controle(execucao=None)
     assert hashes == {"aaaa"}
     assert any("indisponivel" in l for l in robo._linhas)
+
+
+def test_com_o_historico_no_banco_o_csv_nao_e_lido(robo, monkeypatch):
+    """Depois da carga da erp_008 o historico vem de arquivo_historico: o CSV (aaaa/bbbb)
+    nem e aberto, e a memoria continua completa."""
+    monkeypatch.setattr(robo.cfg, "CONTROLE_FONTE", "banco")
+    monkeypatch.setattr(robo.execucao_job, "listar_controle", lambda ex, fam, chave, log=print: {
+        "dddd": {"nome_smart": "D.RET", "processado": "True"}})
+    pedidos = []
+    monkeypatch.setattr(robo.execucao_job, "listar_historico", lambda ex, tipos, log=print: (
+        pedidos.append(tuple(tipos)) or [
+            {"md5": "eeee", "detalhe": {"processado": True, "nomes_smart": ["E.RET"]}},
+            {"md5": "ffff", "detalhe": {"processado": False, "nomes_smart": ["E.RET", "F.RET"]}}]))
+    monkeypatch.setattr(robo, "historico_controle_do_csv",
+                        lambda: pytest.fail("com o historico no banco o CSV nao e lido"))
+    hashes, por_nome = robo.historico_controle(execucao="EX")
+    assert hashes == {"dddd", "eeee"}
+    assert por_nome == {"D.RET": {"dddd"}, "E.RET": {"eeee", "ffff"}, "F.RET": {"ffff"}}
+    assert pedidos == [("retorno_cobranca_cnab_400", "retorno_bb")]
+    assert any("+ historico no banco (1 so no historico)" in l for l in robo._linhas)
+
+
+def test_historico_sem_resposta_do_banco_le_o_csv(robo, monkeypatch):
+    monkeypatch.setattr(robo.cfg, "CONTROLE_FONTE", "banco")
+    monkeypatch.setattr(robo.execucao_job, "listar_controle", lambda ex, fam, chave, log=print: {})
+    monkeypatch.setattr(robo.execucao_job, "listar_historico", lambda ex, tipos, log=print: None)
+    hashes, _ = robo.historico_controle(execucao="EX")
+    assert hashes == {"aaaa"} and any("historico do CSV" in l for l in robo._linhas)

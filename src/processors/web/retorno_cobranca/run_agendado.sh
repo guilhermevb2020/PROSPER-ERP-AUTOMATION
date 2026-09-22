@@ -109,19 +109,25 @@ done
 
 # BEGIN DESCOBERTA_RET
 # Fase 2 (docs/PLANO_CONTROLE_NO_BANCO.md): com CONTROLE_FONTE_RET=banco a memoria "ja
-# processei" vem de erp_automation.arquivo (md5 dos retornos registrados), lida UMA vez
-# para uma lista, MAIS o CSV como historia congelada (ate a Fase 4: o banco so conhece o
-# que entrou desde 21/09/2026, e esta memoria evita reprocessar .RET re-entregue). Se o
-# banco nao responder, fica so o CSV e diz. `csv` (padrao) e o grep de sempre. O md5 e o
-# de MODO TEXTO nos dois lados (o job grava o mesmo valor no banco).
+# processei" vem do banco, lida UMA vez para uma lista: os md5 de erp_automation.arquivo e,
+# desde a carga da erp_008, os do historico que so o CSV sabia (arquivo_historico) — e
+# entao o CSV nao e lido (exit 0 do listar_md5 --com-historico). Enquanto a carga nao
+# existir (exit 3), o CSV congelado entra na lista: esta memoria evita reprocessar .RET
+# re-entregue. Banco sem resposta (outro exit): so o CSV, e diz. `csv` (padrao) e o grep
+# de sempre. O md5 e o de MODO TEXTO nos dois lados (o job grava o mesmo valor no banco).
 CONTROLE_FONTE_RET="${CONTROLE_FONTE_RET:-${CONTROLE_FONTE:-csv}}"
 MEMORIA_RET="$CONTROLE_RET"
 LISTA_MD5_RET="/tmp/robo_retorno_md5_banco.$$"
 if [ "$CONTROLE_FONTE_RET" = "banco" ]; then
     export PYTHONPATH=/app
-    if python /app/src/processors/db/controle/listar_md5.py retorno_cobranca_cnab_400 retorno_bb \
-            > "$LISTA_MD5_RET" 2>/dev/null; then
-        _n=$(wc -l < "$LISTA_MD5_RET" | tr -d ' ')
+    _rc=0
+    python /app/src/processors/db/controle/listar_md5.py --com-historico \
+        retorno_cobranca_cnab_400 retorno_bb > "$LISTA_MD5_RET" 2>/dev/null || _rc=$?
+    _n=$(wc -l < "$LISTA_MD5_RET" | tr -d ' ')
+    if [ "$_rc" -eq 0 ]; then
+        MEMORIA_RET="$LISTA_MD5_RET"
+        echo "controle: fonte BANCO ($_n md5 registrados, com o historico no banco)"
+    elif [ "$_rc" -eq 3 ]; then
         cat "$CONTROLE_RET" >> "$LISTA_MD5_RET" 2>/dev/null || true
         MEMORIA_RET="$LISTA_MD5_RET"
         echo "controle: fonte BANCO ($_n md5 registrados) + historico do CSV"

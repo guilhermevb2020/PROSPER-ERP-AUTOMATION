@@ -319,7 +319,6 @@ def job(monkeypatch, tmp_path):
              "cpf_cnpj": "12.345.678/0001-90", "vencto": "2026-09-22", "sp": "SIM",
              "valor": "12.659,99"}]})
     monkeypatch.setattr(mod.execucao_job, "registrar_evento_operacao", lambda *a, **k: None)
-    monkeypatch.setattr(mod, "_registrar_finalizada", lambda op, cedente: None)
     monkeypatch.setattr(mod, "_avisar_finalizacao", lambda *a, **k: None)
     return mod
 

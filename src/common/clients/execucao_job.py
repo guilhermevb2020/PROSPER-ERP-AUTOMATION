@@ -651,20 +651,214 @@ def _consultar(ex: Execucao, log, descricao: str, sql: str, params: tuple):
 
 def listar_md5(ex: Execucao, tipo_arquivo: str, log=print) -> set | None:
     """Os md5 de todos os arquivos deste tipo ja registrados — a memoria de idempotencia
-    que o CSV de controle guardava (Fase 2 de docs/PLANO_CONTROLE_NO_BANCO.md). None
-    quando nao ha banco ou a consulta falha: quem chama decide o que fazer (o retorno de
-    pagamento volta ao CSV e avisa). Fato consumado: nunca levanta."""
+    que o CSV de controle guardava (Fase 2 de docs/PLANO_CONTROLE_NO_BANCO.md) —, mais o
+    historico que so o CSV sabia, quando a erp_008 ja esta aplicada (`arquivo_historico`).
+    None quando nao ha banco ou a consulta falha: quem chama decide o que fazer (o retorno
+    de pagamento volta ao CSV e avisa). Fato consumado: nunca levanta."""
     if ex is None:
         return None
     if tipo_arquivo not in TIPOS_ARQUIVO:
         raise ValueError(f"tipo_arquivo desconhecido: {tipo_arquivo!r}")
-    linhas = _fato_consumado(ex, log, f"lista de md5 de {tipo_arquivo}", lambda: _consultar(
-        ex, log, f"lista de md5 de {tipo_arquivo}",
-        "SELECT md5 FROM erp_automation.arquivo WHERE tipo_arquivo = %s AND md5 IS NOT NULL",
-        (tipo_arquivo,)))
+
+    def _ler():
+        sql = "SELECT md5 FROM erp_automation.arquivo WHERE tipo_arquivo = %s AND md5 IS NOT NULL"
+        params = (tipo_arquivo,)
+        if _tem_tabela_historico(ex, log):
+            sql += " UNION SELECT md5 FROM erp_automation.arquivo_historico WHERE tipo_arquivo = %s"
+            params = (tipo_arquivo, tipo_arquivo)
+        return _consultar(ex, log, f"lista de md5 de {tipo_arquivo}", sql, params)
+
+    linhas = _fato_consumado(ex, log, f"lista de md5 de {tipo_arquivo}", _ler)
     if linhas is None:
         return None
     return {str(l[0]).lower() for l in linhas if l and l[0]}
+
+
+# --------------------------------------------------------------------------- #
+# historico dos CSVs de controle (erp_008)
+# --------------------------------------------------------------------------- #
+#: Os tipos que a erp_008 aceita: os arquivos que os CSVs de controle acompanhavam.
+TIPOS_ARQUIVO_HISTORICO = ("remessa_cobranca_cnab_400", "retorno_cobranca_cnab_400",
+                           "remessa_pagamento_cnab_240", "retorno_pagamento_cnab_240",
+                           "remessa_bb", "retorno_bb")
+_MD5_RE = re.compile(r"^[0-9a-f]{32}$")
+
+
+def _tem_tabela_historico(ex: Execucao, log) -> bool | None:
+    """A erp_008 ja esta aplicada? Pergunta que nao falha quando a tabela nao existe
+    (to_regclass devolve NULL). None se a propria consulta falhar."""
+    linhas = _consultar(ex, log, "existencia de arquivo_historico",
+                        "SELECT to_regclass('erp_automation.arquivo_historico') IS NOT NULL", ())
+    if linhas is None:
+        return None
+    return bool(linhas and linhas[0][0])
+
+
+def _tipos_historico(tipos) -> list:
+    tipos = [tipos] if isinstance(tipos, str) else list(tipos)
+    for t in tipos:
+        if t not in TIPOS_ARQUIVO_HISTORICO:
+            raise ValueError(f"tipo_arquivo sem historico: {t!r}")
+    return tipos
+
+
+def historico_carregado(ex: Execucao, tipos, log=print) -> bool | None:
+    """True quando a carga do historico dos CSVs (erp_008) ja trouxe linhas destes tipos:
+    dai em diante o CSV congelado nao precisa mais ser lido. A carga e UM comando por
+    execucao (entra tudo ou nada), entao haver linha e haver a carga inteira. False sem a
+    tabela ou sem linhas; None sem banco (quem chama volta ao CSV e avisa)."""
+    if ex is None:
+        return None
+    tipos = _tipos_historico(tipos)
+
+    def _ler():
+        tem = _tem_tabela_historico(ex, log)
+        if not tem:
+            return None if tem is None else [(False,)]
+        return _consultar(ex, log, "historico carregado",
+                          "SELECT EXISTS (SELECT 1 FROM erp_automation.arquivo_historico "
+                          "WHERE tipo_arquivo = ANY(%s))", (tipos,))
+
+    linhas = _fato_consumado(ex, log, "historico carregado", _ler)
+    if linhas is None:
+        return None
+    return bool(linhas and linhas[0][0])
+
+
+def listar_historico(ex: Execucao, tipos, log=print) -> list | None:
+    """As linhas do historico (erp_008) destes tipos, como dicionarios: tipo_arquivo, md5,
+    nome_arquivo, tratado_em, detalhe. [] sem a tabela; None sem banco ou se falhar."""
+    if ex is None:
+        return None
+    tipos = _tipos_historico(tipos)
+
+    def _ler():
+        tem = _tem_tabela_historico(ex, log)
+        if not tem:
+            return None if tem is None else []
+        return _consultar(ex, log, "historico dos CSVs",
+                          "SELECT tipo_arquivo, md5, nome_arquivo, tratado_em, detalhe_json "
+                          "FROM erp_automation.arquivo_historico WHERE tipo_arquivo = ANY(%s) "
+                          "ORDER BY id", (tipos,))
+
+    linhas = _fato_consumado(ex, log, "historico dos CSVs", _ler)
+    if linhas is None:
+        return None
+    return [{"tipo_arquivo": t, "md5": str(m).lower(), "nome_arquivo": n, "tratado_em": q,
+             "detalhe": _dict_do_banco(d)} for t, m, n, q, d in linhas]
+
+
+def _dict_do_banco(valor) -> dict:
+    """jsonb chega como dict pelo psycopg2; texto (ou bytes) e decodificado; o resto vira {}."""
+    if isinstance(valor, (str, bytes)):
+        try:
+            valor = json.loads(valor)
+        except ValueError:
+            return {}
+    return valor if isinstance(valor, dict) else {}
+
+
+def _carga_estrita(ex: Execucao, o_que: str):
+    """A carga historica e administrativa: sem banco ela nao tem sentido nenhum."""
+    if ex is None or not ex.registra or ex._conn is None:
+        raise ErroDeRegistro(f"{o_que} exige execucao com banco")
+
+
+def carregar_historico_arquivos(ex: Execucao, linhas: list, log=print) -> int:
+    """Carrega em erp_automation.arquivo_historico (erp_008) o que so um CSV de controle
+    sabia: [{tipo_arquivo, md5, nome_arquivo, tratado_em, origem, detalhe}]. UM comando —
+    entra tudo ou nada — e repetir a carga nao duplica (ON CONFLICT (tipo_arquivo, md5)
+    DO NOTHING). Devolve quantas linhas entraram agora. Levanta se falhar."""
+    import psycopg2.extras
+
+    _carga_estrita(ex, "carga do historico de arquivos")
+    valores = []
+    for l in linhas:
+        tipo, md5 = l["tipo_arquivo"], str(l["md5"]).lower()
+        if tipo not in TIPOS_ARQUIVO_HISTORICO:
+            raise ValueError(f"tipo_arquivo sem historico: {tipo!r}")
+        if not _MD5_RE.match(md5):
+            raise ValueError(f"md5 invalido: {md5!r}")
+        if not l.get("origem"):
+            raise ValueError("origem obrigatoria (de que arquivo veio a linha)")
+        valores.append((ex.id, tipo, md5, l.get("nome_arquivo") or "", l.get("tratado_em"),
+                        l["origem"], _json(l.get("detalhe") or {})))
+    if not valores:
+        return 0
+    with ex._conn.cursor() as cur:
+        ids = psycopg2.extras.execute_values(
+            cur,
+            "INSERT INTO erp_automation.arquivo_historico (fk_job_execucao, tipo_arquivo, md5, "
+            "nome_arquivo, tratado_em, origem, detalhe_json) VALUES %s "
+            "ON CONFLICT (tipo_arquivo, md5) DO NOTHING RETURNING id",
+            valores, page_size=len(valores), fetch=True)
+    return len(ids)
+
+
+def carregar_historico_eventos(ex: Execucao, eventos: list, log=print) -> int:
+    """Carrega em operacao_evento fatos que so um CSV local sabia (credito:
+    controle_downloads.csv), cada um com o instante original: [{id_operacao, tipo_evento,
+    resultado, ocorrido_em, detalhe}], detalhe['origem'] obrigatorio. UM comando — entra
+    tudo ou nada — e o que ja entrou (mesma op, tipo, instante e origem) nao entra de novo.
+    Devolve quantos eventos entraram agora. Levanta se falhar."""
+    import psycopg2.extras
+
+    _carga_estrita(ex, "carga do historico de eventos")
+    valores = []
+    for e in eventos:
+        if e["tipo_evento"] not in TIPOS_EVENTO_OPERACAO:
+            raise ValueError(f"tipo_evento desconhecido: {e['tipo_evento']!r}")
+        detalhe = dict(e.get("detalhe") or {})
+        if not detalhe.get("origem") or not e.get("ocorrido_em"):
+            raise ValueError("evento historico exige detalhe['origem'] e ocorrido_em")
+        valores.append((int(e["id_operacao"]), e["tipo_evento"], e.get("resultado"),
+                        e["ocorrido_em"], _json(detalhe)))
+    if not valores:
+        return 0
+    with ex._conn.cursor() as cur:
+        ids = psycopg2.extras.execute_values(
+            cur,
+            "INSERT INTO erp_automation.operacao_evento (fk_job_execucao, id_operacao, "
+            "tipo_evento, resultado, ocorrido_em, detalhe_json) "
+            f"SELECT {int(ex.id)}, v.id_operacao, v.tipo_evento, v.resultado, v.ocorrido_em, "
+            "v.detalhe_json FROM (VALUES %s) AS v (id_operacao, tipo_evento, resultado, "
+            "ocorrido_em, detalhe_json) "
+            "WHERE NOT EXISTS (SELECT 1 FROM erp_automation.operacao_evento e "
+            "WHERE e.id_operacao = v.id_operacao AND e.tipo_evento = v.tipo_evento "
+            "AND e.ocorrido_em = v.ocorrido_em "
+            "AND e.detalhe_json->>'origem' = v.detalhe_json->>'origem') RETURNING id",
+            valores, template="(%s::integer, %s::text, %s::text, %s::timestamptz, %s::jsonb)",
+            page_size=len(valores), fetch=True)
+    return len(ids)
+
+
+def listar_eventos_operacao(ex: Execucao, tipos, *, ops=None, log=print) -> list | None:
+    """Os eventos de operacao destes tipos (das ops pedidas, ou de todas), em ordem de
+    ocorrencia: {id_operacao, tipo_evento, resultado, ocorrido_em, detalhe}. E a memoria
+    que o credito (documentos baixados, etapa movida) e o finalizador (avisos enviados)
+    guardavam em CSV. None sem banco ou se falhar (fato consumado: nunca levanta)."""
+    if ex is None:
+        return None
+    tipos = [tipos] if isinstance(tipos, str) else list(tipos)
+    for t in tipos:
+        if t not in TIPOS_EVENTO_OPERACAO:
+            raise ValueError(f"tipo_evento desconhecido: {t!r}")
+    sql = ("SELECT id_operacao, tipo_evento, resultado, ocorrido_em, detalhe_json "
+           "FROM erp_automation.operacao_evento WHERE tipo_evento = ANY(%s)")
+    params = [tipos]
+    if ops is not None:
+        ops = [int(o) for o in ops if str(o).strip().isdigit()]
+        if not ops:
+            return []
+        sql += " AND id_operacao = ANY(%s)"
+        params.append(ops)
+    sql += " ORDER BY ocorrido_em, id"
+    linhas = _fato_consumado(ex, log, "eventos de operacao", lambda: _consultar(
+        ex, log, "eventos de operacao", sql, tuple(params)))
+    if linhas is None:
+        return None
+    return [{"id_operacao": op, "tipo_evento": tipo, "resultado": res, "ocorrido_em": quando,
+             "detalhe": _dict_do_banco(d)} for op, tipo, res, quando, d in linhas]
 
 
 #: As views de controle da erp_005: as colunas do CSV de cada familia, lidas do banco.

@@ -42,6 +42,8 @@ def robo(monkeypatch, tmp_path):
     linhas = []
     monkeypatch.setattr(r, "log", lambda m: linhas.append(m))
     r._linhas = linhas
+    # sem a carga da erp_008 (o padrao destes testes): o historico vem do CSV congelado
+    monkeypatch.setattr(r.execucao_job, "historico_carregado", lambda ex, tipos, log=print: False)
     with open(cfg.ARQ_CONTROLE, "w", newline="", encoding="utf-8") as f:
         w = csv.writer(f)
         w.writerow(["arquivo", "hash", "status_http", "quando"])
@@ -105,3 +107,20 @@ def test_escrever_csv_desligado_nao_grava_e_diz(robo, monkeypatch):
     monkeypatch.setattr(robo.cfg, "ESCREVER_CSV", True)
     robo.gravar_controle({"arquivo": "X.RET", "hash": "ffff", "status_http": 200, "quando": "2026-09-22 12:00:00"})
     assert "ffff" in open(robo.cfg.ARQ_CONTROLE, encoding="utf-8").read()
+
+
+def test_com_o_historico_no_banco_o_csv_nao_e_lido(robo, monkeypatch):
+    """Depois da carga da erp_008 o listar_md5 ja traz o historico: o controle.csv nem e aberto."""
+    monkeypatch.setattr(robo.cfg, "CONTROLE_FONTE", "banco")
+    monkeypatch.setattr(robo.execucao_job, "listar_md5", lambda ex, tipo, log=print: {"aaaa", "bbbb"})
+    monkeypatch.setattr(robo.execucao_job, "historico_carregado", lambda ex, tipos, log=print: True)
+    monkeypatch.setattr(robo, "hashes_do_csv", lambda: pytest.fail("o CSV nao e lido"))
+    assert robo.hashes_ja_tratados(execucao="EX") == {"aaaa", "bbbb"}
+    assert any("com o historico no banco" in l for l in robo._linhas)
+
+
+def test_historico_sem_resposta_soma_o_csv(robo, monkeypatch):
+    monkeypatch.setattr(robo.cfg, "CONTROLE_FONTE", "banco")
+    monkeypatch.setattr(robo.execucao_job, "listar_md5", lambda ex, tipo, log=print: {"bbbb"})
+    monkeypatch.setattr(robo.execucao_job, "historico_carregado", lambda ex, tipos, log=print: None)
+    assert robo.hashes_ja_tratados(execucao="EX") == {"aaaa", "bbbb"}

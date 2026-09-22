@@ -95,7 +95,6 @@ def _preparar_processar(job, monkeypatch, resultado_clique):
         return dict(resultado_clique)
 
     monkeypatch.setattr(job.fin, "finalizar_da_grade", _finalizar)
-    monkeypatch.setattr(job, "_registrar_finalizada", lambda op, cedente: None)
     avisos = []
     monkeypatch.setattr(job, "_avisar_finalizacao",
                         lambda op, cedente, valor, detalhes, confirmacao, execucao=None: avisos.append(str(op)))

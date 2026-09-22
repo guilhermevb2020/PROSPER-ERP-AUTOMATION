@@ -2,7 +2,7 @@
 """
 conftest.py - nenhum teste escreve nos arquivos de estado REAIS do finalizador.
 
-Por que existe: os arquivos de estado do job finalizar_operacao (finalizadas, avisos, a rotina de avisos)
+Por que existe: os arquivos de estado do job finalizar_operacao (a rotina de avisos)
 moram em src/processors/web/finalizar_operacao/, que e bind-mount do container de
 producao. Em 22/09/2026 os testes que simulam uma finalizacao gravaram ops de mentira
 (65071, "CEDENTE X") no finalizadas_pix.jsonl real - e a rodada seguinte do job teria
@@ -19,8 +19,6 @@ import pytest
 _ARQUIVOS = {
     "R7_ARQ_ROTINA": ("ARQ_ROTINA", "rotina_avisos.json"),
     "R7_ARQ_FINALIZADAS_PIX": ("ARQ_FINALIZADAS_PIX", "finalizadas_pix.jsonl"),
-    "R7_ARQ_AVISOS": ("ARQ_AVISOS", "avisos_enviados.csv"),
-    "R7_ARQ_FINALIZADAS": ("ARQ_FINALIZADAS", "finalizadas.csv"),
     "R7_WHATSAPP_ARQUIVO": ("WHATSAPP_ARQUIVO_SAIDA", "whatsapp_enviados.txt"),
 }
 

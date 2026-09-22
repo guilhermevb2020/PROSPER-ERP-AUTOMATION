@@ -23,14 +23,15 @@ o mesmo canal das finalizacoes (notificar_whatsapp).
 
 Anti-repeticao: a mesma op com as MESMAS pendencias e cobrada de novo cada vez mais
 espacado (na hora, 2h, 4h, ... ate 1x/dia); pendencias diferentes zeram o contador.
-Registro em avisos_enviados.csv; o finalizador grava cada envio como evento
-aviso_enviado no banco.
+A memoria e o banco (desde 22/09/2026, no lugar do avisos_enviados.csv): o finalizador
+grava cada envio como evento aviso_enviado, com o hash das pendencias e o numero do
+aviso, e o proximo ciclo le o ultimo. Sem banco nao se avisa (sem saber o que ja foi
+mandado, avisar seria repetir).
 
 Uso isolado (mostra o SMTP; com --teste manda UM e-mail para R7_EMAIL_TESTE):
   python finalizar_operacao/notificar.py --teste [--para endereco]
 """
 import argparse
-import csv
 import hashlib
 import os
 import re
@@ -48,7 +49,14 @@ if _AQUI not in sys.path:
 import notificar_whatsapp  # noqa: E402
 import r7_config as cfg  # noqa: E402
 
-_CABECALHO = ["quando", "op", "hash_pendencias", "n_avisos", "destinatarios"]
+_RAIZ = os.path.abspath(os.path.join(_AQUI, "..", "..", "..", ".."))
+if _RAIZ not in sys.path:
+    sys.path.insert(0, _RAIZ)
+
+from src.common.clients import execucao_job  # noqa: E402
+
+#: o motivo_aviso do evento que este espacamento governa (os avisos da rotina tem o seu)
+MOTIVO_PAGAMENTO_PENDENTE = "pagamento_pendente"
 
 
 # --------------------------------------------------------------------------- #
@@ -107,31 +115,39 @@ def _enviar_email(assunto, corpo, destinatarios):
 # Se as PENDENCIAS MUDAREM (o operador resolveu uma e sobrou outra), o contador
 # ZERA e o aviso sai na hora - e uma cobranca nova, nao repeticao.
 # --------------------------------------------------------------------------- #
-_FMT = "%Y-%m-%d %H:%M:%S"
-
-
 def _hash(pendencias):
     return hashlib.sha1("|".join(sorted(pendencias)).encode("utf-8")).hexdigest()[:12]
 
 
+class SemMemoriaDeAvisos(RuntimeError):
+    """O banco nao respondeu: nao da para saber o que ja foi avisado."""
+
+
 def _ultimo_aviso(op):
-    """Ultima linha registrada p/ a op: (hash, quando: datetime, n_avisos)."""
+    """O ultimo aviso de pagamento pendente ENTREGUE para a op, lido do banco (evento
+    aviso_enviado, resultado ok): (hash, quando: datetime local, n_avisos), ou None se
+    nunca houve. Evento anterior a 22/09/2026 sem hash_aviso usa as pendencias do detalhe.
+    Levanta SemMemoriaDeAvisos sem execucao aberta ou sem banco."""
+    ex = execucao_job.atual()
+    eventos = execucao_job.listar_eventos_operacao(ex, "aviso_enviado", ops=[op])
+    if eventos is None:
+        raise SemMemoriaDeAvisos("sem banco nesta execucao")
     ultimo = None
-    try:
-        with open(cfg.ARQ_AVISOS, encoding="utf-8", newline="") as fh:
-            for linha in csv.DictReader(fh, delimiter=";"):
-                if str(linha.get("op")) != str(op):
-                    continue
-                try:
-                    quando = datetime.strptime(linha["quando"], _FMT)
-                    n = int(linha.get("n_avisos") or 1)
-                except Exception:
-                    continue
-                ultimo = (linha.get("hash_pendencias"), quando, n)
-    except FileNotFoundError:
-        return None
-    except Exception:
-        return None
+    for e in eventos:
+        d = e.get("detalhe") or {}
+        if e.get("resultado") != "ok" or d.get("motivo_aviso") != MOTIVO_PAGAMENTO_PENDENTE:
+            continue
+        h = d.get("hash_aviso") or (_hash(d["pendencias"]) if d.get("pendencias") else None)
+        quando = e.get("ocorrido_em")
+        if not isinstance(quando, datetime):
+            continue
+        if quando.tzinfo is not None:
+            quando = quando.astimezone().replace(tzinfo=None)
+        try:
+            n = int(d.get("n_avisos") or 1)
+        except (TypeError, ValueError):
+            n = 1
+        ultimo = (h, quando, n)
     return ultimo
 
 
@@ -144,7 +160,10 @@ def espera_minutos(n_avisos):
 def pode_avisar(op, pendencias, agora=None):
     """(pode: bool, motivo: str, n_avisos_anteriores: int)."""
     agora = agora or datetime.now()
-    ultimo = _ultimo_aviso(op)
+    try:
+        ultimo = _ultimo_aviso(op)
+    except SemMemoriaDeAvisos as e:
+        return False, f"sem memoria dos avisos ({e}): nao avisa para nao repetir", 0
     if ultimo is None:
         return True, "1o aviso", 0
     h_ant, quando, n = ultimo
@@ -156,16 +175,6 @@ def pode_avisar(op, pendencias, agora=None):
         return True, f"reenvio #{n + 1} (espacamento de {espera / 60:.0f}h cumprido)", n
     return False, (f"aguardando espacamento: faltam {falta / 60:.1f}h "
                    f"(aviso #{n} foi {quando.strftime('%d/%m %H:%M')})"), n
-
-
-def _registrar(op, pendencias, destinatarios, n_anterior):
-    novo = not os.path.exists(cfg.ARQ_AVISOS)
-    with open(cfg.ARQ_AVISOS, "a", encoding="utf-8", newline="") as fh:
-        w = csv.writer(fh, delimiter=";")
-        if novo:
-            w.writerow(_CABECALHO)
-        w.writerow([datetime.now().strftime(_FMT), str(op), _hash(pendencias),
-                    n_anterior + 1, ",".join(destinatarios)])
 
 
 # --------------------------------------------------------------------------- #
@@ -429,11 +438,13 @@ def _canais_ligados(tem_whatsapp):
 
 def _avisar(op, pendencias, assunto, corpo, destinatarios, texto_whatsapp=None, forcar=False):
     """Liga/desliga, espacamento, envio e registro de UM aviso, por canal.
-    -> {"enviado", "tentou", "motivo", "destinatarios", "canais"}. `tentou` = chegou a
-    falar com algum canal; `enviado` = pelo menos um entregou (e ai conta no espacamento).
-    Um canal que falha nao impede o outro."""
+    -> {"enviado", "tentou", "motivo", "destinatarios", "canais", "hash_aviso", "n_avisos"}.
+    `tentou` = chegou a falar com algum canal; `enviado` = pelo menos um entregou (e ai conta
+    no espacamento). Um canal que falha nao impede o outro. Quem chama grava o evento
+    aviso_enviado com hash_aviso e n_avisos no detalhe: e dele que o proximo ciclo le o
+    espacamento (sem esse evento, o aviso sai de novo no ciclo seguinte)."""
     r = {"enviado": False, "tentou": False, "motivo": "", "destinatarios": list(destinatarios),
-         "canais": {}}
+         "canais": {}, "hash_aviso": _hash(pendencias or []), "n_avisos": None}
     if not pendencias:
         r["motivo"] = "sem pendencias"
         return r
@@ -452,6 +463,7 @@ def _avisar(op, pendencias, assunto, corpo, destinatarios, texto_whatsapp=None, 
             return r
     reforco = f" (cobranca #{n_anterior + 1})" if n_anterior else ""
     r["tentou"] = True
+    r["n_avisos"] = n_anterior + 1
     if "whatsapp" in canais:
         n_ok, res = notificar_whatsapp.enviar(texto_whatsapp, cfg.WHATSAPP_DESTINO_OPERACIONAL)
         r["canais"]["whatsapp"] = {"ok": bool(n_ok), "detalhe": "; ".join(
@@ -465,7 +477,6 @@ def _avisar(op, pendencias, assunto, corpo, destinatarios, texto_whatsapp=None, 
     if not r["enviado"]:
         r["motivo"] = f"nenhum canal entregou ({resumo})"
         return r
-    _registrar(op, pendencias, [c for c, v in r["canais"].items() if v["ok"]], n_anterior)
     proxima = espera_minutos(n_anterior + 1) / 60.0
     r["motivo"] = (f"enviado ({resumo}; {motivo_envio}; se continuar pendente, cobra de "
                    f"novo em {proxima:.0f}h)")
