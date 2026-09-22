@@ -88,10 +88,10 @@ repo — candidatos a `src/common/` quando um segundo job precisar deles.
 
 ```bash
 # confere e avisa, NÃO finaliza (é o default)
-sh /app/src/processors/web/robo_finalizar/run_agendado.sh
+sh /app/src/processors/web/finalizar_operacao/run_agendado.sh
 
 # finaliza de verdade — só depois de validado
-sh /app/src/processors/web/robo_finalizar/run_agendado.sh --executar
+sh /app/src/processors/web/finalizar_operacao/run_agendado.sh --executar
 ```
 
 `--executar` é **ignorado** se `R7_DRY_RUN=1` — e, desde 21/09/2026, a trava vale
@@ -157,7 +157,7 @@ Perde-se a evidência visual exatamente quando o login quebra.
 
 ## Pendências para produção
 
-- [x] `config/robo_finalizar.env` (600) a partir do `.example.env` — 07/09/2026; em 21/09 ganhou aspas nos dois valores com espaço (o `sh` os deixava vazios)
+- [x] `config/finalizar_operacao.env` (600) a partir do `.example.env` — 07/09/2026; em 21/09 ganhou aspas nos dois valores com espaço (o `sh` os deixava vazios)
 - [x] Task no hub, `--timeout-seconds 1500`, começou `--disabled` em 21/09 09:21 e foi habilitada em DRY às 19:32
 - [x] `R7_DRY_RUN` efetivo conferido pelo container em 21/09 — `1`
 - [ ] `placar.py` por alguns dias úteis antes de sair do DRY (nunca rodou)

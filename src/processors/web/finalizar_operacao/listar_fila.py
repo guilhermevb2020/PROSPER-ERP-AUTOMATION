@@ -11,8 +11,8 @@ tela; op sem espelho aparece assim mesmo.
 Read-only: so faz a consulta da tela (mesma funcao que o R1 usa).
 
 Uso (rodar da RAIZ, com sessao logada):
-  python robo7_finalizar/listar_fila.py
-  python robo7_finalizar/listar_fila.py --cdp 9222 --sem-banco
+  python finalizar_operacao/listar_fila.py
+  python finalizar_operacao/listar_fila.py --cdp 9222 --sem-banco
 """
 import argparse
 import os
@@ -80,7 +80,7 @@ def main():
             browser = p.chromium.connect_over_cdp(f"http://127.0.0.1:{args.cdp}")
         except Exception as e:
             print(f"[ERRO] CDP {args.cdp} nao responde: {e}\n"
-                  "       Suba a sessao: python robo7_finalizar/sessao_r7.py")
+                  "       Suba a sessao: python finalizar_operacao/sessao_r7.py")
             return 2
         ctx = browser.contexts[0]
         print(f"=== FILA DO ROBO 7 | etapa '{cfg.ROTULO_ETAPA_ENTRADA}' | CDP {args.cdp} ===")

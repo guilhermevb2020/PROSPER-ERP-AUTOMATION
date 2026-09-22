@@ -16,7 +16,7 @@ from pathlib import Path
 import pytest
 
 RAIZ = Path(__file__).resolve().parents[2]
-PACOTE = RAIZ / "src" / "processors" / "web" / "robo_finalizar"
+PACOTE = RAIZ / "src" / "processors" / "web" / "finalizar_operacao"
 
 
 @pytest.fixture
@@ -26,9 +26,9 @@ def robo(monkeypatch):
     for p in (str(RAIZ), str(PACOTE)):
         if p not in sys.path:
             sys.path.insert(0, p)
-    for nome in ("robo_finalizar", "r7_config"):
+    for nome in ("finalizar_operacao", "r7_config"):
         sys.modules.pop(nome, None)
-    mod = importlib.import_module("robo_finalizar")
+    mod = importlib.import_module("finalizar_operacao")
     monkeypatch.setattr(mod.cfg, "PAGAMENTO_SO_APOS_ASSINATURAS", True)
     return mod
 

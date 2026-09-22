@@ -68,7 +68,7 @@ if str(RAIZ) not in sys.path:
 #: O robo, agora versionado no repo. As dependencias que ele consome do
 #: `credito` sao resolvidas pelo proprio `r7_config` (ver la o porque).
 PACOTE_R7 = Path(os.environ.get(
-    "R7_PACOTE_DIR", str(RAIZ / "src" / "processors" / "web" / "robo_finalizar")))
+    "R7_PACOTE_DIR", str(RAIZ / "src" / "processors" / "web" / "finalizar_operacao")))
 
 #: Placar local: uma linha por op por execucao. E a evidencia de acuracia.
 LEDGER = Path(os.environ.get(
@@ -106,7 +106,7 @@ def log(msg: str = "") -> None:
 # Preparar o import do pacote do robo
 # --------------------------------------------------------------------------- #
 def _preparar_pacote(log=print) -> None:
-    """Publica envs e sys.path para `import robo_finalizar` funcionar.
+    """Publica envs e sys.path para `import finalizar_operacao` funcionar.
 
     Chamar SO DEPOIS de `_ambiente.garantir_env()`, que e quem resolve a
     credencial do Smart.
@@ -352,7 +352,7 @@ def trabalho(ctx, args, log=print) -> dict:
     """Roda o ciclo do robo em DRY sobre o `ctx` ja logado do sandbox."""
     _travar_finalizacao(log=log)
 
-    import robo_finalizar as robo
+    import finalizar_operacao as robo
 
     ops = [o.strip() for o in args.ops.split(",") if o.strip()] or None
     if ops:

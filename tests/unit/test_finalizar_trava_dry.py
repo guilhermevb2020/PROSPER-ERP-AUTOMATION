@@ -4,7 +4,7 @@ test_finalizar_trava_dry.py - R7_DRY_RUN=1 impede o clique em Finalizar em QUALQ
 caminho, inclusive quem chama finalizar_da_grade() direto com executar=True.
 
 Por que existe: ate 21/09/2026 a trava do ambiente vivia so no main() do
-robo_finalizar.py; o scripts/sandbox/finalizar_op_executar.py --confirmar chamava
+finalizar_operacao.py; o scripts/sandbox/finalizar_op_executar.py --confirmar chamava
 ciclo(executar=True) e clicava mesmo com R7_DRY_RUN=1. O clique e irreversivel.
 
 Sem navegador: a grade e o botao sao dubles. Nenhum teste aqui fala com o Smart.
@@ -19,7 +19,7 @@ from pathlib import Path
 import pytest
 
 RAIZ = Path(__file__).resolve().parents[2]
-PACOTE = RAIZ / "src" / "processors" / "web" / "robo_finalizar"
+PACOTE = RAIZ / "src" / "processors" / "web" / "finalizar_operacao"
 
 
 @pytest.fixture

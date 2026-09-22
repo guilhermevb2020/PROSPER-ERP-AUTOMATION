@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-robo_finalizar.py - ORQUESTRADOR do Robo 7.
+finalizar_operacao.py - ORQUESTRADOR do Robo 7.
 
 Para cada operacao na etapa "Aguardando Ass.":
   1. le os titulos da tela (tipos: LCB/DUR/DSR/...) e o nome do cedente;
@@ -18,11 +18,11 @@ Dentro de um mesmo momento o e-mail continua sendo UM por operacao, com tudo o
 que falta naquela etapa - o operador nunca recebe uma pendencia de cada vez.
 
 Uso (rodar da RAIZ; o robo sobe a PROPRIA sessao do Smart - `--cdp` anexa numa ja aberta):
-  python robo7_finalizar/robo_finalizar.py                    # DRY, sem e-mail
-  python robo7_finalizar/robo_finalizar.py --ops 64886,64890  # ops especificas
-  python robo7_finalizar/robo_finalizar.py --email            # DRY + manda o e-mail
-  python robo7_finalizar/robo_finalizar.py --executar --email # PRODUCAO
-  python robo7_finalizar/robo_finalizar.py --loop             # ciclo continuo
+  python finalizar_operacao/finalizar_operacao.py                    # DRY, sem e-mail
+  python finalizar_operacao/finalizar_operacao.py --ops 64886,64890  # ops especificas
+  python finalizar_operacao/finalizar_operacao.py --email            # DRY + manda o e-mail
+  python finalizar_operacao/finalizar_operacao.py --executar --email # PRODUCAO
+  python finalizar_operacao/finalizar_operacao.py --loop             # ciclo continuo
 """
 import argparse
 import csv

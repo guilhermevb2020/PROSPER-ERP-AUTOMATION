@@ -96,7 +96,7 @@ def main() -> int:
         log(f"\n  ⚠️  A conta {os.environ.get('BOLETO_EMAIL', '?')} vai constar no "
             f"Smart como quem finalizou.")
 
-    import robo_finalizar as robo
+    import finalizar_operacao as robo
 
     ops = [o.strip() for o in args.ops.split(",") if o.strip()] or None
     log(f"  alvo: {', '.join(ops) if ops else 'todas as aprovadas da fila'}\n")

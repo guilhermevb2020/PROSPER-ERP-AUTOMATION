@@ -210,7 +210,7 @@ def finalizar_da_grade(pg, op, aceitar_dialogos=None, log=print):
     # Trava do AMBIENTE, no ponto do clique: R7_DRY_RUN=1 impede a finalizacao por
     # qualquer caminho - inclusive quem chama esta funcao direto com executar=True
     # (finalizar_op_executar.py --confirmar). Ate 21/09/2026 a trava vivia so no
-    # main() do robo_finalizar, e esse caminho passava por cima dela. Fica DEPOIS
+    # main() do finalizar_operacao, e esse caminho passava por cima dela. Fica DEPOIS
     # das checagens do botao de proposito: o DRY continua dizendo se clicaria.
     if cfg.DRY_RUN:
         return {"ok": False, "situacao": "dry", "dialogos": [],

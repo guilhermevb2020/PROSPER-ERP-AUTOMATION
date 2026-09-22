@@ -20,7 +20,7 @@ from pathlib import Path
 import pytest
 
 RAIZ = Path(__file__).resolve().parents[2]
-PACOTE = RAIZ / "src" / "processors" / "web" / "robo_finalizar"
+PACOTE = RAIZ / "src" / "processors" / "web" / "finalizar_operacao"
 MODULO_SESSAO = RAIZ / "src" / "common" / "clients" / "smart_sessao.py"
 
 
@@ -32,9 +32,9 @@ def pacote(monkeypatch):
         sys.path.insert(0, str(RAIZ))
     if str(PACOTE) not in sys.path:
         sys.path.insert(0, str(PACOTE))
-    for nome in ("robo_finalizar", "r7_config"):
+    for nome in ("finalizar_operacao", "r7_config"):
         sys.modules.pop(nome, None)
-    return importlib.import_module("robo_finalizar")
+    return importlib.import_module("finalizar_operacao")
 
 
 def test_r7_config_cumpre_o_contrato_do_smart_sessao(pacote):
@@ -84,7 +84,7 @@ def test_main_abre_a_propria_sessao_e_roda_o_ciclo_nela(pacote, monkeypatch):
         yield ctx
 
     chamadas = _preparar(pacote, monkeypatch, sessao)
-    monkeypatch.setattr(sys, "argv", ["robo_finalizar.py"])
+    monkeypatch.setattr(sys, "argv", ["finalizar_operacao.py"])
 
     assert pacote.main() == 0
     assert chamadas == [(ctx, None, False)], "o ciclo tem de rodar no ctx da sessao, em DRY"
@@ -102,7 +102,7 @@ def test_flag_cdp_anexa_em_vez_de_subir(pacote, monkeypatch):
         yield _CtxDuble()
 
     _preparar(pacote, monkeypatch, sessao)
-    monkeypatch.setattr(sys, "argv", ["robo_finalizar.py", "--cdp"])
+    monkeypatch.setattr(sys, "argv", ["finalizar_operacao.py", "--cdp"])
 
     assert pacote.main() == 0
     assert recebido["usar_cdp"] is True
@@ -117,7 +117,7 @@ def test_sessao_que_falha_encerra_com_exit_2_sem_rodar_o_ciclo(pacote, monkeypat
         yield  # noqa: unreachable - forma de contextmanager
 
     chamadas = _preparar(pacote, monkeypatch, sessao)
-    monkeypatch.setattr(sys, "argv", ["robo_finalizar.py"])
+    monkeypatch.setattr(sys, "argv", ["finalizar_operacao.py"])
 
     assert pacote.main() == 2
     assert chamadas == [], "sem sessao o ciclo nao pode rodar"

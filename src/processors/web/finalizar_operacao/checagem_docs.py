@@ -31,7 +31,7 @@ graca (tipo + descricao) e so os "Contrato sem descricao" (LCB vs Carta de
 Cessao) sao abertos, e mesmo assim so quando a operacao tem titulo LCB.
 
 Uso isolado (read-only, precisa da sessao R7 no ar):
-  python robo7_finalizar/checagem_docs.py --op 64887
+  python finalizar_operacao/checagem_docs.py --op 64887
 """
 import argparse
 import os
@@ -491,7 +491,7 @@ def main():
             browser = p.chromium.connect_over_cdp(f"http://127.0.0.1:{args.cdp}")
         except Exception as e:
             print(f"[ERRO] CDP {args.cdp} nao responde: {e}\n"
-                  "       Suba a sessao: python robo7_finalizar/sessao_r7.py")
+                  "       Suba a sessao: python finalizar_operacao/sessao_r7.py")
             return 2
         ctx = browser.contexts[0]
 

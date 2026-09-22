@@ -21,8 +21,8 @@ isso o relatorio mostra a conta e o valor pago de cada uma: e o que permite
 julgar quem estava certo.
 
 Uso (rodar da RAIZ):
-  python robo7_finalizar/placar.py
-  python robo7_finalizar/placar.py --log logs/r7_loop.log --dia 2026-08-28
+  python finalizar_operacao/placar.py
+  python finalizar_operacao/placar.py --log logs/r7_loop.log --dia 2026-08-28
 """
 import argparse
 import os

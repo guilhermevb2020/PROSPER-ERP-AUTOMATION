@@ -21,7 +21,7 @@ Campos da linha N (o sufixo e o numero da linha):
     ckspN  SP (checkbox)
 
 Uso isolado (read-only, NAO clica em Finalizar):
-  python robo7_finalizar/checagem_pagamento.py --op 64887
+  python finalizar_operacao/checagem_pagamento.py --op 64887
 """
 import argparse
 import os

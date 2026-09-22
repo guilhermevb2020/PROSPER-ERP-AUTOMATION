@@ -14,8 +14,8 @@ NAO CLICA em nada que grave: so abre a tela, abre o Resumir e LE o DOM. As
 requisicoes de rede sao apenas OBSERVADAS (nao ha route/abort).
 
 Uso (rodar da RAIZ, com uma sessao logada no CDP informado):
-  python robo7_finalizar/mapear_tela.py --op 64743
-  python robo7_finalizar/mapear_tela.py --op 64743 --cdp 9222 --sem-resumir
+  python finalizar_operacao/mapear_tela.py --op 64743
+  python finalizar_operacao/mapear_tela.py --op 64743 --cdp 9222 --sem-resumir
 
 Saidas: debug_r7/op<OP>_*.html + debug_r7/mapa_op<OP>.json + relatorio no stdout.
 """
@@ -152,7 +152,7 @@ def main():
             browser = p.chromium.connect_over_cdp(f"http://127.0.0.1:{args.cdp}")
         except Exception as e:
             print(f"[ERRO] CDP {args.cdp} nao responde: {e}\n"
-                  f"       Suba a sessao: python robo7_finalizar/sessao_r7.py")
+                  f"       Suba a sessao: python finalizar_operacao/sessao_r7.py")
             return 2
         ctx = browser.contexts[0]
         page = ctx.new_page()

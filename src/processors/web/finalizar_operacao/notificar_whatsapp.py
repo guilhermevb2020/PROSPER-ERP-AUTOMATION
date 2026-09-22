@@ -16,7 +16,7 @@ codigo que ja atende o healthcheck dos boletos:
 
 A INTERFACE do pacote foi preservada - `enviar(texto, destinos, provider)`
 retornando (n_ok, [(numero, ok, detalhe)]) - porque e o que o orquestrador
-(`robo_finalizar._avisar_finalizacao`) chama. So os providers mudaram:
+(`finalizar_operacao._avisar_finalizacao`) chama. So os providers mudaram:
 
   evolution -> modulo comum (default)
   arquivo   -> grava num .txt em vez de enviar (ensaio)

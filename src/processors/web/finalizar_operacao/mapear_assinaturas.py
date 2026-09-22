@@ -17,8 +17,8 @@ O que faz (tudo GET/POST de leitura, nada de escrita):
   5. mostra o que o parser heuristico (checagem_docs.parse_assinantes) extraiu.
 
 Uso (rodar da RAIZ, com a sessao R7 no ar):
-  python robo7_finalizar/mapear_assinaturas.py --op 64743
-  python robo7_finalizar/mapear_assinaturas.py --op 64743 --cdp 9222 --so-aditivo
+  python finalizar_operacao/mapear_assinaturas.py --op 64743
+  python finalizar_operacao/mapear_assinaturas.py --op 64743 --cdp 9222 --so-aditivo
 
 Saidas: debug_r7/doc2you_op<OP>_lista.html + doc2you_doc<idDoc>.html
 """
@@ -66,7 +66,7 @@ def main():
             browser = p.chromium.connect_over_cdp(f"http://127.0.0.1:{args.cdp}")
         except Exception as e:
             print(f"[ERRO] CDP {args.cdp} nao responde: {e}\n"
-                  "       Suba a sessao: python robo7_finalizar/sessao_r7.py")
+                  "       Suba a sessao: python finalizar_operacao/sessao_r7.py")
             return 2
         ctx = browser.contexts[0]
 

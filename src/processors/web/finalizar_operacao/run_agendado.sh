@@ -12,7 +12,7 @@ cd /app || exit 1
 LOG=/app/logs/vnc; mkdir -p "$LOG"
 
 # 1) credenciais (arquivo montado, fora do git)
-[ -f /app/config/robo_finalizar.env ] && { set -a; . /app/config/robo_finalizar.env; set +a; }
+[ -f /app/config/finalizar_operacao.env ] && { set -a; . /app/config/finalizar_operacao.env; set +a; }
 
 # 2) mata Chrome orfao SO do nosso perfil (nunca pkill generico de chrome!)
 PERFIL="${USER_DATA_DIR_R7:-/app/data/robo_finalizar/perfil_chrome}"
@@ -42,7 +42,7 @@ export PYTHONUNBUFFERED=1
 #    que e SEMPRE 0 - o robo falha e a task fica verde.
 LOGROBO="/app/logs/robo_finalizar_$(date +%Y-%m-%d).log"
 RC="/tmp/robo_finalizar_rc.$$"
-{ python /app/src/processors/web/robo_finalizar/robo_finalizar.py "$@"; echo $? > "$RC"; } 2>&1 \
+{ python /app/src/processors/web/finalizar_operacao/finalizar_operacao.py "$@"; echo $? > "$RC"; } 2>&1 \
     | tee -a "$LOGROBO"
 CODIGO=$(cat "$RC" 2>/dev/null || echo 1); rm -f "$RC"
 exit "$CODIGO"

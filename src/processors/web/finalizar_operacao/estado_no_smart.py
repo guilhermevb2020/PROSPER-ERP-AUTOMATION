@@ -12,7 +12,7 @@ Criterio: na tela de Resumir, o botao FINALIZAR (`id="pagamento"`) so existe
 enquanto a operacao NAO foi finalizada. Sumiu = finalizada.
 
 Uso:
-  python robo7_finalizar/estado_no_smart.py 64997 64887
+  python finalizar_operacao/estado_no_smart.py 64997 64887
 """
 import re
 import sys

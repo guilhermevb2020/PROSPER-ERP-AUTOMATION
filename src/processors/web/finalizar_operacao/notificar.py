@@ -11,7 +11,7 @@ Anti-repeticao: nao manda o MESMO aviso (mesma op + mesmas pendencias) duas
 vezes no mesmo dia - registro em avisos_enviados.csv.
 
 Uso isolado:
-  python robo7_finalizar/notificar.py --teste
+  python finalizar_operacao/notificar.py --teste
 """
 import argparse
 import csv

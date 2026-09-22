@@ -24,7 +24,7 @@ SEGURANCA: este script NAO clica no #pagamento e DISPENSA (dismiss) qualquer
 dialogo, justamente p/ nao finalizar nada por acidente.
 
 Uso (rodar da RAIZ, com a sessao R7 no ar):
-  python robo7_finalizar/mapear_pagamento.py --op 64887
+  python finalizar_operacao/mapear_pagamento.py --op 64887
 """
 import argparse
 import json
