@@ -671,6 +671,13 @@ def rodada_cancelamento(ctx, args, dry, execucao=None):
         # monta a grade de outra conta, o id nao aparece nela, e o cancelamento
         # silenciosamente nao acha nada.
         entrada = cancelar.entrada_do_controle(controle, arquivo, smart_id)
+        # ⭐ 22/09/2026: remessa que este robo DESCARTOU (linha fora dos 400 bytes) nao esta no
+        # controle — ele so a anotou em `falhas/<id>.json`. A lista traz de la o `tipo` (de onde
+        # sai a conta do Smart) e a `gerada_em` (a data que a grade mostra); sem isso a 26381 da
+        # MP PROSPERE ficava "SEM conta do Smart" para sempre: 60 titulos, R$ 492.734,47 parados
+        # desde 15/09 com o boleto na mao do sacado.
+        if not entrada and dados.get("tipo"):
+            entrada = {"tipo": dados["tipo"], "baixado_em": str(dados.get("gerada_em") or "")}
         tipo = entrada.get("tipo") if isinstance(entrada, dict) else None
         conta = cancelar.conta_do_smart(tipo, contas_mapa)
         # ⛔ A JANELA e por REMESSA, da data em que o robo a baixou. O job olha 45 dias
