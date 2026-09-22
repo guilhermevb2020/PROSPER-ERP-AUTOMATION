@@ -155,6 +155,18 @@ túnel ssh ao IP do container (ver `docs/COMO_SUBIR_UM_JOB.md`).
   fontes. Job novo já nasce registrando; quem mexer nesses quatro mantém os dois lados.
   O `arquivo` é identificado pelo **conteúdo** (sha256), então reprocessar o mesmo arquivo
   devolve a linha existente em vez de duplicar — a mesma regra do `hash` no CSV.
+- **O banco é a fonte do controle, desde a `erp_005` (22/09/2026).** Plano e fases em
+  `docs/PLANO_CONTROLE_NO_BANCO.md`. O que só existia em JSON no disco virou evento
+  (`descartado`, `cancelado`, `intencao_envio` do BB; `documentos_baixados`/`etapa_movida`
+  do crédito); o que não tem tabela vai por `execucao_job.anotar()` para o `detalhe_json`
+  da execução. As views `vw_controle_*` têm as colunas dos CSVs; `vw_job_execucao_ultima`
+  responde "rodou?". A paridade CSV × banco é medida todo dia útil pela task
+  `comparar_controle_csv_banco` (19:35; exit 3 = divergência). As leituras de idempotência
+  ainda são do CSV (Fase 2): quem mexer nos quatro jobs de arquivo mantém os dois lados.
+- **Execução manual em modo real diz quem e por quê:** `docker exec -e ERP_OPERADOR=nome
+  -e ERP_MOTIVO="..." erp-automation sh .../run_agendado.sh`. O hub ainda não se identifica
+  no exec (`HUB_RUN_ID`/`HUB_TASK_NOME` não chegam), então toda execução dele aparece como
+  `gatilho manual` — pendência da frente do hub, não deste repositório.
 - **O nome do job na execução tem de casar com a task do hub.** `run_bb.sh` é
   `gerar_remessa_bb`/`processar_retorno_bb`, `run_deposito.sh` é `baixar_deposito_no_erp`.
   Errar isso faz a execução apontar para o job errado, e ninguém percebe até procurar. Tabela de evento nunca muda: corrigir é outro evento.

@@ -11,10 +11,11 @@ vale mais como instrução.
 - [CREDENCIAIS_GUARDIAN.md](CREDENCIAIS_GUARDIAN.md) — como o container recebe credenciais (apelidos, login efêmero, SMTP pelo broker) e como operar o Guardian
 - [CONVENCOES_PORTAS.md](CONVENCOES_PORTAS.md) — portas e displays
 - [hub_orchestration_API.md](hub_orchestration_API.md) — a API do hub para disparar e consultar tasks
+- [PLANO_CONTROLE_NO_BANCO.md](PLANO_CONTROLE_NO_BANCO.md) — o banco como fonte única do controle dos jobs: o que vivia em CSV/JSON, o que a `erp_004`/`erp_005` cobrem, e as fases (paridade diária → estrutura → leituras → contratos → corte do CSV)
 
 ## Jobs
 
-Cada job documenta a si mesmo em `src/processors/web/<job>/docs/README.md`.
+Cada job documenta a si mesmo em `src/processors/web/<job>/docs/README.md` (jobs sem navegador: `src/processors/db/<job>/docs/README.md`, como a paridade CSV × banco).
 Guia geral dos boletos: [BOLETOS_LOTE.md](BOLETOS_LOTE.md).
 
 ## O que foi validado, e os limites

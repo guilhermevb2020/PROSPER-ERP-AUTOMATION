@@ -368,6 +368,11 @@ def processar(ctx, itens, forcar=False, execucao=None):
             # O Smart ja considera os titulos despachados: sem rastro, eles somem.
             falhas.registrar(fid, conta=item.get("conta"), rotulo=rotulo, motivo="download do Smart falhou",
                              titulos=item.get("titulos_grade"), log=log)
+            # erp_005: sem conteudo nao ha `arquivo`; o fato vai na execucao (detalhe_json)
+            execucao_job.anotar(execucao, "remessas_perdidas", {
+                "id": fid, "conta": item.get("conta"), "rotulo": rotulo,
+                "motivo": "download do Smart falhou",
+                "qtd_titulos": len(item.get("titulos_grade") or [])})
             continue
 
         ok, msg, titulos = validar_cnab(dados)
@@ -377,6 +382,9 @@ def processar(ctx, itens, forcar=False, execucao=None):
             quem = "; ".join(f"{c['documento'] or '?'} ({c['bytes']} bytes: {c['motivo']})"
                              for c in (reg or {}).get("culpados") or [])
             log(f"  id={fid} ({rotulo}): DESCARTADO - {msg}" + (f" - culpado(s): {quem}" if quem else ""))
+            # erp_005: o .REM existe (o Smart o gerou) — entra como arquivo com evento
+            # `descartado`, ao lado do falhas/<id>.json que o vigia le. Fato consumado.
+            _registrar_descarte(execucao, fid, item, rotulo, nome, dados, msg, reg, log)
             continue
 
         destino = os.path.join(cfg.PASTA_REMESSAS, nome)
@@ -617,6 +625,51 @@ def _ler_controle():
         return {}
 
 
+def _registrar_descarte(execucao, fid, item, rotulo, nome, dados, msg, reg, log):
+    """Remessa que o robo recusou: `arquivo` (sentido gerado) + evento `descartado`."""
+    if execucao is None:
+        return None
+    arq_id = execucao_job.registrar_arquivo(
+        execucao, "remessa_cobranca_cnab_400", "gerado",
+        nome_arquivo=nome or f"remessa_{fid}.REM", conteudo=dados,
+        conta_id=(str(item.get("conta")) if item.get("conta") else None), conta_label=rotulo,
+        detalhe={"md5": hashlib.md5(dados).hexdigest(), "id_no_smart": fid,
+                 "motivo": f"DESCARTADO - {msg}",
+                 "culpados": (reg or {}).get("culpados") or []}, log=log)
+    if arq_id:
+        execucao_job.registrar_evento_arquivo(execucao, arq_id, "descartado", resultado=msg, log=log)
+    return arq_id
+
+
+def _registrar_cancelamento(execucao, smart_id, arquivo, conta, como, log):
+    """erp_005: o cancelamento vira evento `cancelado` do arquivo. Remessa registrada
+    desde 22/09 e achada pelo id do Smart; anterior, pelo .REM ainda no disco (entra
+    agora, com a origem anotada); sem nenhum dos dois, fica na execucao (detalhe_json).
+    Tudo fato consumado: o cancelamento ja aconteceu no Smart."""
+    if execucao is None:
+        return None
+    arq_id = execucao_job.buscar_arquivo(execucao, "remessa_cobranca_cnab_400",
+                                         id_no_smart=str(smart_id), log=log)
+    if arq_id is None and arquivo:
+        caminho = os.path.join(cfg.PASTA_REMESSAS, os.path.basename(str(arquivo)))
+        if os.path.isfile(caminho):
+            with open(caminho, "rb") as fh:
+                dados = fh.read()
+            arq_id = execucao_job.registrar_arquivo(
+                execucao, "remessa_cobranca_cnab_400", "gerado",
+                nome_arquivo=os.path.basename(caminho), conteudo=dados,
+                conta_id=(str(conta) if conta else None), destino_caminho=caminho,
+                detalhe={"md5": hashlib.md5(dados).hexdigest(), "id_no_smart": str(smart_id),
+                         "origem": "registrada no cancelamento: remessa anterior ao registro no banco"},
+                log=log)
+    if arq_id:
+        return execucao_job.registrar_evento_arquivo(
+            execucao, arq_id, "cancelado", resultado=como, detalhe={"conta": conta}, log=log)
+    execucao_job.anotar(execucao, "cancelamentos_sem_arquivo",
+                        {"id": smart_id, "arquivo": arquivo, "conta": conta, "como": como})
+    return None
+
+
 def rodada_cancelamento(ctx, args, dry, execucao=None):
     """Cancela no Smart as remessas que o process-automation apontou. Exit code.
 
@@ -715,6 +768,7 @@ def rodada_cancelamento(ctx, args, dry, execucao=None):
             feitos += 1
             log(f"  {rotulo}: CANCELADA ({como})")
             cancelar.registrar_feito(smart_id, arquivo)
+            _registrar_cancelamento(execucao, smart_id, arquivo, conta, como, log)
         else:
             incertos += 1
             log(f"  {rotulo}: POST aceito mas {como} — CONFERIR no Smart")

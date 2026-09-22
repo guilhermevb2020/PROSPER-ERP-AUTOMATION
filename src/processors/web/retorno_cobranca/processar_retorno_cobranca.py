@@ -305,10 +305,17 @@ def _registrar_no_banco(execucao, res, caminho, bb: bool):
                  "divergencias": res.get("divergencias") or []},
         titulos=titulos, log=log)
     if arq_id:
+        # O que aconteceu no processamento e do EVENTO (erp_005: as views de controle leem
+        # daqui; o arquivo e a reserva). Para o BB o arquivo ja pode existir desde a
+        # intencao_envio, com outro detalhe — e a tabela nao aceita UPDATE.
         execucao_job.registrar_evento_arquivo(
             execucao, arq_id, "processado" if res.get("processado") else "retido",
             resultado=res.get("motivo"),
-            detalhe={"dry": bool(res.get("motivo", "").startswith("DRY_RUN"))}, log=log)
+            detalhe={"dry": bool(res.get("motivo", "").startswith("DRY_RUN")),
+                     "estado_final": res.get("estado_final"),
+                     "ocorrencias": res.get("ocorrencias") or {},
+                     "qtd_criticas": len(res.get("criticas") or []),
+                     "divergencias": res.get("divergencias") or []}, log=log)
     return arq_id
 
 

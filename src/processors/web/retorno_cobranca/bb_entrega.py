@@ -12,6 +12,10 @@ from pathlib import Path
 from uuid import UUID, uuid4
 
 import artefatos
+try:
+    from src.common.clients import execucao_job          # erp_005: intencao tambem no banco
+except ImportError:                                      # fora do container/PYTHONPATH: so o recibo
+    execucao_job = None
 import bb_api
 import retorno
 
@@ -65,6 +69,28 @@ def _anterior(pasta, sha, conta):
             "motivo": "tentativa BB já iniciada sem confirmação durável; não reenviar"}
 
 
+def _espelhar_intencao_no_banco(etapa, resultado, *, caminho, conta, tentativa):
+    """erp_005: a INTENCAO (antes do POST irreversivel) vai ao banco tambem, como
+    `intencao_envio` do arquivo. O recibo em disco continua sendo a prova de tentativa
+    unica; aqui e registro — fato consumado, falha de banco avisa e nao barra. Promover
+    a estrito (sem registro, sem POST) e da Fase 2, quando o recibo migrar. O resultado
+    nao entra aqui: `processar_retorno_cobranca._registrar_no_banco` ja o grava."""
+    if etapa != "intencao" or execucao_job is None:
+        return
+    ex = execucao_job.atual()
+    if ex is None:
+        return
+    arq_id = execucao_job.registrar_arquivo(
+        ex, "retorno_bb", "recebido", nome_arquivo=Path(caminho).name, caminho=str(caminho),
+        qtd_registros=resultado.get("titulos"), conta_id=str(conta),
+        detalhe={"md5": resultado.get("hash"), "nome_smart": resultado.get("nome_smart"),
+                 "tentativa": tentativa})
+    if arq_id:
+        execucao_job.registrar_evento_arquivo(
+            ex, arq_id, "intencao_envio",
+            detalhe={"tentativa": tentativa, "conta_bb_api": conta})
+
+
 def processar(ctx, caminho, *, conta, pasta_recibos, dry_run=True):
     """Processa uma vez por SHA-256 e conta; a trava cobre leitura e gravação."""
     if type(conta) is not int or conta <= 0:
@@ -91,6 +117,8 @@ def processar(ctx, caminho, *, conta, pasta_recibos, dry_run=True):
                 metadados={"etapa": etapa, "tentativa": tentativa, "conta_bb_api": conta},
             )
             gravados.add(etapa)
+            _espelhar_intencao_no_banco(etapa, resultado, caminho=arquivo, conta=conta,
+                                        tentativa=tentativa)
 
         resultado = retorno.processar(ctx, caminho, dry_run=dry_run,
                                       conta_bb_api=conta, registrar_bb=registrar)

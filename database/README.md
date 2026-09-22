@@ -159,6 +159,24 @@ bin/guardian revogar-banco NOME && shred -u ~/NOME.pgpass
 ⚠️ `DB_PORT` é o nome da variável de porta, não `DB_ADMIN_PORT`. Errar isso aponta o
 aplicador para a 5432, que é produção.
 
+## erp_005 — o banco como fonte do controle (22/09/2026)
+
+`database/erp_005_controle_no_banco.sql`, Fase 1 de `docs/PLANO_CONTROLE_NO_BANCO.md`:
+`arquivo.md5` e `arquivo.id_no_smart` como colunas **geradas** de `detalhe_json` (a origem
+segue sendo o JSON; a coluna é o índice — `ADD COLUMN` gerada não dispara gatilho de linha);
+eventos novos em `arquivo_evento` (`intencao_envio`, `descartado`, `cancelado`, `movido`) e
+em `operacao_evento` (`documentos_baixados`, `etapa_movida`); `job_execucao.operador` e
+`.motivo` (imutáveis no fechamento, o gatilho foi estendido); automação `controle`; views
+`vw_controle_retorno`, `vw_controle_remessa`, `vw_controle_pagamento`,
+`vw_controle_retorno_pagamento`, `vw_arquivo_dia`, `vw_job_execucao_ultima`. Nada é apagado,
+nenhuma linha muda. Re-executável. Aplica-se como a erp_004 (modelo `erp-automation-ddl`).
+
+**Ordem de implantação:** a migration entra em produção **antes** do código que a usa. O
+cliente tolera o banco sem ela (o INSERT da execução repete sem `operador`/`motivo` e avisa
+`erp_005 nao aplicada`; os eventos novos falham como fato consumado, com aviso), então uma
+inversão não derruba job — mas deixa buraco no registro. Provada na bancada em 22/09/2026
+(`tests/integration/test_erp_005_controle.py`).
+
 ### Quando o ledger diz que o conteúdo mudou
 
 Migration aplicada é imutável e a guarda barra — é isso que se quer. Só existe uma saída,

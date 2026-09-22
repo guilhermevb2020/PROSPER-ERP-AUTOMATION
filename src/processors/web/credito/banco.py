@@ -189,6 +189,12 @@ def registrar_download(op, arquivo_nfe, arquivo_resumo) -> None:
     })
     dados[op] = reg
     _salvar_controle(dados)
+    _registrar_no_banco(op, "documentos_baixados",
+                        resultado="OK" if (reg["nfe_ok"] and reg["resumo_ok"]) else "PARCIAL",
+                        detalhe={"arquivo_nfe": reg.get("arquivo_nfe") or "",
+                                 "arquivo_resumo": reg.get("arquivo_resumo") or "",
+                                 "nfe_ok": bool(reg.get("nfe_ok")),
+                                 "resumo_ok": bool(reg.get("resumo_ok"))})
 
 
 def marcar_etapa_movida(op) -> None:
@@ -199,6 +205,26 @@ def marcar_etapa_movida(op) -> None:
     reg["etapa_movida"] = True
     dados[op] = reg
     _salvar_controle(dados)
+    _registrar_no_banco(op, "etapa_movida", resultado=config.ROTULO_ANALISE_CREDITO)
+
+
+def _registrar_no_banco(op, tipo_evento, *, resultado=None, detalhe=None) -> None:
+    """erp_005 (22/09/2026): o mesmo fato do CSV local vai para operacao_evento, na
+    execucao que analisar_credito.py abriu (execucao_job.atual()). Fato consumado: falha
+    de banco avisa no log e o download segue. Fora do fluxo do job (teste, uso manual de
+    uma funcao) nao ha execucao aberta e nada e registrado. O CSV continua sendo escrito
+    ao lado ate o corte (docs/PLANO_CONTROLE_NO_BANCO.md)."""
+    if not str(op).isdigit():
+        return
+    try:
+        from src.common.clients import execucao_job
+    except ImportError:
+        return
+    ex = execucao_job.atual()
+    if ex is None:
+        return
+    execucao_job.registrar_evento_operacao(ex, int(op), tipo_evento, resultado=resultado,
+                                           detalhe=detalhe or {}, fato=True)
 
 
 def ja_baixou(reg) -> bool:

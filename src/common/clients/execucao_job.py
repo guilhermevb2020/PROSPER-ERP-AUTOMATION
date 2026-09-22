@@ -44,10 +44,15 @@ from decimal import Decimal, InvalidOperation
 from typing import Any
 
 AUTOMACOES = ("boletos", "doc2you", "credito", "remessa_cobranca", "retorno_cobranca",
-              "remessa_pagamento", "retorno_pagamento", "finalizar_operacao")
+              "remessa_pagamento", "retorno_pagamento", "finalizar_operacao",
+              "controle")  # paridade CSV x banco e outras conferencias sem navegador (erp_005)
 TIPOS_EVENTO_OPERACAO = ("avaliada", "finalizar_clicado", "finalizada", "finalizacao_falhou",
-                         "finalizada_por_outro", "aviso_enviado")
-TIPOS_EVENTO_ARQUIVO = ("gerado", "enviado", "recebido", "processado", "rejeitado", "retido")
+                         "finalizada_por_outro", "aviso_enviado",
+                         # credito (erp_005): o que antes so o CSV local sabia
+                         "documentos_baixados", "etapa_movida")
+TIPOS_EVENTO_ARQUIVO = ("gerado", "enviado", "recebido", "processado", "rejeitado", "retido",
+                        # erp_005: o que antes so existia em JSON no disco
+                        "intencao_envio", "descartado", "cancelado", "movido")
 TIPOS_ARQUIVO = ("remessa_cobranca_cnab_400", "retorno_cobranca_cnab_400",
                  "remessa_pagamento_cnab_240", "retorno_pagamento_cnab_240",
                  "remessa_bb", "retorno_bb", "exportacao_csv")
@@ -76,6 +81,9 @@ class Execucao:
     estrito: bool = False
     _conn: Any = None
     avisos: list = field(default_factory=list)
+    #: fatos sem tabela propria (remessa que nao baixou, cancelamento sem arquivo):
+    #: entram em detalhe_json no fechamento — a tabela nao aceita UPDATE antes disso.
+    anotacoes: dict = field(default_factory=dict)
 
     @property
     def registra(self) -> bool:
@@ -87,6 +95,23 @@ class Execucao:
         if texto not in self.avisos:
             self.avisos.append(texto)
             log(f"  [execucao] AVISO: {texto}")
+
+
+#: A execucao aberta por este processo. `abrir_execucao` a define e `fechar_execucao`
+#: a limpa. Serve para quem esta fundo no job (credito/banco.py, bb_entrega.py) registrar
+#: um fato sem receber `execucao` por quatro assinaturas. Um processo = um job = uma execucao.
+_ATUAL: Execucao | None = None
+
+
+def atual() -> Execucao | None:
+    """A execucao aberta neste processo, ou None (fora do fluxo que abre uma)."""
+    return _ATUAL
+
+
+def conexao_leitura(job: str):
+    """Uma conexao para LER as tabelas do erp_automation com a identidade do container
+    (a mesma dos registros). Para jobs de conferencia, como a paridade CSV x banco."""
+    return _conectar(job)
 
 
 # --------------------------------------------------------------------------- #
@@ -238,12 +263,41 @@ def linha_pagamento_normalizada(linha: dict, numero_linha: int) -> dict:
 # --------------------------------------------------------------------------- #
 # a API
 # --------------------------------------------------------------------------- #
+def _operador_padrao(gatilho: str) -> str | None:
+    # So o que a pessoa declarou: dentro do container todo `docker exec` e root, entao
+    # USER/LOGNAME nao dizem quem foi. Cron: o hub e o operador; fica nulo.
+    if gatilho != "manual":
+        return None
+    return (os.environ.get("ERP_OPERADOR") or "").strip() or None
+
+
+def _inserir_execucao(cur, campos: dict) -> int:
+    """INSERT da execucao. Antes da erp_005 as colunas operador/motivo nao existem: o
+    INSERT cai por UndefinedColumn e repete sem elas — o job nao para por causa de uma
+    migration pendente, mas avisa (ver abrir_execucao)."""
+    colunas = list(campos.keys())
+    cur.execute(
+        f"INSERT INTO erp_automation.job_execucao ({', '.join(colunas)}) "
+        f"VALUES ({', '.join(['%s'] * len(colunas))}) RETURNING id",
+        tuple(campos[c] for c in colunas))
+    return int(cur.fetchone()[0])
+
+
+def _e_coluna_inexistente(e: Exception) -> bool:
+    return type(e).__name__ == "UndefinedColumn" or "column" in str(e).lower() and "does not exist" in str(e).lower()
+
+
 def abrir_execucao(automacao: str, job: str, *, flag_ensaio: bool, gatilho: str | None = None,
                    ambiente: str | None = None, task_nome: str | None = None,
                    run_id: str | None = None, apelido_credencial: str | None = None,
                    versao_codigo: str | None = None, detalhe: dict | None = None,
+                   operador: str | None = None, motivo: str | None = None,
                    obrigatoria: bool = False, log=print) -> Execucao:
-    """Abre a execucao. obrigatoria=True: sem banco, levanta; False: volta degradada."""
+    """Abre a execucao. obrigatoria=True: sem banco, levanta; False: volta degradada.
+
+    operador/motivo (erp_005): quem disparou a mao e por que. Vem de ERP_OPERADOR e
+    ERP_MOTIVO quando nao informados; no cron ficam nulos (o hub e o operador)."""
+    global _ATUAL
     if automacao not in AUTOMACOES:
         raise ValueError(f"automacao desconhecida: {automacao!r} (aceitas: {AUTOMACOES})")
     gatilho = gatilho or _gatilho_padrao()
@@ -252,19 +306,31 @@ def abrir_execucao(automacao: str, job: str, *, flag_ensaio: bool, gatilho: str 
     run_id = run_id or os.environ.get("HUB_RUN_ID") or None
     versao_codigo = versao_codigo or os.environ.get("ERP_AUTOMATION_REVISION") or None
     apelido = apelido_seguro(apelido_credencial)
+    operador = (operador or "").strip() or _operador_padrao(gatilho)
+    motivo = (motivo or "").strip() or (os.environ.get("ERP_MOTIVO") or "").strip() or None
 
     ex = Execucao(id=None, automacao=automacao, job=job, flag_ensaio=flag_ensaio, estrito=obrigatoria)
+    _ATUAL = ex
+    # Sem aviso quando faltam operador/motivo: o hub (22/09/2026) ainda nao injeta
+    # HUB_RUN_ID/HUB_TASK_NOME no docker exec, entao TODA execucao dele chega como
+    # "manual" e o aviso viraria ruido em cada job. Quando o hub passar a identificar-se,
+    # o gatilho vira cron sozinho e o aviso para execucao manual sem autor passa a valer.
+    campos = {"automacao": automacao, "job": job, "task_nome": task_nome, "run_id": run_id,
+              "gatilho": gatilho, "ambiente": ambiente, "flag_ensaio": flag_ensaio,
+              "apelido_credencial": apelido, "versao_codigo": versao_codigo,
+              "detalhe_json": _json(detalhe or {}), "operador": operador, "motivo": motivo}
     try:
         conn = _conectar(job)
         with conn.cursor() as cur:
-            cur.execute(
-                "INSERT INTO erp_automation.job_execucao "
-                "(automacao, job, task_nome, run_id, gatilho, ambiente, flag_ensaio, "
-                " apelido_credencial, versao_codigo, detalhe_json) "
-                "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING id",
-                (automacao, job, task_nome, run_id, gatilho, ambiente, flag_ensaio,
-                 apelido, versao_codigo, _json(detalhe or {})))
-            ex.id = int(cur.fetchone()[0])
+            try:
+                ex.id = _inserir_execucao(cur, campos)
+            except Exception as e:  # noqa: BLE001
+                if not _e_coluna_inexistente(e):
+                    raise
+                # erp_005 ainda nao aplicada neste banco: registra sem operador/motivo
+                campos.pop("operador"); campos.pop("motivo")
+                ex.id = _inserir_execucao(cur, campos)
+                ex._avisar(log, "erp_005 nao aplicada: operador/motivo nao registrados")
             # a sessao passa a dizer QUAL execucao esta escrevendo
             cur.execute("SELECT set_config('erp.execucao_id', %s, false)", (str(ex.id),))
         ex._conn = conn
@@ -307,12 +373,23 @@ def _executar(ex: Execucao, log, descricao: str, sql: str, params: tuple, *, dev
 def registrar_evento_operacao(ex: Execucao, id_operacao, tipo_evento: str, *,
                               resultado: str | None = None, cedente: str | None = None,
                               valor_liquido=None, pendencias=None, detalhe: dict | None = None,
-                              linhas_pagamento: list | None = None, log=print) -> int | None:
-    """Um fato sobre a operacao. Devolve o id do evento (None se nao registrou)."""
+                              linhas_pagamento: list | None = None, fato: bool = False,
+                              log=print) -> int | None:
+    """Um fato sobre a operacao. Devolve o id do evento (None se nao registrou).
+
+    Estrito por padrao: e o registro de INTENCAO (o clique do finalizador). fato=True e
+    para o que JA aconteceu (credito: documentos baixados, etapa movida) — falha de banco
+    vira aviso, nunca derruba o job."""
     if ex is None:
         return None
     if tipo_evento not in TIPOS_EVENTO_OPERACAO:
         raise ValueError(f"tipo_evento desconhecido: {tipo_evento!r}")
+    if fato:
+        return _fato_consumado(ex, log, f"evento {tipo_evento} da op {id_operacao}", lambda: (
+            registrar_evento_operacao(ex, id_operacao, tipo_evento, resultado=resultado,
+                                      cedente=cedente, valor_liquido=valor_liquido,
+                                      pendencias=pendencias, detalhe=detalhe,
+                                      linhas_pagamento=linhas_pagamento, log=log)))
     evento_id = _executar(
         ex, log, f"evento {tipo_evento} da op {id_operacao}",
         "INSERT INTO erp_automation.operacao_evento "
@@ -421,8 +498,15 @@ def _registrar_arquivo(ex: Execucao, tipo_arquivo: str, sentido: str, *, nome_ar
 
 def registrar_evento_arquivo(ex: Execucao, fk_arquivo: int | None, tipo_evento: str, *,
                              resultado: str | None = None, detalhe: dict | None = None,
-                             log=print) -> int | None:
-    """Evento de arquivo e sempre fato consumado: falha de banco vira aviso."""
+                             estrito: bool = False, log=print) -> int | None:
+    """Evento de arquivo e fato consumado por padrao: falha de banco vira aviso.
+
+    estrito=True e para INTENCAO (`intencao_envio` do BB, antes do POST): na execucao
+    estrita a falha levanta ErroDeRegistro e o POST nao acontece — sem rastro nao ha
+    acao irreversivel. Fora do modo real continua avisando."""
+    if estrito:
+        return _registrar_evento_arquivo(ex, fk_arquivo, tipo_evento, resultado=resultado,
+                                         detalhe=detalhe, log=log)
     if ex is None:
         return None
     return _fato_consumado(
@@ -446,11 +530,47 @@ def _registrar_evento_arquivo(ex: Execucao, fk_arquivo: int | None, tipo_evento:
         (fk_arquivo, ex.id, tipo_evento, resultado, _json(detalhe or {})), devolve=True)
 
 
+def buscar_arquivo(ex: Execucao, tipo_arquivo: str, *, sha256: str | None = None,
+                   md5: str | None = None, id_no_smart: str | None = None, log=print) -> int | None:
+    """O id de um arquivo ja registrado, pela chave que se tem (sha256, md5 ou id do Smart).
+    md5 e id_no_smart sao colunas geradas da erp_005. None quando nao ha, ou sem banco."""
+    if ex is None:
+        return None
+    if tipo_arquivo not in TIPOS_ARQUIVO:
+        raise ValueError(f"tipo_arquivo desconhecido: {tipo_arquivo!r}")
+    if sha256:
+        coluna, valor = "sha256", sha256
+    elif md5:
+        coluna, valor = "md5", md5
+    elif id_no_smart is not None:
+        coluna, valor = "id_no_smart", str(id_no_smart)
+    else:
+        raise ValueError("informe sha256, md5 ou id_no_smart")
+    return _fato_consumado(ex, log, f"busca do arquivo por {coluna}", lambda: _executar(
+        ex, log, f"busca do arquivo por {coluna}",
+        f"SELECT id FROM erp_automation.arquivo WHERE tipo_arquivo = %s AND {coluna} = %s "
+        "ORDER BY id DESC LIMIT 1", (tipo_arquivo, valor), devolve=True))
+
+
+def anotar(ex: Execucao, chave: str, valor) -> None:
+    """Guarda um fato que nao tem tabela propria (remessa que nao baixou, cancelamento de
+    remessa anterior ao registro). Vai para detalhe_json no fechamento, como lista."""
+    if ex is None:
+        return
+    ex.anotacoes.setdefault(chave, []).append(valor)
+
+
 def fechar_execucao(ex: Execucao, status: str, *, codigo_saida: int | None = None,
                     qtd_itens: int | None = None, detalhe: dict | None = None, log=print) -> bool:
-    """Fecha UMA vez. status: sucesso|falha|abandonada. Fecha a conexao sempre."""
+    """Fecha UMA vez. status: sucesso|falha|abandonada. Fecha a conexao sempre.
+    As anotacoes (`anotar`) entram em detalhe_json junto com `detalhe`."""
+    global _ATUAL
     if ex is None:
         return False
+    if ex.anotacoes:
+        detalhe = {**ex.anotacoes, **(detalhe or {})}
+    if _ATUAL is ex:
+        _ATUAL = None
     if status not in ("sucesso", "falha", "abandonada"):
         raise ValueError("status de fechamento e sucesso|falha|abandonada")
     ok = False

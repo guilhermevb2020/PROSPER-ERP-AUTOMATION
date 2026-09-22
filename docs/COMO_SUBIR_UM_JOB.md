@@ -389,3 +389,13 @@ Regras: em DRY o banco pode faltar (a execução degrada e avisa uma vez); em mo
 obrigatório — `obrigatoria=True` faz `abrir` levantar e `registrar` recusar antes da ação.
 Evento nunca muda: corrigir é gravar outro. O apelido da credencial se registra; a senha,
 nunca (`apelido_seguro` recusa o que não tiver forma de apelido).
+
+Desde a `erp_005` (22/09/2026): `execucao_job.atual()` devolve a execução aberta neste
+processo — módulos fundos (o `banco.py` do crédito, o `bb_entrega.py`) registram sem
+receber `execucao` por quatro assinaturas; `anotar(ex, chave, valor)` guarda o que não
+tem tabela própria e vai para `detalhe_json` no fechamento; `buscar_arquivo(ex, tipo,
+sha256=|md5=|id_no_smart=)` acha um arquivo já registrado; `registrar_evento_arquivo(...,
+estrito=True)` é intenção (levanta em modo real); `registrar_evento_operacao(..., fato=True)`
+é o que já aconteceu (avisa, nunca derruba). Execução manual real: `ERP_OPERADOR` e
+`ERP_MOTIVO` no ambiente. Job sem navegador (conferência) mora em `src/processors/db/<job>/`
+e usa a automação `controle` — modelo: `src/processors/db/controle/`.
