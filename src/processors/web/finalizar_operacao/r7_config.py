@@ -179,10 +179,18 @@ TIPOS_COM_LETRA_CAMBIO = [t.strip().upper() for t in _s(
 # --------------------------------------------------------------------------- #
 EMAIL_DESTINO = [e.strip() for e in _s(
     "R7_EMAIL_DESTINO", "operacional@prospereinvest.com.br").split(",") if e.strip()]
-# Credenciais SMTP: reusa o email_config.json do prospercredit (fonte unica de
-# verdade, sem duplicar senha). Override por env se precisar.
-EMAIL_CONFIG_JSON = _s("R7_EMAIL_CONFIG_JSON", r"C:\ProsperAI\code\email_config.json")
+# O SMTP vem do ambiente (broker do Access Guardian: SMTP_SERVER/SMTP_PORT/EMAIL_FROM,
+# senha vazia) - ver notificar.py. Ate 22/09/2026 vinha de um email_config.json da maquina
+# Windows de origem, que nao existe no servidor.
 EMAIL_ATIVO = _b("R7_EMAIL_ATIVO", "1")
+# Caixa do `notificar.py --teste` (a caixa de testes da casa, nunca o operacional).
+EMAIL_TESTE = [e.strip() for e in _s(
+    "R7_EMAIL_TESTE", "testes@prospereinvest.com.br").split(",") if e.strip()]
+# Canais do aviso de PAGAMENTO pendente (documentos ok, grade PIX travando). Cada um
+# ainda obedece a sua chave: whatsapp -> R7_WHATSAPP_ATIVO; email -> R7_EMAIL_ATIVO.
+# Vazio desliga o aviso de pendencia sem mexer no WhatsApp das finalizacoes.
+AVISO_PENDENCIA_CANAIS = [c.strip().lower() for c in _s(
+    "R7_AVISO_PENDENCIA_CANAIS", "whatsapp,email").split(",") if c.strip()]
 
 # Avisar TAMBEM quando a operacao FOR FINALIZADA (nao so quando e barrada),
 # dizendo o motivo: o que foi conferido e por que passou.
@@ -212,6 +220,9 @@ WHATSAPP_PROVIDER = _s("R7_WHATSAPP_PROVIDER", "evolution").strip().lower()
 WHATSAPP_ATIVO = _b("R7_WHATSAPP_ATIVO", "1")
 WHATSAPP_DESTINO = [n.strip() for n in _s(
     "R7_WHATSAPP_DESTINO", "5511963226389").split(",") if n.strip()]
+# Quem recebe o aviso de PAGAMENTO pendente no WhatsApp (padrao: o mesmo das finalizacoes).
+WHATSAPP_DESTINO_PENDENCIA = [n.strip() for n in _s(
+    "R7_WHATSAPP_DESTINO_PENDENCIA", ",".join(WHATSAPP_DESTINO)).split(",") if n.strip()]
 # Instancia da Evolution. O nome real e resolvido pelo modulo comum via
 # EVOLUTION_INST_<TAG>_NAME, a mesma convencao do healthcheck dos boletos.
 WHATSAPP_INSTANCIA = _s("R7_WHATSAPP_INSTANCIA", "Prosperito")

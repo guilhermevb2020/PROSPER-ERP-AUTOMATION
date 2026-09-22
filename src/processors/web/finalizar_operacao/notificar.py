@@ -1,23 +1,39 @@
 # -*- coding: utf-8 -*-
 """
-notificar.py - avisa o OPERADOR por e-mail quando uma operacao NAO pode ser
-finalizada (algum documento sem assinatura ou a forma de pagamento incompleta).
+notificar.py - os AVISOS do Robo 7 (finalizar operacao): quem fica sabendo do que.
 
-Reusa as credenciais SMTP do prospercredit (C:\\ProsperAI\\code\\email_config.json)
-p/ nao duplicar senha em dois lugares. Override por env:
-  R7_EMAIL_CONFIG_JSON, R7_SMTP_SERVER/PORT/USER/SENHA/REMETENTE, R7_EMAIL_DESTINO.
+  op FINALIZADA pelo robo          -> WhatsApp (texto_whatsapp_finalizada; quem envia e o
+                                      notificar_whatsapp). Ha tambem um e-mail de
+                                      finalizacao, desligado (R7_EMAIL_FINALIZACAO=0).
+  documentos assinados, mas o      -> WhatsApp e/ou e-mail (avisar_pagamento_pendente):
+  PAGAMENTO impede a finalizacao      so o operador corrige a grade PIX, e enquanto ele
+                                      nao corrige o dinheiro nao sai. E o unico aviso de
+                                      pendencia; exige --avisar no comando. Canais em
+                                      R7_AVISO_PENDENCIA_CANAIS, cada um com a sua chave.
+  esperando ASSINATURA             -> nenhum aviso: e o estado normal da etapa (horas ou
+                                      dias), e cobrar o operador por isso so gera ruido.
 
-Anti-repeticao: nao manda o MESMO aviso (mesma op + mesmas pendencias) duas
-vezes no mesmo dia - registro em avisos_enviados.csv.
+E-mail: broker SMTP do Access Guardian (SMTP_SERVER/SMTP_PORT, SMTP_PASSWORD vazia de
+proposito; ele repassa ao MailerSend), remetente EMAIL_FROM. Ate 22/09/2026 este modulo
+lia a senha de um email_config.json da maquina Windows de origem, que nao existe no
+servidor: nenhum aviso por e-mail tinha saido daqui. Em 22/09 o broker aceitou a conversa
+mas o servidor de saida recusou (451): o e-mail fica DESLIGADO (R7_EMAIL_ATIVO=0) ate a
+Gerencia consertar o relay ou dar ao erp a API HTTP do MailerSend. WhatsApp: Evolution,
+o mesmo canal das finalizacoes (notificar_whatsapp).
 
-Uso isolado:
-  python finalizar_operacao/notificar.py --teste
+Anti-repeticao: a mesma op com as MESMAS pendencias e cobrada de novo cada vez mais
+espacado (na hora, 2h, 4h, ... ate 1x/dia); pendencias diferentes zeram o contador.
+Registro em avisos_enviados.csv; o finalizador grava cada envio como evento
+aviso_enviado no banco.
+
+Uso isolado (mostra o SMTP; com --teste manda UM e-mail para R7_EMAIL_TESTE):
+  python finalizar_operacao/notificar.py --teste [--para endereco]
 """
 import argparse
 import csv
 import hashlib
-import json
 import os
+import re
 import smtplib
 import sys
 from datetime import date, datetime
@@ -29,6 +45,7 @@ _AQUI = os.path.dirname(os.path.abspath(__file__))
 if _AQUI not in sys.path:
     sys.path.insert(0, _AQUI)
 
+import notificar_whatsapp  # noqa: E402
 import r7_config as cfg  # noqa: E402
 
 _CABECALHO = ["quando", "op", "hash_pendencias", "n_avisos", "destinatarios"]
@@ -38,22 +55,48 @@ _CABECALHO = ["quando", "op", "hash_pendencias", "n_avisos", "destinatarios"]
 # Configuracao SMTP
 # --------------------------------------------------------------------------- #
 def _smtp_config():
-    """Le o SMTP do email_config.json do prospercredit; env sobrescreve."""
-    base = {}
-    try:
-        with open(cfg.EMAIL_CONFIG_JSON, encoding="utf-8") as fh:
-            base = (json.load(fh) or {}).get("email", {}) or {}
-    except Exception as e:
-        print(f"  [notificar] nao li {cfg.EMAIL_CONFIG_JSON} ({e}) - uso so as env")
+    """Broker SMTP do Access Guardian: servidor, porta e remetente do ambiente, senha
+    vazia (o broker reconhece o container e fala com o MailerSend). R7_SMTP_* sobrescreve."""
     env = os.environ.get
     return {
-        "server": env("R7_SMTP_SERVER", base.get("smtp_server", "")),
-        "port": int(env("R7_SMTP_PORT", str(base.get("smtp_port", 465)))),
-        "user": env("R7_SMTP_USER", base.get("sender_email", "")),
-        "senha": env("R7_SMTP_SENHA", base.get("sender_password", "")),
-        "remetente": env("R7_SMTP_REMETENTE", base.get("sender_email", "")),
-        "nome": env("R7_SMTP_NOME", base.get("sender_name", "Prosper - Robo 7")),
+        "server": env("R7_SMTP_SERVER") or env("SMTP_SERVER", ""),
+        "port": int(env("R7_SMTP_PORT") or env("SMTP_PORT") or 2525),
+        "user": env("R7_SMTP_USER") or env("SMTP_USER", ""),
+        "senha": env("R7_SMTP_SENHA") or env("SMTP_PASSWORD", ""),
+        "remetente": env("R7_SMTP_REMETENTE") or env("EMAIL_FROM", ""),
+        "nome": env("R7_SMTP_NOME", "Robo 7 - Prospere"),
+        "starttls": env("R7_SMTP_STARTTLS", "0").strip().lower() in ("1", "true", "sim"),
     }
+
+
+def _enviar_email(assunto, corpo, destinatarios):
+    """Um e-mail texto pelo broker. -> (ok, motivo). Nunca levanta."""
+    smtp = _smtp_config()
+    if not (smtp["server"] and smtp["remetente"]):
+        return False, "SMTP sem servidor ou remetente no ambiente (SMTP_SERVER / EMAIL_FROM)"
+    if not destinatarios:
+        return False, "sem destinatario"
+    msg = MIMEMultipart()
+    msg["From"] = f"{smtp['nome']} <{smtp['remetente']}>"
+    msg["To"] = ", ".join(destinatarios)
+    msg["Date"] = formatdate(localtime=True)
+    msg["Subject"] = assunto
+    msg.attach(MIMEText(corpo, "plain", "utf-8"))
+    try:
+        if smtp["port"] == 465:
+            srv = smtplib.SMTP_SSL(smtp["server"], smtp["port"], timeout=30)
+        else:
+            srv = smtplib.SMTP(smtp["server"], smtp["port"], timeout=30)
+            if smtp["starttls"]:
+                srv.starttls()
+        with srv:
+            # o broker do Guardian dispensa AUTH: a senha vazia e de proposito
+            if smtp["user"] and smtp["senha"]:
+                srv.login(smtp["user"], smtp["senha"])
+            srv.sendmail(smtp["remetente"], destinatarios, msg.as_string())
+    except Exception as e:  # noqa: BLE001
+        return False, f"falha SMTP: {str(e)[:160]}"
+    return True, "ok"
 
 
 # --------------------------------------------------------------------------- #
@@ -308,85 +351,152 @@ def enviar_finalizada(op, cedente, contexto=None, detalhes=None, destinatarios=N
     destinatarios = destinatarios or cfg.EMAIL_DESTINO_FINALIZACAO
     if not (cfg.EMAIL_ATIVO and cfg.AVISAR_FINALIZACAO and cfg.EMAIL_FINALIZACAO_ATIVO):
         return False, "e-mail de finalizacao desligado (R7_EMAIL_FINALIZACAO=0)"
-    smtp = _smtp_config()
-    if not (smtp["server"] and smtp["user"] and smtp["senha"]):
-        return False, f"SMTP incompleto em {cfg.EMAIL_CONFIG_JSON}"
-
     corpo = montar_corpo_finalizada(op, cedente, contexto, detalhes)
-    msg = MIMEMultipart()
-    msg["From"] = f"{smtp['nome']} <{smtp['remetente']}>"
-    msg["To"] = ", ".join(destinatarios)
-    msg["Date"] = formatdate(localtime=True)
-    msg["Subject"] = f"[Robo 7] Operacao {op} FINALIZADA - {cedente or ''}".strip()
-    msg.attach(MIMEText(corpo, "plain", "utf-8"))
-    try:
-        if smtp["port"] == 465:
-            srv = smtplib.SMTP_SSL(smtp["server"], smtp["port"], timeout=30)
-        else:
-            srv = smtplib.SMTP(smtp["server"], smtp["port"], timeout=30)
-            srv.starttls()
-        with srv:
-            srv.login(smtp["user"], smtp["senha"])
-            srv.sendmail(smtp["remetente"], destinatarios, msg.as_string())
-    except Exception as e:
-        return False, f"falha SMTP: {e}"
-    return True, "ok"
+    return _enviar_email(f"[Robo 7] Operacao {op} FINALIZADA - {cedente or ''}".strip(),
+                         corpo, destinatarios)
 
 
-def enviar(op, cedente, pendencias, contexto=None, destinatarios=None, forcar=False,
-           prefixo_assunto=""):
-    """Manda o aviso. Retorna (enviado: bool, motivo: str)."""
-    destinatarios = destinatarios or cfg.EMAIL_DESTINO
+def montar_corpo_pagamento(op, cedente, pendencias, contexto=None):
+    """Texto do aviso de PAGAMENTO pendente: a op so nao foi finalizada por causa dele."""
+    ctx = contexto or {}
+    linhas = [
+        f"Todos os documentos da operacao {op} estao assinados, mas o Robo 7 NAO a",
+        "finalizou porque a forma de pagamento tem pendencia:",
+        "",
+    ]
+    linhas += [f"  - {p}" for p in pendencias]
+    linhas += ["", "Dados da operacao:", f"  Cedente ....... {cedente or '(nao identificado)'}"]
+    if ctx.get("valor"):
+        linhas.append(f"  Valor ......... {ctx['valor']}")
+    for lin in ctx.get("linhas_pagamento") or []:
+        linhas.append(
+            f"  Pagamento {lin.get('_linha')}: {lin.get('tipo') or '(sem tipo)'}"
+            f" | origem {lin.get('cta_origem') or '(vazia)'}"
+            f" | vencimento {_data_br(lin.get('vencto')) or '(vazio)'}"
+            f" | SP {'marcado' if lin.get('sp') == 'SIM' else 'NAO marcado'}")
+    limite = cfg.HORA_LIMITE_FINALIZAR or "o fim do expediente"
+    linhas += [
+        "",
+        "Corrija na tela da operacao (Resumir > Pagamento). O robo confere de novo a cada",
+        f"15 minutos e finaliza sozinho quando estiver certo, ate as {limite}. Depois desse",
+        "horario ele nao clica: finalize a mao se o pagamento precisar sair hoje.",
+        "",
+        "-- ",
+        "Robo 7 (finalizar operacao) - Prospere",
+    ]
+    return "\n".join(linhas)
+
+
+def _pendencia_curta(p):
+    """Tira o prefixo que so atrapalha no celular: 'Pagamento: X' -> 'X';
+    'Pagamento (linha 2): X' -> 'linha 2: X'; 'Forma de pagamento: X' -> 'X'."""
+    m = re.match(r"Pagamento \((linha \d+)\): (.*)", p)
+    if m:
+        return f"{m.group(1)}: {m.group(2)}"
+    for prefixo in ("Forma de pagamento: ", "Pagamento: "):
+        if p.startswith(prefixo):
+            return p[len(prefixo):]
+    return p
+
+
+def texto_whatsapp_pagamento_pendente(op, cedente, pendencias, contexto=None):
+    """WhatsApp do aviso de PAGAMENTO pendente: o que trava e o que fazer, no celular."""
+    ctx = contexto or {}
+    linhas = [f"⚠️ *Operação {op} pronta, mas o pagamento trava*"]
+    if cedente:
+        linhas.append(f"{cedente}")
+    if ctx.get("valor"):
+        linhas.append(f"💰 {ctx['valor']}")
+    linhas += ["", "📄 Documentos: todos assinados ✓", "", "🏦 *Falta no pagamento*"]
+    for p in pendencias:
+        linhas.append(f"  • {_pendencia_curta(p)}")
+    limite = cfg.HORA_LIMITE_FINALIZAR or "o fim do expediente"
+    linhas += ["", f"Corrija no Smart (Resumir › Pagamento). O robô confere a cada 15 min e "
+                   f"finaliza sozinho até as {limite}; depois disso, só à mão.",
+               "", f"_{datetime.now():%d/%m %H:%M} · Robô 7_"]
+    return "\n".join(linhas)
+
+
+def _canais_ligados(tem_whatsapp):
+    """Canais do aviso de pendencia que vao mesmo sair: pedidos E com a chave ligada."""
+    canais = []
+    if "whatsapp" in cfg.AVISO_PENDENCIA_CANAIS and tem_whatsapp and cfg.WHATSAPP_ATIVO:
+        canais.append("whatsapp")
+    if "email" in cfg.AVISO_PENDENCIA_CANAIS and cfg.EMAIL_ATIVO:
+        canais.append("email")
+    return canais
+
+
+def _avisar(op, pendencias, assunto, corpo, destinatarios, texto_whatsapp=None, forcar=False):
+    """Liga/desliga, espacamento, envio e registro de UM aviso, por canal.
+    -> {"enviado", "tentou", "motivo", "destinatarios", "canais"}. `tentou` = chegou a
+    falar com algum canal; `enviado` = pelo menos um entregou (e ai conta no espacamento).
+    Um canal que falha nao impede o outro."""
+    r = {"enviado": False, "tentou": False, "motivo": "", "destinatarios": list(destinatarios),
+         "canais": {}}
     if not pendencias:
-        return False, "sem pendencias"
-    if not cfg.EMAIL_ATIVO:
-        print(f"  [notificar] EMAIL DESLIGADO (R7_EMAIL_ATIVO=0) - aviso da op {op} nao enviado")
-        return False, "email desligado"
-
+        r["motivo"] = "sem pendencias"
+        return r
+    canais = _canais_ligados(bool(texto_whatsapp))
+    if not canais:
+        r["motivo"] = ("nenhum canal de aviso ligado (R7_AVISO_PENDENCIA_CANAIS, "
+                       "R7_WHATSAPP_ATIVO, R7_EMAIL_ATIVO)")
+        return r
     n_anterior = 0
     if forcar:
         motivo_envio = "forcado"
     else:
         pode, motivo_envio, n_anterior = pode_avisar(op, pendencias)
         if not pode:
-            return False, motivo_envio
-
-    smtp = _smtp_config()
-    if not (smtp["server"] and smtp["user"] and smtp["senha"]):
-        return False, f"SMTP incompleto (server/user/senha) em {cfg.EMAIL_CONFIG_JSON}"
-
-    corpo = montar_corpo(op, cedente, pendencias, contexto)
-    msg = MIMEMultipart()
-    msg["From"] = f"{smtp['nome']} <{smtp['remetente']}>"
-    msg["To"] = ", ".join(destinatarios)
-    msg["Date"] = formatdate(localtime=True)
+            r["motivo"] = motivo_envio
+            return r
     reforco = f" (cobranca #{n_anterior + 1})" if n_anterior else ""
-    msg["Subject"] = (f"{prefixo_assunto}[Robo 7] Operacao {op} NAO finalizada - "
-                      f"{len(pendencias)} pendencia(s){reforco}")
-    msg.attach(MIMEText(corpo, "plain", "utf-8"))
-
-    try:
-        if smtp["port"] == 465:
-            srv = smtplib.SMTP_SSL(smtp["server"], smtp["port"], timeout=30)
-        else:
-            srv = smtplib.SMTP(smtp["server"], smtp["port"], timeout=30)
-            srv.starttls()
-        with srv:
-            srv.login(smtp["user"], smtp["senha"])
-            srv.sendmail(smtp["remetente"], destinatarios, msg.as_string())
-    except Exception as e:
-        return False, f"falha SMTP: {e}"
-
-    _registrar(op, pendencias, destinatarios, n_anterior)
+    r["tentou"] = True
+    if "whatsapp" in canais:
+        n_ok, res = notificar_whatsapp.enviar(texto_whatsapp, cfg.WHATSAPP_DESTINO_PENDENCIA)
+        r["canais"]["whatsapp"] = {"ok": bool(n_ok), "detalhe": "; ".join(
+            f"{num}: {'OK' if ok else 'FALHOU'} - {str(d)[:80]}" for num, ok, d in res)}
+    if "email" in canais:
+        ok, motivo = _enviar_email(assunto + reforco, corpo, destinatarios)
+        r["canais"]["email"] = {"ok": ok, "detalhe": motivo}
+    r["enviado"] = any(c["ok"] for c in r["canais"].values())
+    resumo = " | ".join(f"{canal}: {'ok' if c['ok'] else c['detalhe']}"
+                        for canal, c in r["canais"].items())
+    if not r["enviado"]:
+        r["motivo"] = f"nenhum canal entregou ({resumo})"
+        return r
+    _registrar(op, pendencias, [c for c, v in r["canais"].items() if v["ok"]], n_anterior)
     proxima = espera_minutos(n_anterior + 1) / 60.0
-    print(f"  [notificar] aviso da op {op} enviado p/ {', '.join(destinatarios)} "
-          f"({motivo_envio}; se continuar pendente, cobra de novo em {proxima:.0f}h)")
-    return True, "ok"
+    r["motivo"] = (f"enviado ({resumo}; {motivo_envio}; se continuar pendente, cobra de "
+                   f"novo em {proxima:.0f}h)")
+    return r
+
+
+def avisar_pagamento_pendente(op, cedente, pendencias, contexto=None, destinatarios=None):
+    """O aviso de pendencia que vale: documentos assinados e o PAGAMENTO travando."""
+    destinatarios = destinatarios or cfg.EMAIL_DESTINO
+    assunto = (f"[Robo 7] Operacao {op} pronta, mas o PAGAMENTO impede a finalizacao - "
+               f"{len(pendencias)} pendencia(s)")
+    return _avisar(op, pendencias, assunto,
+                   montar_corpo_pagamento(op, cedente, pendencias, contexto), destinatarios,
+                   texto_whatsapp=texto_whatsapp_pagamento_pendente(op, cedente, pendencias,
+                                                                    contexto))
+
+
+def enviar(op, cedente, pendencias, contexto=None, destinatarios=None, forcar=False,
+           prefixo_assunto=""):
+    """Aviso generico de pendencia (compatibilidade). Retorna (enviado, motivo)."""
+    destinatarios = destinatarios or cfg.EMAIL_DESTINO
+    assunto = (f"{prefixo_assunto}[Robo 7] Operacao {op} NAO finalizada - "
+               f"{len(pendencias)} pendencia(s)")
+    r = _avisar(op, pendencias, assunto, montar_corpo(op, cedente, pendencias, contexto),
+                destinatarios, forcar=forcar)
+    return r["enviado"], r["motivo"]
 
 
 def main():
-    ap = argparse.ArgumentParser(description="Envia (ou simula) o aviso de pendencia do Robo 7.")
-    ap.add_argument("--teste", action="store_true", help="manda um e-mail de teste")
+    ap = argparse.ArgumentParser(description="Mostra o SMTP do Robo 7; com --teste, manda um e-mail de teste.")
+    ap.add_argument("--teste", action="store_true", help="manda UM e-mail de teste (R7_EMAIL_TESTE)")
     ap.add_argument("--op", default="00000")
     ap.add_argument("--para", default="", help="destinatario(s) separados por virgula")
     args = ap.parse_args()
@@ -396,21 +506,26 @@ def main():
         pass
 
     smtp = _smtp_config()
-    print(f"SMTP: {smtp['server']}:{smtp['port']} como {smtp['user']} "
-          f"(senha {'OK' if smtp['senha'] else 'FALTANDO'})")
-    print(f"Destino padrao: {cfg.EMAIL_DESTINO}")
+    print(f"SMTP: servidor {'definido' if smtp['server'] else 'AUSENTE'}, porta {smtp['port']}, "
+          f"remetente {'definido' if smtp['remetente'] else 'AUSENTE'}, "
+          f"senha {'definida' if smtp['senha'] else 'vazia (broker do Guardian)'}")
+    print(f"Aviso de pagamento: {', '.join(cfg.EMAIL_DESTINO)} | "
+          f"e-mail {'LIGADO' if cfg.EMAIL_ATIVO else 'desligado'} (R7_EMAIL_ATIVO)")
     if not args.teste:
-        print("\n(use --teste para enviar um e-mail de verdade)")
+        print("\n(use --teste para mandar um e-mail de teste)")
         return 0
 
-    destino = [e.strip() for e in args.para.split(",") if e.strip()] or cfg.EMAIL_DESTINO
-    pend = ["Aditivo: falta assinatura de terceiro(s) -> GIGA PAPER COMERCIO (Pendente)",
-            "Pagamento: campo 'Favorecido' esta vazio",
-            "Pagamento: Vencto = 27/08/2026, deveria ser a data de hoje"]
-    ok, motivo = enviar(args.op, "CEDENTE DE TESTE", pend,
-                        {"valor": "R$ 3.537,26", "tipos_titulos": ["DUR"]},
-                        destino, forcar=True, prefixo_assunto="[TESTE] ")
-    print(f">> enviado={ok} | {motivo}")
+    destino = [e.strip() for e in args.para.split(",") if e.strip()] or cfg.EMAIL_TESTE
+    pend = ["Pagamento: Vencto = 21/09/2026, deveria ser a data de hoje",
+            "Pagamento: SP nao esta marcado"]
+    ctx = {"valor": "R$ 3.537,26",
+           "linhas_pagamento": [{"_linha": "1", "tipo": "PIX", "cta_origem": "mp prospere",
+                                 "vencto": "2026-09-21", "sp": "NAO"}]}
+    ok, motivo = _enviar_email(
+        f"[TESTE] [Robo 7] Operacao {args.op} pronta, mas o PAGAMENTO impede a finalizacao - "
+        f"{len(pend)} pendencia(s)",
+        montar_corpo_pagamento(args.op, "CEDENTE DE TESTE", pend, ctx), destino)
+    print(f">> enviado={ok} | {motivo} | para {', '.join(destino)}")
     return 0 if ok else 1
 
 

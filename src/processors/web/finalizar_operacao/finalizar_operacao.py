@@ -7,7 +7,9 @@ Para cada operacao na etapa "Aguardando Ass.":
   2. CHECAGEM 1 - documentos assinados no doc2you  (checagem_docs);
   3. se os documentos estao ok -> CHECAGEM 2, forma de pagamento (checagem_pagamento);
   4. tudo OK  -> clica em FINALIZAR (so com --executar; DRY e o padrao);
-     algo NOK -> NAO finaliza e manda UM e-mail com as pendencias da op.
+     algo NOK -> NAO finaliza. Se os documentos estao ok e o que trava e o
+     PAGAMENTO, avisa (WhatsApp/e-mail, so com --avisar); esperando assinatura
+     nao gera aviso - e o estado normal da etapa.
 
 ORDEM (regra do usuario): a forma de pagamento so e conferida DEPOIS que as
 assinaturas estao ok - enquanto ninguem assinou, o cadastro de pagamento ainda
@@ -188,16 +190,10 @@ def processar(ctx, op, executar=False, mandar_email=False, execucao=None):
               "quando as assinaturas estiverem ok:")
         for p in laudo["pendencias"]:
             print(f"     - {p}")
-        laudo["acao"] = "avisar"
+        laudo["acao"] = "aguardando assinatura"
         laudo["pagamento_conferido"] = False
-        if mandar_email:
-            ok, motivo = notificar.enviar(
-                op, cedente, laudo["pendencias"],
-                {"valor": _fmt_valor(valor), "tipos_titulos": laudo["tipos"]})
-            print(f"     e-mail: {'enviado' if ok else 'nao enviado'} ({motivo})")
-            laudo["acao"] = "avisado" if ok else "avisar"
-        else:
-            print("     (e-mail NAO enviado - rode com --email para avisar de verdade)")
+        # sem aviso: esperar assinatura e o estado normal da etapa (horas ou dias), e
+        # cobrar o operador por isso a cada ciclo so gerava ruido (ver notificar.py)
         return laudo
 
     # ---- ETAPA: so finaliza quem esta MESMO na etapa de entrada ----------- #
@@ -253,14 +249,11 @@ def processar(ctx, op, executar=False, mandar_email=False, execucao=None):
             for p in laudo["pendencias"]:
                 print(f"     - {p}")
             laudo["acao"] = "avisar"
-            if mandar_email:
-                ok, motivo = notificar.enviar(
-                    op, cedente, laudo["pendencias"],
-                    {"valor": _fmt_valor(valor), "tipos_titulos": laudo["tipos"]})
-                print(f"     e-mail: {'enviado' if ok else 'nao enviado'} ({motivo})")
-                laudo["acao"] = "avisado" if ok else "avisar"
-            else:
-                print("     (e-mail NAO enviado - rode com --email para avisar de verdade)")
+            # AVISO ao operacional so quando os documentos estao ok e o que trava e o
+            # pagamento: e o caso que so o operador resolve, e que segura o dinheiro.
+            if not r_docs["pendencias"] and r_pag["pendencias"]:
+                laudo["acao"] = _avisar_pagamento(op, cedente, valor, r_pag, laudo,
+                                                   mandar_email, execucao)
             return laudo
 
         print("\n  >> TUDO OK - a operacao pode ser finalizada")
@@ -336,6 +329,29 @@ def processar(ctx, op, executar=False, mandar_email=False, execucao=None):
             pg.close()
         except Exception:
             pass
+
+
+def _avisar_pagamento(op, cedente, valor, r_pag, laudo, mandar_email, execucao):
+    """Aviso de PAGAMENTO pendente com documentos ok. -> a acao do laudo."""
+    if not mandar_email:
+        print("     (aviso de pagamento NAO enviado - o comando nao tem --avisar)")
+        return "avisar"
+    r = notificar.avisar_pagamento_pendente(
+        op, cedente, r_pag["pendencias"],
+        {"valor": _fmt_valor(valor), "tipos_titulos": laudo["tipos"],
+         "linhas_pagamento": r_pag.get("linhas") or []})
+    print(f"     aviso de pagamento: {r['motivo']}")
+    if r["tentou"] and execucao is not None:
+        # best-effort como o aviso: registrar nunca muda o veredito da op
+        try:
+            execucao_job.registrar_evento_operacao(
+                execucao, op, "aviso_enviado", resultado="ok" if r["enviado"] else "falhou",
+                cedente=cedente, valor_liquido=valor,
+                detalhe={"motivo_aviso": "pagamento_pendente", "canais": r.get("canais"),
+                         "pendencias": r_pag["pendencias"], "detalhe": r["motivo"]})
+        except Exception as e:  # noqa: BLE001
+            print(f"     registro do aviso FALHOU: {str(e)[:120]}")
+    return "avisado" if r["enviado"] else "avisar"
 
 
 def _avisar_finalizacao(op, cedente, valor, detalhes, confirmacao, execucao=None):
@@ -448,8 +464,9 @@ def main():
     ap.add_argument("--ops", default="", help="ops especificas (virgula). Vazio = fila da etapa")
     ap.add_argument("--executar", action="store_true",
                     help="clica em Finalizar de verdade (sem isso = DRY)")
-    ap.add_argument("--email", action="store_true",
-                    help="manda o e-mail de pendencia (sem isso, so mostra)")
+    ap.add_argument("--avisar", "--email", dest="email", action="store_true",
+                    help="manda o aviso de PAGAMENTO pendente (documentos ok) por WhatsApp "
+                         "e/ou e-mail; sem isso, so mostra. --email e o nome antigo")
     ap.add_argument("--loop", action="store_true", help="repete a cada R7_INTERVALO_CICLO_S")
     args = ap.parse_args()
     try:
@@ -462,7 +479,7 @@ def main():
         print("[!] R7_DRY_RUN=1 no ambiente -> --executar IGNORADO (nada sera finalizado).\n"
               "    Para valer: $env:R7_DRY_RUN='0' antes de rodar.")
     modo = "EXECUTAR (finaliza de verdade)" if executar else "DRY (nao finaliza nada)"
-    print(f"=== ROBO 7 | {modo} | e-mail: {'SIM' if args.email else 'nao'} | "
+    print(f"=== ROBO 7 | {modo} | avisos: {'SIM' if args.email else 'nao'} | "
           f"conta: {cfg.CONTA} ===")
 
     ops = [o.strip() for o in args.ops.split(",") if o.strip()] or None

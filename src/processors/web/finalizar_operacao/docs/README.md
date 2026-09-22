@@ -70,7 +70,8 @@ fecha ao sair, com exit code e quantidade de operações. Por operação, um eve
 `avaliada` com o veredito (`FINALIZARIA` / `BARRADA` / `ERRO`), as pendências e a foto da
 grade de pagamento (`operacao_pagamento_linha`, leitura restrita); em modo real,
 `finalizar_clicado` **antes** do clique e `finalizada` / `finalizacao_falhou` /
-`finalizada_por_outro` depois; e `aviso_enviado` quando o WhatsApp sai. Evento nunca
+`finalizada_por_outro` depois; e `aviso_enviado` quando sai um aviso (o WhatsApp da
+finalização, ou o aviso de pagamento pendente, com o resultado por canal). Evento nunca
 muda. O placar (`vw_operacao_placar`) compara o veredito com o espelho do Smart.
 
 Em DRY o banco pode faltar: a execução degrada, avisa uma vez e o ciclo segue. Em modo
@@ -95,6 +96,31 @@ idêntico** ao do pacote de origem, e os símbolos consumidos de `config.py`
 repo — candidatos a `src/common/` quando um segundo job precisar deles.
 
 ---
+
+## Avisos — quem fica sabendo do quê
+
+| situação da operação | aviso | para quem | chave |
+|---|---|---|---|
+| finalizada pelo robô | WhatsApp | `R7_WHATSAPP_DESTINO` | `R7_WHATSAPP_ATIVO` |
+| documentos assinados, mas o **pagamento** impede a finalização | WhatsApp e/ou e-mail | `R7_WHATSAPP_DESTINO_PENDENCIA` (padrão: o mesmo) e `R7_EMAIL_DESTINO` (operacional@) | `--avisar` no comando **e** `R7_AVISO_PENDENCIA_CANAIS` (+ a chave de cada canal) |
+| esperando assinatura | **nenhum** | — | — |
+
+O aviso de pagamento é o que importa: só o operador corrige a grade PIX, e enquanto ele não
+corrige o dinheiro não sai. Esperar assinatura é o estado normal da etapa (horas ou dias);
+avisar isso a cada ciclo só gerava ruído, e foi retirado em 22/09/2026. A mesma operação com
+as mesmas pendências é avisada de novo cada vez mais espaçado (na hora, 2 h, 4 h, … até
+1x/dia); pendência diferente zera o contador (`avisos_enviados.csv`). Cada envio vira
+`aviso_enviado` no banco.
+
+**E-mail desligado de propósito.** Até 22/09/2026 o `notificar.py` lia a senha SMTP de um
+`email_config.json` da máquina Windows de origem, que não existe no servidor: nenhum e-mail
+tinha saído daqui. Agora ele usa o broker SMTP do Access Guardian (`SMTP_SERVER`,
+`SMTP_PORT`, `EMAIL_FROM`, senha vazia). O broker aceitou a conversa, mas o servidor de
+saída recusou (`451 4.4.0 o servidor de saída recusou`): o relay do erp entrou por acidente
+e o combinado do Guardian para o erp é a API HTTP do MailerSend (`DECISOES.md`). Enquanto a
+Gerência não resolve, `R7_EMAIL_ATIVO=0` e o aviso de pagamento sai só por WhatsApp. Para
+testar o e-mail: `python .../notificar.py --teste` (vai para `R7_EMAIL_TESTE`, a caixa de
+testes, nunca o operacional).
 
 ## Rodar
 
@@ -138,9 +164,9 @@ Dois dias de ciclos contínuos contra o Smart e o doc2you **reais**:
 - **A finalização.** Ligada em 22/09/2026 14:37; as primeiras finalizações reais
   neste servidor foram às 15:46 e 15:47 do mesmo dia (ver "Estado"). Antes disso, tudo foi DRY. O pacote de origem reporta 9 finalizações em
   01/09/2026 na máquina de origem — é o autor dizendo, não nós vendo.
-- **O aviso por WhatsApp.** Nenhum envio saiu; falta a `EVOLUTION_API_KEY` no
-  sandbox (no container ela vem do `env_file`). Testados só os caminhos de
-  erro (401 sem chave / com chave inválida), que falham fechado.
+- **O aviso de pagamento pendente em produção.** Ligado em 22/09/2026 (`--avisar`); até
+  então nenhum saiu. O WhatsApp de finalização saiu nas duas primeiras finalizações reais
+  (65879 e 65876, 22/09 15:46 e 15:47).
 - **Acurácia medida.** O `placar.py` nunca rodou. "A operação sumiu da fila
   depois que o job aprovou" **não é prova** — operações barradas também somem,
   e uma delas saiu e voltou assinada 12 min depois.
@@ -218,5 +244,6 @@ clicado (teste `test_finalizar_trava_titulos`).
 - [ ] `placar.py` por alguns dias úteis e a primeira finalização **supervisionada** — dispensados pelo usuário ao ligar a produção em 22/09; acompanhar a primeira finalização real até o retorno do banco
 - [x] Consulta da fila: espera a recarga do frame de resultado e confere a coluna Etapa, em vez de 1,5 s fixos — 22/09/2026 (`_buscar_numeros_uma`, compartilhada com o `credito`; teste `test_busca_consulta_etapa`)
 - [x] Botão Pagamento desabilitado: espera até 90 s e diagnóstico "operação aberta por outro usuário" — 22/09/2026
-- [ ] `notificar.py` ainda aponta para um `email_config.json` de Windows
+- [x] `notificar.py` sem o `email_config.json` de Windows: SMTP pelo broker do Guardian, aviso só de pagamento travado, por WhatsApp — 22/09/2026 (teste `test_finalizar_notificar`)
+- [ ] E-mail dos avisos: o relay SMTP do Guardian recusa na saída (451); depende da Gerência (consertar o relay ou dar ao erp a API HTTP do MailerSend)
 - [ ] Renomear `r7_config.py` → `finalizar_config.py` (convenção do guia §2)
