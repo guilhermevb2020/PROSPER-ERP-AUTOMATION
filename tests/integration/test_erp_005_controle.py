@@ -214,3 +214,18 @@ def test_carga_historica_de_remessa_entra_com_a_data_de_entao(execucao, tmp_path
     assert ctl["25695"]["ultimo_evento"] == "enviado"
     r2 = carga.carregar([linha], carga.indexar_arvore(str(tmp_path / "Remessas")), execucao, ensaio=False)
     assert r2.ja_estavam == ["25695"], "idempotente pelo sha256"
+
+
+def test_conexao_que_cai_no_meio_e_reconectada(execucao):
+    """22/09/2026 #164: o servidor fechou a conexao apos 12 min ociosos; os registros
+    seguintes se perdiam e o fechamento derrubava o job. Aqui a conexao e fechada por
+    baixo e o registro seguinte tem de sair — na conexao nova, com o mesmo execucao_id."""
+    execucao._conn.close()
+    dados = _unico(b"k")
+    arq = execucao_job.registrar_arquivo(execucao, "retorno_pagamento_cnab_240", "recebido",
+                                         nome_arquivo="CP2209RECONEXAO.RET", conteudo=dados,
+                                         detalhe={"md5": hashlib.md5(dados).hexdigest()})
+    assert arq, "registrado depois da queda"
+    assert any("reconectada" in a for a in execucao.avisos)
+    (fk,), = _ler("select fk_job_execucao from erp_automation.arquivo where id = %s", (arq,))
+    assert fk == execucao.id

@@ -70,6 +70,11 @@ cada operação com eventos; tudo imutável por dono separado e gatilho.
 - Fato sem tabela própria (remessa que não baixou, cancelamento de remessa anterior ao
   registro) vai por `execucao_job.anotar()` para o `detalhe_json` da execução, no fechamento.
 - Nada se apaga nem se corrige no lugar: corrigir é outro evento.
+- **A conexão do registro pode cair numa rodada longa** (22/09/2026, remessa das 11h30: o
+  servidor fechou após 12 min ociosos). O cliente reconecta e repete o comando uma vez;
+  o **fechamento nunca derruba o job** (falha vira aviso e a linha fica `ativa` — a
+  `vw_job_execucao_abandonada` a mostra depois de 2 h). Registro que se perdeu no meio
+  de uma rodada entra depois pela carga histórica (`--dias 1`), pelo CSV.
 
 ## 5. Como conferir
 

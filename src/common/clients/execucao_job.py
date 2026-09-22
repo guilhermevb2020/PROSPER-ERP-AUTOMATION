@@ -120,7 +120,11 @@ def conexao_leitura(job: str):
 def _parametros_conexao(job: str) -> dict:
     dsn = os.environ.get("ERP_EXECUCAO_DSN", "").strip()
     base = {"connect_timeout": CONNECT_TIMEOUT_S,
-            "application_name": f"erp-automation:{job}"[:63]}
+            "application_name": f"erp-automation:{job}"[:63],
+            # A sessao fica OCIOSA enquanto o Chrome trabalha (a remessa das 18h leva 20 min):
+            # keepalive de TCP evita que NAT/proxy derrubem a conexao parada. Nao e garantia
+            # (o proxy pode fechar por politica): por isso tambem existe a reconexao.
+            "keepalives": 1, "keepalives_idle": 60, "keepalives_interval": 15, "keepalives_count": 4}
     if dsn:
         return {"dsn": dsn, **base}
     return {
@@ -346,8 +350,74 @@ def abrir_execucao(automacao: str, job: str, *, flag_ensaio: bool, gatilho: str 
     return ex
 
 
+#: Erros que significam "a conexao morreu", nao "o comando esta errado": vale reconectar
+#: e repetir UMA vez. Reconhecidos pelo nome da classe (psycopg2) e pelo texto, para o
+#: modulo continuar importando sem psycopg2 (testes com dubles).
+_ERROS_DE_CONEXAO = ("InterfaceError", "OperationalError")
+_TEXTOS_DE_CONEXAO = ("connection already closed", "server closed the connection",
+                      "terminating connection", "could not receive data", "connection not open",
+                      "SSL connection has been closed", "connection reset")
+
+
+def _e_queda_de_conexao(conn, e: Exception) -> bool:
+    if getattr(conn, "closed", 0):
+        return True
+    return type(e).__name__ in _ERROS_DE_CONEXAO and any(t in str(e) for t in _TEXTOS_DE_CONEXAO)
+
+
+def _reconectar(ex: Execucao, log, motivo: str) -> bool:
+    """A conexao caiu no meio de uma rodada longa (22/09/2026, remessa das 11:30: o
+    servidor fechou apos 12 min ociosos e os 5 registros seguintes se perderam, e o
+    fechamento derrubou o job). Abre outra, republica erp.execucao_id e avisa. False se
+    nao der: quem chama decide (estrito levanta; fato consumado avisa)."""
+    try:
+        conn = _conectar(ex.job)
+        with conn.cursor() as cur:
+            cur.execute("SELECT set_config('erp.execucao_id', %s, false)", (str(ex.id),))
+    except Exception as e:  # noqa: BLE001
+        ex._avisar(log, f"conexao com o banco caiu ({motivo}) e a reconexao falhou "
+                        f"({type(e).__name__}: {str(e)[:100]})")
+        return False
+    try:
+        if ex._conn is not None:
+            ex._conn.close()
+    except Exception:  # noqa: BLE001
+        pass
+    ex._conn = conn
+    ex._avisar(log, f"conexao com o banco caiu ({motivo}); reconectada")
+    return True
+
+
+def _rodar(ex: Execucao, log, descricao: str, sql: str, params: tuple, *, modo: str):
+    """O acesso ao banco com UMA repeticao apos queda de conexao. modo: 'um' (fetchone ->
+    int), 'todos' (fetchall) ou 'nada' (True). Levanta a excecao original se nao der."""
+    try:
+        with ex._conn.cursor() as cur:
+            cur.execute(sql, params)
+            if modo == "um":
+                linha = cur.fetchone()
+                return int(linha[0]) if linha else None
+            if modo == "todos":
+                return cur.fetchall()
+            return True
+    except Exception as e:  # noqa: BLE001
+        if not _e_queda_de_conexao(ex._conn, e) or not _reconectar(ex, log, f"{type(e).__name__}: {str(e)[:80]}"):
+            raise
+    # segunda e ultima tentativa, na conexao nova. INSERT de arquivo tem ON CONFLICT
+    # (sha256) — repetir nao duplica; evento repetido e append-only e inofensivo.
+    with ex._conn.cursor() as cur:
+        cur.execute(sql, params)
+        if modo == "um":
+            linha = cur.fetchone()
+            return int(linha[0]) if linha else None
+        if modo == "todos":
+            return cur.fetchall()
+        return True
+
+
 def _executar(ex: Execucao, log, descricao: str, sql: str, params: tuple, *, devolve=False):
-    """Roda um comando na execucao. Degradada: avisa e devolve None. Estrita: levanta."""
+    """Roda um comando na execucao. Degradada: avisa e devolve None. Estrita: levanta.
+    Queda de conexao no meio: reconecta e repete uma vez (ver _reconectar)."""
     if ex is None:
         # Sem execucao nenhuma: o job foi chamado fora do fluxo que a abre (teste de
         # unidade, uso manual de uma funcao interna). Nao ha o que registrar, e isto
@@ -357,12 +427,7 @@ def _executar(ex: Execucao, log, descricao: str, sql: str, params: tuple, *, dev
         ex._avisar(log, "registro nao feito: execucao sem banco (o ensaio segue; em modo real isto levanta)")
         return None
     try:
-        with ex._conn.cursor() as cur:
-            cur.execute(sql, params)
-            if devolve:
-                linha = cur.fetchone()
-                return int(linha[0]) if linha else None
-        return True
+        return _rodar(ex, log, descricao, sql, params, modo="um" if devolve else "nada")
     except Exception as e:  # noqa: BLE001
         if ex.estrito:
             raise ErroDeRegistro(f"{descricao} falhou: {type(e).__name__}: {str(e)[:160]}") from e
@@ -570,9 +635,7 @@ def _consultar(ex: Execucao, log, descricao: str, sql: str, params: tuple):
             ex._avisar(log, "consulta nao feita: execucao sem banco")
         return None
     try:
-        with ex._conn.cursor() as cur:
-            cur.execute(sql, params)
-            return cur.fetchall()
+        return _rodar(ex, log, descricao, sql, params, modo="todos")
     except Exception as e:  # noqa: BLE001
         if ex.estrito:
             raise ErroDeRegistro(f"{descricao} falhou: {type(e).__name__}: {str(e)[:160]}") from e
@@ -676,12 +739,20 @@ def fechar_execucao(ex: Execucao, status: str, *, codigo_saida: int | None = Non
         raise ValueError("status de fechamento e sucesso|falha|abandonada")
     ok = False
     try:
-        r = _executar(
-            ex, log, f"fechamento da execucao #{ex.id}",
-            "UPDATE erp_automation.job_execucao SET terminado_em = now(), status = %s, "
-            " codigo_saida = %s, qtd_itens = %s, detalhe_json = detalhe_json || %s "
-            "WHERE id = %s AND status = 'ativa'",
-            (status, codigo_saida, qtd_itens, _json(detalhe or {}), ex.id))
+        # O fechamento e FATO CONSUMADO: o job ja fez o que fez. Levantar aqui so troca o
+        # exit de um trabalho terminado por um traceback e um "failed" no hub (22/09/2026,
+        # execucao #164: 9 remessas geradas, hub marcou falha). Falha vira aviso; a linha
+        # fica `ativa` e a vw_job_execucao_abandonada a mostra depois de 2 h.
+        try:
+            r = _executar(
+                ex, log, f"fechamento da execucao #{ex.id}",
+                "UPDATE erp_automation.job_execucao SET terminado_em = now(), status = %s, "
+                " codigo_saida = %s, qtd_itens = %s, detalhe_json = detalhe_json || %s "
+                "WHERE id = %s AND status = 'ativa'",
+                (status, codigo_saida, qtd_itens, _json(detalhe or {}), ex.id))
+        except ErroDeRegistro as e:
+            ex._avisar(log, f"{e} (execucao fica ativa no banco; o job termina normalmente)")
+            r = None
         ok = bool(r)
         if ok:
             log(f"  [execucao] #{ex.id} fechada: {status}"
