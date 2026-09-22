@@ -27,7 +27,7 @@ fluxo de sempre segue.
    nao e trabalho de robo. Por isso a decisao mora em `decidir_conta()`, que e
    funcao PURA e tem teste (`tests/unit/test_conta_operacao.py`).
 
-Segue o mesmo desenho do ajuste de classe de risco (`robo_analise_credito_v3`):
+Segue o mesmo desenho do ajuste de classe de risco (`_analisar_credito_v3`):
 best-effort (nunca derruba o robo) e **desligado por padrao** — com
 `CONTA_PADRAO_APLICAR=0` ele so registra no log o que faria.
 """

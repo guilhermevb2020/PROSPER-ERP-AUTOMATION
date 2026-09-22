@@ -15,8 +15,8 @@
 # regravaria por cima — perdendo tudo o que o run atual escreveu depois da copia.
 # O robo roda das 07:45 as ~18:52 em dia util (timeout 11h10).
 #
-#   ./scripts/mover_estado_robo_credito.sh              faz a troca
-#   ./scripts/mover_estado_robo_credito.sh --dry-run    so confere, nao mexe
+#   ./scripts/mover_estado_credito.sh              faz a troca
+#   ./scripts/mover_estado_credito.sh --dry-run    so confere, nao mexe
 set -euo pipefail
 
 RAIZ="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
