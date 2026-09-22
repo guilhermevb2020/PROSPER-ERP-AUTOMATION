@@ -352,7 +352,7 @@ def ciclo(ctx, conta=None, dry_run=True, log=print):
         # conheciamos -- nada garante que a remessa NOVA (a que motivou esta
         # recuperacao) ja apareceu ali. `caminho` fica None de proposito
         # quando as tentativas se esgotam: e o que ja liga o alerta existente
-        # em robo_pagamento.py (`enviado and not caminho` ->
+        # em gerar_remessa_pagamento.py (`enviado and not caminho` ->
         # SAIU_RODADA_INCOMPLETA) sem precisar duplicar a trava.
         destino = os.path.join(cfg.PASTA_SAIDA, nome)
         ja_conhecido = os.path.exists(destino)

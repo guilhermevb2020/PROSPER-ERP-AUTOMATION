@@ -51,7 +51,7 @@ carregam o menu (a de remessa de cobranca tem 4 links). O menu esta no PAINEL
 USO (dentro do container)
 -------------------------
     # 1) que telas de pagamento existem?
-    sh /app/src/processors/web/robo_pagamento/run_descoberta.sh --links pagamento
+    sh /app/src/processors/web/remessa_pagamento/run_descoberta.sh --links pagamento
 
     # 2) abre UMA delas e despeja tudo que o robo vai precisar
     sh .../run_descoberta.sh --url https://wvw.smartsecurities.com.br/smart/<tela>.php

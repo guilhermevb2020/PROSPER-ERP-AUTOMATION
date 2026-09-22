@@ -4,9 +4,9 @@ retorno_pagamento_config.py - configuracao do robo que INSERE o retorno de
 PAGAMENTO no Smart.
 
 Tela: Financeiro > Sistemas de pagamento > Pagamento BMP Money Plus > Processar
-Retorno. MESMA area do `robo_pagamento` (que so GERA a remessa) — por isso usa a
+Retorno. MESMA area do `remessa_pagamento` (que so GERA a remessa) — por isso usa a
 MESMA credencial (`PAGAMENTO_EMAIL`/`PAGAMENTO_SENHA`, carregada pelo
-`run_agendado.sh` de `config/robo_pagamento.env`), mas com display, perfil e
+`run_agendado.sh` de `config/remessa_pagamento.env`), mas com display, perfil e
 sessao PROPRIOS: dois robos no mesmo perfil de Chrome travam o login um do
 outro (mesmo motivo do `retorno_cobranca` ter sessao propria, so que aqui a conta
 Smart e a MESMA e so o navegador e isolado).
@@ -45,9 +45,9 @@ def _b(chave: str, padrao: str) -> bool:
 
 
 # --------------------------------------------------------------------------- #
-# Credenciais do Smart — MESMA conta do robo_pagamento (mesma tela, mesmo modulo)
+# Credenciais do Smart — MESMA conta do remessa_pagamento (mesma tela, mesmo modulo)
 # --------------------------------------------------------------------------- #
-# O `run_agendado.sh` deste robo carrega `config/robo_pagamento.env` ANTES
+# O `run_agendado.sh` deste robo carrega `config/remessa_pagamento.env` ANTES
 # (mesma variavel, sem duplicar o segredo em dois arquivos). Um `RETPAG_EMAIL`/
 # `RETPAG_SENHA` explicito sobrescreve, se um dia a conta precisar ser outra.
 EMAIL = _s("RETPAG_EMAIL", _s("PAGAMENTO_EMAIL", ""))
@@ -87,7 +87,7 @@ def exigir_credenciais() -> None:
     if faltando:
         raise RuntimeError(
             f"Credencial ausente: {', '.join(faltando)}. O run_agendado.sh deste "
-            "robo carrega config/robo_pagamento.env antes de rodar — confira se "
+            "robo carrega config/remessa_pagamento.env antes de rodar — confira se "
             "esse arquivo existe e tem PAGAMENTO_EMAIL/PAGAMENTO_SENHA.")
 
 

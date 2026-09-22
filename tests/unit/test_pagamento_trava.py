@@ -46,7 +46,7 @@ from pathlib import Path
 import pytest
 
 RAIZ = Path(__file__).resolve().parents[2]
-WRAPPER = RAIZ / "src" / "processors" / "web" / "robo_pagamento" / "run_agendado.sh"
+WRAPPER = RAIZ / "src" / "processors" / "web" / "remessa_pagamento" / "run_agendado.sh"
 
 INICIO, FIM = "# >>> TRAVA", "# <<< TRAVA"
 

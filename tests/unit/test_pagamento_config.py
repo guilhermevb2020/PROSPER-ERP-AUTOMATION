@@ -32,7 +32,7 @@ from pathlib import Path
 import pytest
 
 RAIZ = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(RAIZ / "src" / "processors" / "web" / "robo_pagamento"))
+sys.path.insert(0, str(RAIZ / "src" / "processors" / "web" / "remessa_pagamento"))
 
 # Sufixo das envs deste robo. Sem `_PAG`, ler `DISPLAY` puro pegaria o `:99` dos
 # boletos que o compose define para todo processo do container.
@@ -133,7 +133,7 @@ def test_credencial_ausente_falha_com_mensagem_util(cfg):
     with pytest.raises(RuntimeError) as e:
         c.exigir_credenciais()
     assert "PAGAMENTO_EMAIL" in str(e.value) and "PAGAMENTO_SENHA" in str(e.value)
-    assert "robo_pagamento.env" in str(e.value)
+    assert "remessa_pagamento.env" in str(e.value)
 
 
 def test_credencial_so_de_espaco_conta_como_ausente(cfg):

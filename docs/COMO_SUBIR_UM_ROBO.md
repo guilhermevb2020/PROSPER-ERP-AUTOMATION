@@ -46,7 +46,7 @@ dois no mesmo `user-data-dir` disputam o lock — um simplesmente não sobe.
 | `remessa_cobranca` | `:97` | 5903 | 6083 | 9224 | `data/robo_remessa/perfil_chrome` |
 | `robo_credito` | `:96` | 5902 | 6082 | *(pipe)* | `data/robo_credito/perfil_chrome` |
 | `retorno_cobranca` | `:95` | 5904 | 6084 | 9225 | `data/robo_retorno/perfil_chrome` |
-| `robo_pagamento` | `:94` | 5905 | 6085 | 9226 | `data/robo_pagamento/perfil_chrome` |
+| `remessa_pagamento` | `:94` | 5905 | 6085 | 9226 | `data/robo_pagamento/perfil_chrome` |
 | `retorno_pagamento` | `:93` | 5906 | 6086 | 9227 | `data/robo_retorno_pagamento/perfil_chrome` |
 | **próximo livre** | **`:92`** | **5907** | **6087** | **9228** | `data/<robo>/perfil_chrome` |
 

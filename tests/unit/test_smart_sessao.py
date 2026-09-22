@@ -130,16 +130,16 @@ def test_pagamento_aborta_com_codigo_correto_sem_gerar(monkeypatch, tmp_path, er
 
     pytest.importorskip("playwright")
     raiz = Path(__file__).resolve().parents[2]
-    monkeypatch.syspath_prepend(str(raiz / "src/processors/web/robo_pagamento"))
+    monkeypatch.syspath_prepend(str(raiz / "src/processors/web/remessa_pagamento"))
     monkeypatch.setenv("PAGAMENTO_ENV_FILE", "/dev/null")
     for chave in ("USER_DATA_DIR_PAG", "PASTA_SAIDA_PAG", "DEBUG_DIR_PAG"):
         monkeypatch.setenv(chave, str(tmp_path / chave))
     monkeypatch.setenv("ARQ_CONTROLE_PAG", str(tmp_path / "controle.csv"))
     import pagamento_config
-    import robo_pagamento
+    import gerar_remessa_pagamento
     importlib.reload(pagamento_config)
-    rp = importlib.reload(robo_pagamento)
-    monkeypatch.setattr(sys, "argv", ["robo_pagamento.py"])
+    rp = importlib.reload(remessa_pagamento)
+    monkeypatch.setattr(sys, "argv", ["gerar_remessa_pagamento.py"])
     monkeypatch.setattr(rp, "sync_playwright", lambda: nullcontext(None))
     monkeypatch.setattr(rp.cfg, "exigir_tela", lambda: None)
 

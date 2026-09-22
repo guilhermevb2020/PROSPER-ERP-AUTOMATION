@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
 test_finalizar_sessao_propria.py - o robo de finalizar sobe a PROPRIA sessao do
-Smart pelo modulo comum (src.common.clients.smart_sessao), como o robo_pagamento.
+Smart pelo modulo comum (src.common.clients.smart_sessao), como o remessa_pagamento.
 
 Por que existe: ate 21/09/2026 o main() so anexava num Chrome ja aberto
 (connect_over_cdp) e no container ninguem o abria - a 1a rodada em producao

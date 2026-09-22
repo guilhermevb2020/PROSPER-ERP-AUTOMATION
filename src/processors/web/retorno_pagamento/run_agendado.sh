@@ -1,7 +1,7 @@
 #!/bin/sh
 # Wrapper do robo que INSERE o retorno de PAGAMENTO no Smart (hub-orchestration chama isto).
 # Garante o display :93 ISOLADO (Xvfb + x11vnc 5906 + noVNC 6086) — separado do
-# :94 (robo_pagamento), :95 (retorno_cobranca), :96 (credito), :97 (remessa), :98
+# :94 (remessa_pagamento), :95 (retorno_cobranca), :96 (credito), :97 (remessa), :98
 # (doc2you) e :99 (boletos) — carrega credenciais e roda o robo UMA vez.
 #
 # O robo sobe o proprio Chrome, loga via CapSolver, insere cada .RET pendente
@@ -12,13 +12,13 @@ cd /app || exit 1
 LOG=/app/logs/vnc
 mkdir -p "$LOG"
 
-# 1) credenciais do Smart — MESMA conta do robo_pagamento (mesma tela, mesmo
+# 1) credenciais do Smart — MESMA conta do remessa_pagamento (mesma tela, mesmo
 #    modulo `pagtobmp`). Carrega o .env DELE primeiro (PAGAMENTO_EMAIL/SENHA),
 #    depois o proprio (se existir), que so PRECISA ter DRY_RUN_RETPAG e afins —
 #    nao duplica o segredo em dois arquivos.
-if [ -f /app/config/robo_pagamento.env ]; then
+if [ -f /app/config/remessa_pagamento.env ]; then
     set -a
-    . /app/config/robo_pagamento.env
+    . /app/config/remessa_pagamento.env
     set +a
 fi
 if [ -f /app/config/retorno_pagamento.env ]; then

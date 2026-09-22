@@ -8,19 +8,19 @@
 # Sem trava porque ninguem o dispara sozinho — mas ele USA O MESMO PERFIL do
 # robo. Nao rode enquanto uma rodada agendada estiver em curso: o passo 2 mata o
 # Chrome do perfil e mataria a rodada no meio. Confira antes:
-#     cat /tmp/robo_pagamento.lock 2>/dev/null && echo "TEM RODADA EM CURSO"
+#     cat /tmp/remessa_pagamento.lock 2>/dev/null && echo "TEM RODADA EM CURSO"
 #
 # Uso:
-#   sh /app/src/processors/web/robo_pagamento/run_descoberta.sh --links pagamento
+#   sh /app/src/processors/web/remessa_pagamento/run_descoberta.sh --links pagamento
 #   sh .../run_descoberta.sh --url https://wvw.smartsecurities.com.br/smart/<tela>.php
 set -u
 cd /app || exit 1
 LOG=/app/logs/vnc
 mkdir -p "$LOG"
 
-if [ -f /app/config/robo_pagamento.env ]; then
+if [ -f /app/config/remessa_pagamento.env ]; then
     set -a
-    . /app/config/robo_pagamento.env
+    . /app/config/remessa_pagamento.env
     set +a
 fi
 
@@ -52,7 +52,7 @@ mkdir -p "$PERFIL"
 
 LOGROBO="/app/logs/robo_pagamento_descoberta_$(date +%Y-%m-%d).log"
 RC="/tmp/robo_pagamento_desc_rc.$$"
-{ python /app/src/processors/web/robo_pagamento/descobrir.py "$@"; echo $? > "$RC"; } \
+{ python /app/src/processors/web/remessa_pagamento/descobrir.py "$@"; echo $? > "$RC"; } \
     2>&1 | tee -a "$LOGROBO"
 CODIGO=$(cat "$RC" 2>/dev/null || echo 1)
 rm -f "$RC"

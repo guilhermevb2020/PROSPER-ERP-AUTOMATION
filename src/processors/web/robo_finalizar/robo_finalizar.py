@@ -385,7 +385,7 @@ def main():
         return 2
     codigo, total = 2, 0
 
-    # Sessao pelo modulo comum (o mesmo do robo_pagamento): sobe o Chrome no
+    # Sessao pelo modulo comum (o mesmo do remessa_pagamento): sobe o Chrome no
     # display/perfil/porta PROPRIOS e loga via CapSolver com a credencial DESTE
     # robo (cfg.EMAIL/SENHA). Ate 21/09/2026 o main so anexava num Chrome ja
     # aberto (connect_over_cdp); no container ninguem o abria, e a 1a rodada em

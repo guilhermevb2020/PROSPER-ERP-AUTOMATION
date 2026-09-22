@@ -3,7 +3,7 @@
 
 WRAPPER FINO sobre o cliente COMPARTILHADO
 (`src.common.clients.nextcloud_webdav.NextcloudWebDAV`) — mesmo cliente que
-`robo_pagamento/_nextcloud.py` usa para subir o `.REM`. `baixar`/`mover` foram
+`remessa_pagamento/_nextcloud.py` usa para subir o `.REM`. `baixar`/`mover` foram
 adicionados a esse cliente para este robo (ele so tinha `enviar`/`listar_nomes`
 ate 26/08/2026 — nenhum consumidor antes precisava LER do Nextcloud).
 """

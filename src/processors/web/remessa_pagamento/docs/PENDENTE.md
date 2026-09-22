@@ -10,11 +10,11 @@ código — **apague este arquivo quando ele for respondido**.
    (`erp-automation`, cron `0,30 8-18 * * 1-5`), com `enviar_pagamento`
    (process-automation) dependendo dela (status `success`).
 2. **As duas chaves de geração** — ligadas: `DRY_RUN_PAG=False` e
-   `PRA_VALER_PAG=--pra-valer` em `config/robo_pagamento.env`, confirmado
+   `PRA_VALER_PAG=--pra-valer` em `config/remessa_pagamento.env`, confirmado
    em 25/08/2026. Fluxo real testado, dinheiro se moveu (confirmado pelo
    dono).
 3. **Commit** — feito. `git log` deste projeto tem os commits de 25 e
-   26/08/2026 sobre `robo_pagamento/`, `retorno_pagamento/` e
+   26/08/2026 sobre `remessa_pagamento/`, `retorno_pagamento/` e
    `src/common/clients/nextcloud_webdav.py`.
 
 ## ⛔ Ainda aberto — item 4, é decisão de dono

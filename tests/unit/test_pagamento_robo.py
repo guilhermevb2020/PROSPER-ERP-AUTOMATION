@@ -22,7 +22,7 @@ O `ctx` e um duble. Nao ha rede, nao ha login, nao ha Smart — gerar remessa de
 pagamento move dinheiro e nao entra em teste automatico.
 
 AMBIENTE: precisa de `playwright` importavel (o `gerar.py` puxa `smart_sessao`,
-que nao o importa, mas o `robo_pagamento.py` sim). Roda sob `.venv-sandbox`.
+que nao o importa, mas o `gerar_remessa_pagamento.py` sim). Roda sob `.venv-sandbox`.
 """
 from __future__ import annotations
 
@@ -35,7 +35,7 @@ import pytest
 pytest.importorskip("playwright", reason="rode sob .venv-sandbox")
 
 RAIZ = Path(__file__).resolve().parents[2]
-for caminho in (RAIZ, RAIZ / "src" / "processors" / "web" / "robo_pagamento"):
+for caminho in (RAIZ, RAIZ / "src" / "processors" / "web" / "remessa_pagamento"):
     if str(caminho) not in sys.path:
         sys.path.insert(0, str(caminho))
 
@@ -127,9 +127,9 @@ def robo(tmp_path, monkeypatch):
     import gerar
     importlib.reload(analise)
     importlib.reload(gerar)
-    import robo_pagamento
-    importlib.reload(robo_pagamento)
-    return robo_pagamento, gerar, tmp_path
+    import gerar_remessa_pagamento
+    importlib.reload(remessa_pagamento)
+    return remessa_pagamento, gerar, tmp_path
 
 
 # --------------------------------------------------------------------------- #

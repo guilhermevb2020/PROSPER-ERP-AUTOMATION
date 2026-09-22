@@ -43,7 +43,7 @@ mkdir -p "$LOG"
 # `tests/unit/test_pagamento_trava.py` recorta exatamente este trecho e o roda
 # em `dash` e `sh`. Mexeu aqui, rode o teste — e nao apague os marcadores.
 # >>> TRAVA
-TRAVA="${TRAVA_PAG:-/tmp/robo_pagamento.lock}"
+TRAVA="${TRAVA_PAG:-/tmp/remessa_pagamento.lock}"
 IDADE_ALERTA_MIN="${IDADE_ALERTA_MIN_PAG:-45}"
 
 if [ -e "$TRAVA" ]; then
@@ -74,9 +74,9 @@ trap 'rm -f "$TRAVA"' EXIT INT TERM
 # 1) credenciais + flags (arquivo montado, gitignored). SOBRESCREVE o SMART_EMAIL
 #    do container (que e felipe_p, de outra automacao).
 # --------------------------------------------------------------------------- #
-if [ -f "$RAIZ/config/robo_pagamento.env" ]; then
+if [ -f "$RAIZ/config/remessa_pagamento.env" ]; then
     set -a
-    . "$RAIZ/config/robo_pagamento.env"
+    . "$RAIZ/config/remessa_pagamento.env"
     set +a
 fi
 
@@ -126,9 +126,9 @@ export USER_DATA_DIR_PAG="$PERFIL"
 mkdir -p "$PERFIL"
 # DRY_RUN_PAG=True e o default do config e o certo ate o run supervisionado:
 # gerar remessa de PAGAMENTO move dinheiro. Para valer, ponha DRY_RUN_PAG=false
-# no robo_pagamento.env — e confira o valor EFETIVO depois de editar:
+# no remessa_pagamento.env — e confira o valor EFETIVO depois de editar:
 #   docker exec -e PYTHONPATH=/app erp-automation python -c \
-#     "import sys; sys.path.insert(0,'/app/src/processors/web/robo_pagamento'); \
+#     "import sys; sys.path.insert(0,'/app/src/processors/web/remessa_pagamento'); \
 #      import pagamento_config as c; print(c.DRY_RUN)"
 export DRY_RUN_PAG="${DRY_RUN_PAG:-True}"
 
@@ -154,7 +154,7 @@ export ARQ_CONTROLE_PAG DEBUG_DIR_PAG
 #   PRA_VALER="--pra-valer"
 # e confira o valor efetivo depois:
 #   docker exec -e PYTHONPATH=/app erp-automation python -c \
-#     "import sys; sys.path.insert(0,'/app/src/processors/web/robo_pagamento'); \
+#     "import sys; sys.path.insert(0,'/app/src/processors/web/remessa_pagamento'); \
 #      import pagamento_config as c; print('DRY_RUN =', c.DRY_RUN)"
 PRA_VALER="${PRA_VALER_PAG:-}"
 
@@ -169,7 +169,7 @@ LOGROBO="$RAIZ/logs/robo_pagamento_$(date +%Y-%m-%d).log"
 RC="/tmp/robo_pagamento_rc.$$"
 echo "===== inicio $(date '+%F %T %Z') =====" >> "$LOGROBO"
 # shellcheck disable=SC2086  # $PRA_VALER e uma flag ou vazio: nao pode ir com aspas
-{ "${PYTHON_PAG:-python}" "$RAIZ/src/processors/web/robo_pagamento/robo_pagamento.py" $PRA_VALER "$@"; \
+{ "${PYTHON_PAG:-python}" "$RAIZ/src/processors/web/remessa_pagamento/gerar_remessa_pagamento.py" $PRA_VALER "$@"; \
   echo $? > "$RC"; } 2>&1 | tee -a "$LOGROBO"
 CODIGO=$(cat "$RC" 2>/dev/null || echo 1)
 rm -f "$RC"

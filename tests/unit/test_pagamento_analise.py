@@ -38,7 +38,7 @@ from pathlib import Path
 import pytest
 
 RAIZ = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(RAIZ / "src" / "processors" / "web" / "robo_pagamento"))
+sys.path.insert(0, str(RAIZ / "src" / "processors" / "web" / "remessa_pagamento"))
 
 from analise import (  # noqa: E402  (o sys.path tem de vir antes)
     MOLDE_AJAX,

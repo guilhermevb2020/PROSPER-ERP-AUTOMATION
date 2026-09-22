@@ -22,7 +22,7 @@ em 25/08/2026 o fluxo completo foi validado com dinheiro de verdade se movendo
 |---|---|
 | ✅ Fluxo validado em produção real, dinheiro se moveu | 25/08 |
 | ✅ 116 testes no host | |
-| ✅ `config/robo_pagamento.env` com a credencial definitiva | 25/08 |
+| ✅ `config/remessa_pagamento.env` com a credencial definitiva | 25/08 |
 | ✅ As duas chaves de geração ligadas — `DRY_RUN_PAG=False`, `PRA_VALER_PAG=--pra-valer` | 25/08 |
 | ✅ Commitado | 25-26/08 |
 | ✅ Task no hub — `gerar_remessa_pagamento_bmp`, cron `0,30 8-18 * * 1-5`, **enabled** | 25/08 |
@@ -109,7 +109,7 @@ As vírgulas no fim de cada lista (`"143,"`) são fiéis ao `+=` do JS.
 | Perfil Chrome | `/app/data/robo_pagamento/perfil_chrome` |
 | **Saída dos `.REM`** | `/app/temp/remessas de pagamento` — host: `erp-automation/temp/remessas de pagamento` |
 | Controle | `/app/data/robo_pagamento/controle_pagamentos.csv` |
-| Credenciais | `/app/config/robo_pagamento.env` (fora do git) |
+| Credenciais | `/app/config/remessa_pagamento.env` (fora do git) |
 | Conta | `404` = `mp prospere \| 274 \| 0001 \| 0986952` |
 | Log ao vivo | `/app/logs/robo_pagamento_<data>.log` |
 
@@ -127,7 +127,7 @@ As vírgulas no fim de cada lista (`"143,"`) são fiéis ao `+=` do JS.
 
 | Arquivo | Papel |
 |---|---|
-| `robo_pagamento.py` | entrypoint agendado: sessão, rodada, controle, exit codes |
+| `gerar_remessa_pagamento.py` | entrypoint agendado: sessão, rodada, controle, exit codes |
 | `gerar.py` | o ciclo (pesquisa → gera → guarda → recupera) |
 | `analise.py` | **puro**, só stdlib: leitura de tela e montagem dos POSTs |
 | `pagamento_config.py` | tudo por env, sufixo `_PAG` |

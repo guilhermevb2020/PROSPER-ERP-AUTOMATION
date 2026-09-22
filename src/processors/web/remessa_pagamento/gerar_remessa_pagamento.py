@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-robo_pagamento.py - gera a remessa de PAGAMENTO (BMP Money Plus) e baixa o .REM.
+gerar_remessa_pagamento.py - gera a remessa de PAGAMENTO (BMP Money Plus) e baixa o .REM.
 
 Robo do ERP AUTOMATION. Roda DESATENDIDO: sobe o proprio Chrome no display :94,
 loga via CapSolver, pesquisa os pagamentos PENDENTES da conta, gera a remessa,
@@ -37,12 +37,12 @@ SEGURANCA
 
 Uso:
     # producao (o wrapper do hub chama isto)
-    sh /app/src/processors/web/robo_pagamento/run_agendado.sh
+    sh /app/src/processors/web/remessa_pagamento/run_agendado.sh
 
     # manual, dentro do container
-    python /app/src/processors/web/robo_pagamento/robo_pagamento.py            # dry-run
-    python .../robo_pagamento.py --pra-valer                                   # gera
-    python .../robo_pagamento.py --listar                                      # so olha
+    python /app/src/processors/web/remessa_pagamento/gerar_remessa_pagamento.py            # dry-run
+    python .../gerar_remessa_pagamento.py --pra-valer                                   # gera
+    python .../gerar_remessa_pagamento.py --listar                                      # so olha
 """
 import argparse
 import csv

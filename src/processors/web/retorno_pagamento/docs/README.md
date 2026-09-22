@@ -70,7 +70,7 @@ escrito DEPOIS, a partir do HTML da prévia, mas nunca rodou contra o Smart.
 **Não repita esse teste no arquivo sintético para validar a etapa 2** — ele já
 foi consumido (está em `_PROCESSADOS`) e não tem título real para provar nada
 novo. O teste que falta é com um retorno de um pagamento REAL (gerado pelo
-`robo_pagamento`, não por script de teste).
+`remessa_pagamento`, não por script de teste).
 
 ## O ciclo — duas etapas
 
@@ -120,7 +120,7 @@ AMBAS as etapas são salvas em `DEBUG_DIR` (evidência, não fila de rotina).
 | Onde roda | container `erp-automation`, agendado pelo hub — task `retorno_pagamento`, `55 8-18 * * 1-5`, depende de `baixar_retorno_pagamento` (status success) |
 | Display / VNC / noVNC / CDP | `:93` / 5906 / 6086 / 9227 |
 | Perfil Chrome | `/app/data/robo_retorno_pagamento/perfil_chrome` |
-| Credenciais | `config/robo_pagamento.env` (MESMA conta do robô de geração — mesma tela, mesmo módulo) |
+| Credenciais | `config/remessa_pagamento.env` (MESMA conta do robô de geração — mesma tela, mesmo módulo) |
 | Entrada (Nextcloud) | `FINANCEIRO/Pagamentos-MoneyPlus/_RETORNOS` |
 | Saída (Nextcloud) | `.../_RETORNOS/_PROCESSADOS` |
 | Controle | `/app/data/robo_retorno_pagamento/controle.csv` |
@@ -132,7 +132,7 @@ AMBAS as etapas são salvas em `DEBUG_DIR` (evidência, não fila de rotina).
 |---|---|
 | `processar_retorno_pagamento.py` | entrypoint agendado: sessão, rodada (2 etapas), controle, exit codes |
 | `retorno_pagamento.py` | monta o multipart (etapa 1), extrai `target`, confirma (etapa 2) — não classifica resposta |
-| `retorno_pagamento_config.py` | tudo por env, sufixo `_RETPAG`, credencial reaproveitada do `robo_pagamento` |
+| `retorno_pagamento_config.py` | tudo por env, sufixo `_RETPAG`, credencial reaproveitada do `remessa_pagamento` |
 | `_nextcloud.py` | wrapper fino sobre `NextcloudWebDAV` (que ganhou `baixar`/`mover` para este robô) |
 | `run_agendado.sh` | wrapper agendado (display + env + python) |
 

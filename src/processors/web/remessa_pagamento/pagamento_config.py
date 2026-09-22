@@ -9,8 +9,8 @@ e vive em outra arvore (`financeiro/remessaocorrencia.php`).
 Slot deste robo (ver docs/COMO_SUBIR_UM_ROBO.md §1):
     display :94 | VNC 5905 | noVNC 6085 | CDP 9226 | perfil data/robo_pagamento
 
-Credenciais: `config/robo_pagamento.env` (montado, fora do git). NUNCA no fonte —
-este repo tem remote publico. Ver `robo_pagamento.example.env`.
+Credenciais: `config/remessa_pagamento.env` (montado, fora do git). NUNCA no fonte —
+este repo tem remote publico. Ver `remessa_pagamento.example.env`.
 
 Os endpoints abaixo foram MEDIDOS em 21/08/2026, pelo sandbox do host
 (`scripts/sandbox/pagamento.py`), contra o Smart real. Nao sao chute: cada um
@@ -23,7 +23,7 @@ import os
 try:
     from dotenv import load_dotenv
 
-    load_dotenv(os.environ.get("PAGAMENTO_ENV_FILE", "/app/config/robo_pagamento.env"))
+    load_dotenv(os.environ.get("PAGAMENTO_ENV_FILE", "/app/config/remessa_pagamento.env"))
 except ImportError:
     pass
 
@@ -138,7 +138,7 @@ def exigir_credenciais() -> None:
     if faltando:
         raise RuntimeError(
             f"Credencial ausente: {', '.join(faltando)}. Defina em "
-            "/app/config/robo_pagamento.env (fora do git) ou no ambiente do container.")
+            "/app/config/remessa_pagamento.env (fora do git) ou no ambiente do container.")
 
 
 def exigir_tela() -> None:

@@ -18,7 +18,7 @@ e rodar o que vai para producao — muda so de onde vem o `ctx`, que e o contrat
 do sandbox.
 
     sandbox   -> `_ambiente.sessao`      (Chromium no host, sandbox.env)
-    producao  -> `smart_sessao.sessao`   (Chrome no container, robo_pagamento.env)
+    producao  -> `smart_sessao.sessao`   (Chrome no container, remessa_pagamento.env)
 
 USO
     PYTHONPATH=$PWD .venv-sandbox/bin/python scripts/sandbox/pagamento.py --links pagamento
@@ -42,7 +42,7 @@ RAIZ = Path(__file__).resolve().parents[2]
 # O pacote do robo entra no sys.path porque `descobrir.py` importa os irmaos
 # dele por nome simples (`import analise`, `import pagamento_config`) — e assim
 # que os robos deste repo se organizam, e o `_AQUI` deles faz o mesmo.
-ROBO = RAIZ / "src" / "processors" / "web" / "robo_pagamento"
+ROBO = RAIZ / "src" / "processors" / "web" / "remessa_pagamento"
 for _caminho in (RAIZ, ROBO):
     if str(_caminho) not in sys.path:
         sys.path.insert(0, str(_caminho))

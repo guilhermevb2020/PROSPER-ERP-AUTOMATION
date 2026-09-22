@@ -52,7 +52,7 @@ pytest.importorskip("playwright",
                     reason="descobrir.py importa playwright; rode sob .venv-sandbox")
 
 RAIZ = Path(__file__).resolve().parents[2]
-for caminho in (RAIZ, RAIZ / "src" / "processors" / "web" / "robo_pagamento"):
+for caminho in (RAIZ, RAIZ / "src" / "processors" / "web" / "remessa_pagamento"):
     if str(caminho) not in sys.path:
         sys.path.insert(0, str(caminho))
 

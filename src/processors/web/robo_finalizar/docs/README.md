@@ -99,7 +99,7 @@ sh /app/src/processors/web/robo_finalizar/run_agendado.sh --executar
 `scripts/sandbox/finalizar_op_executar.py --confirmar` (teste `test_finalizar_trava_dry`).
 
 Desde 21/09/2026 o job **sobe a própria sessão** do Smart pelo
-`src/common/clients/smart_sessao` (o mesmo do `robo_pagamento`): abre o Chrome no
+`src/common/clients/smart_sessao` (o mesmo do `remessa_pagamento`): abre o Chrome no
 display `:92`, loga via CapSolver com a credencial do finalizador e fecha ao terminar.
 `--cdp` anexa num Chrome já aberto (desenvolvimento pelo VNC). Antes ele exigia um
 Chrome pré-aberto na porta 9228 que, no container, ninguém subia — a primeira rodada
