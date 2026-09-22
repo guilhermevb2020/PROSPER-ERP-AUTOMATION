@@ -23,6 +23,7 @@ Fluxo geral:
 import os
 import sys
 import time
+import unicodedata
 from datetime import datetime, timezone, timedelta
 
 from playwright.sync_api import sync_playwright, Page, TimeoutError as PWTimeout
@@ -415,6 +416,114 @@ def _pagina_busca(ctx):
     return p
 
 
+# --------------------------------------------------------------------------- #
+# Resultado da consulta: esperar a RECARGA e conferir a ETAPA de cada linha
+# --------------------------------------------------------------------------- #
+# Medido em 22/09/2026 (inspecao da tela): o Pesquisar faz POST de conoperacao.php no
+# frame 'pesq', que troca de documento. ANTES da 1a pesquisa esse frame ja mostra as 10
+# operacoes mais recentes, de QUALQUER etapa e das duas securitizadoras. Com a espera
+# fixa de 1,5 s, quando o Smart demorava, a leitura pegava essa tabela (9x no credito em
+# 22/09) e o robo processava operacao de outra etapa: 65854 e 65877 sairam de
+# 'Aguardando Ass.' para 'Analise de credito', com a classe de risco dos titulos trocada.
+# Agora: (1) so le depois que o frame de resultado troca de documento; (2) so devolve a
+# linha cuja coluna Etapa e a pesquisada. Sem a coluna, nada e devolvido: quem consome
+# muda etapa e grava, e na duvida nao age.
+FRAME_RESULTADO = "pesq"
+
+_JS_LINHAS_CONSULTA = r"""() => {
+  for (const t of document.querySelectorAll('table')) {
+    const cab = Array.from(t.querySelectorAll('th')).map(th => (th.innerText || '').trim());
+    let iEtapa = cab.findIndex(h => /^etapa$/i.test(h));
+    if (iEtapa < 0) iEtapa = cab.findIndex(h => /etapa/i.test(h));
+    const linhas = [];
+    for (const r of t.querySelectorAll('tbody tr')) {
+      const td = r.querySelectorAll('td');
+      if (td.length < 3) continue;
+      const num = (td[2].innerText || '').trim();
+      if (!/^\d+$/.test(num)) continue;
+      linhas.push({num: num,
+                   etapa: (iEtapa >= 0 && td[iEtapa]) ? (td[iEtapa].innerText || '').trim() : null});
+    }
+    if (linhas.length) return {linhas: linhas, tem_etapa: iEtapa >= 0};
+  }
+  return {linhas: [], tem_etapa: null};
+}"""
+
+
+def _norm_etapa(texto) -> str:
+    t = unicodedata.normalize("NFKD", str(texto or ""))
+    return "".join(c for c in t if c.isalnum()).lower()
+
+
+def filtrar_por_etapa(linhas, alvos):
+    """Separa (aceitas, descartadas): aceita a linha cuja coluna Etapa casa com algum
+    dos rotulos `alvos`, sem acento, caixa, espaco ou pontuacao."""
+    alvos_n = {_norm_etapa(a) for a in alvos} - {""}
+    aceitas, descartadas = [], []
+    for linha in linhas:
+        (aceitas if _norm_etapa(linha.get("etapa")) in alvos_n else descartadas).append(linha)
+    return aceitas, descartadas
+
+
+def numeros_conferidos(dados, alvos):
+    """-> (numeros, descartadas, motivo). `motivo` preenchido = nada foi devolvido
+    porque nao da para conferir a etapa (sem coluna Etapa ou sem rotulo alvo)."""
+    linhas = (dados or {}).get("linhas") or []
+    if not linhas:
+        return [], [], None
+    if not dados.get("tem_etapa"):
+        return [], linhas, "a tabela de resultado nao tem a coluna Etapa"
+    if not {_norm_etapa(a) for a in alvos} - {""}:
+        return [], linhas, "sem o rotulo da etapa pesquisada para conferir"
+    aceitas, descartadas = filtrar_por_etapa(linhas, alvos)
+    numeros = []
+    for linha in aceitas:
+        if linha["num"] not in numeros:
+            numeros.append(linha["num"])
+    return numeros, descartadas, None
+
+
+def _linhas_da_consulta(page) -> dict:
+    """Linhas {num, etapa} da tabela de resultado. So o frame de resultado, se ele
+    existir; sem ele, o primeiro frame com linhas (o comportamento antigo)."""
+    fr = page.frame(name=FRAME_RESULTADO)
+    for f in ([fr] if fr is not None else list(page.frames)):
+        try:
+            dados = f.evaluate(_JS_LINHAS_CONSULTA)
+        except Exception:
+            continue
+        if dados and dados.get("linhas"):
+            return dados
+    return {"linhas": [], "tem_etapa": None}
+
+
+def _marcar_resultado(page):
+    """Marca o documento ATUAL do frame de resultado. -> (frame, marca) ou (None, None)."""
+    fr = page.frame(name=FRAME_RESULTADO)
+    if fr is None:
+        return None, None
+    marca = f"busca-{time.time():.6f}"
+    try:
+        fr.evaluate("m => { window.__buscaAntiga = m; }", marca)
+    except Exception:
+        return None, None
+    return fr, marca
+
+
+def _esperar_recarga(fr, marca, limite_s: float, intervalo: float = 0.25) -> bool:
+    """True quando o frame trocou de documento (a marca sumiu) e terminou de carregar."""
+    fim = time.time() + limite_s
+    while time.time() < fim:
+        try:
+            if fr.evaluate("m => window.__buscaAntiga !== m && document.readyState === 'complete'",
+                           marca):
+                return True
+        except Exception:
+            pass          # navegando: o contexto foi destruido no meio da leitura
+        time.sleep(intervalo)
+    return False
+
+
 def _buscar_numeros_uma(ctx, valor_etapa: str, rotulo: str, sel_tipo: str,
                         _tentativa: int = 0) -> list:
     """Uma busca (um tipo) REUTILIZANDO a aba de consulta: garante o layout,
@@ -444,14 +553,35 @@ def _buscar_numeros_uma(ctx, valor_etapa: str, rotulo: str, sel_tipo: str,
         fr_etapa = frame_com(page_busca, config.SEL_FILTRO_ETAPA, timeout=15)
         fr_etapa.locator(config.SEL_FILTRO_ETAPA).select_option(value=valor_etapa)
         valor_sel = fr_etapa.locator(config.SEL_FILTRO_ETAPA).input_value()
+        try:
+            rotulo_sel = (fr_etapa.locator(config.SEL_FILTRO_ETAPA).evaluate(
+                "s => (s.options[s.selectedIndex] || {}).text || ''") or "").strip()
+        except Exception:
+            rotulo_sel = ""
+        # a linha vale se a coluna Etapa casar com o rotulo da opcao OU com o do chamador
+        alvos = [rotulo_sel, (rotulo or "").split("/")[0]]
 
+        fr_res, marca = _marcar_resultado(page_busca)
         frame_com(page_busca, config.SEL_PESQUISAR).locator(config.SEL_PESQUISAR).click()
-        esperar(config.WAIT_POS_PESQUISA, "aguardando resultado da pesquisa")
+        if fr_res is not None:
+            if not _esperar_recarga(fr_res, marca, config.WAIT_MAX_PESQUISA):
+                raise RuntimeError(f"a pesquisa nao recarregou o resultado em "
+                                   f"{config.WAIT_MAX_PESQUISA:.0f}s (tabela antiga na tela)")
+        else:
+            print(f"  [busca] frame '{FRAME_RESULTADO}' nao achado: espera fixa "
+                  "(a etapa de cada linha continua conferida)")
+            esperar(config.WAIT_POS_PESQUISA, "aguardando resultado da pesquisa")
 
         if config.DEBUG:
             salvar_diagnostico(page_busca, f"consulta_{rotulo}".replace("/", "_"))
 
-        nums = extrair_numeros_operacao(page_busca)
+        nums, descartadas, motivo = numeros_conferidos(_linhas_da_consulta(page_busca), alvos)
+        if motivo:
+            print(f"  [busca] ATENCAO '{rotulo}': {motivo} - {len(descartadas)} linha(s) "
+                  "NAO devolvida(s)")
+        elif descartadas:
+            print(f"  [busca] '{rotulo}': {len(descartadas)} op(s) de OUTRA etapa descartada(s): "
+                  f"{[(d['num'], d['etapa']) for d in descartadas][:10]}")
         print(f"  filtro fEtapaOperacao={valor_sel} ({rotulo}): {len(nums)} op(s) {nums}")
         return nums
     except Exception as e:

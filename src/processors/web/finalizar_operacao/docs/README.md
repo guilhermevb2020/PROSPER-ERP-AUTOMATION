@@ -183,8 +183,11 @@ etapa é lida no Smart **antes de abrir a grade**: a opção marcada no `<select
 id="etapaOperacao">` do HTML da tela de edição, a mesma que o robô já baixa por HTTP.
 Fora da etapa de entrada, ou sem leitura, não finaliza (teste `test_finalizar_trava_etapa`).
 Conferido no Smart em 22/09 15:35: 65879 e 65877 em `Aguardando Ass.`; 65875 e 65846,
-já pagas, em `Concluída`, que é para onde a operação vai ao ser finalizada. A consulta
-em si continua com a espera fixa: uma operação pode ficar fora da fila por um ciclo.
+já pagas, em `Concluída`, que é para onde a operação vai ao ser finalizada. Desde 22/09
+16:21 a própria consulta espera o frame de resultado recarregar e confere a coluna Etapa
+de cada linha (ver `credito/_ESTADO_E_PROXIMOS_PASSOS.md`, que tem o dano que a tabela
+errada causou no robô de crédito); a leitura da etapa na operação ficou como segunda
+barreira.
 
 **Pelo DOM a etapa some depois da grade.** O formulário de edição mora no frame
 `stage`, e o Resumir (`novoresumir.php`) e a grade (`gridpagamentodinheirocheque.php`)
@@ -210,7 +213,7 @@ clicado (teste `test_finalizar_trava_titulos`).
 - [x] Títulos não lidos fecham a porta — 22/09/2026 (teste `test_finalizar_trava_titulos`)
 - [x] Produção: `R7_DRY_RUN=0` no `.env` e `--executar` na task — 22/09/2026 14:37, por decisão do usuário
 - [ ] `placar.py` por alguns dias úteis e a primeira finalização **supervisionada** — dispensados pelo usuário ao ligar a produção em 22/09; acompanhar a primeira finalização real até o retorno do banco
-- [ ] Consulta da fila: esperar a tabela de resultados mudar em vez de 1,5 s fixos (`_buscar_numeros_uma`, compartilhada com o `credito`)
+- [x] Consulta da fila: espera a recarga do frame de resultado e confere a coluna Etapa, em vez de 1,5 s fixos — 22/09/2026 (`_buscar_numeros_uma`, compartilhada com o `credito`; teste `test_busca_consulta_etapa`)
 - [ ] Corrigir o timeout de 15s → espera compatível + diagnóstico "operação em uso"
 - [ ] `notificar.py` ainda aponta para um `email_config.json` de Windows
 - [ ] Renomear `r7_config.py` → `finalizar_config.py` (convenção do guia §2)

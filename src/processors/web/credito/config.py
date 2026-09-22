@@ -245,6 +245,11 @@ WAIT_POS_SALVAR = int(os.getenv("WAIT_POS_SALVAR", "3"))            # era 5
 WAIT_ENTRE_OPERACOES = int(os.getenv("WAIT_ENTRE_OPERACOES", "12"))  # era 40
 # Espera (s) apos clicar "Pesquisar" na consulta, antes de extrair os numeros.
 WAIT_POS_PESQUISA = float(os.getenv("WAIT_POS_PESQUISA", "1.5"))     # era 2 fixo
+# Teto da espera pela RECARGA do frame de resultado depois de Pesquisar (22/09/2026).
+# A tabela so e lida depois que o frame 'pesq' troca de documento; se nao trocar ate
+# aqui, a busca falha (e tenta de novo uma vez) em vez de ler a tabela que ja estava
+# na tela. O WAIT_POS_PESQUISA fica so para quando o frame nao e achado.
+WAIT_MAX_PESQUISA = float(os.getenv("WAIT_MAX_PESQUISA", "20"))
 # Espacamento entre a Promissoria e a Duplicata no DIGITAIS via HTTP (segundos):
 # da tempo da NPP finalizar/assinar no servidor antes de pedir a Duplicata.
 ESPACO_NPP_DUP = int(os.getenv("ESPACO_NPP_DUP", "10"))             # era 15

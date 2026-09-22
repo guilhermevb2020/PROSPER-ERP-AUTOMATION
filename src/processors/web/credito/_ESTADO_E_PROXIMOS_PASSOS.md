@@ -5,6 +5,36 @@
 
 ---
 
+## ⚠️ 22/09/2026 — a consulta lia a tabela errada, e o robô mexeu em operação de outra etapa
+
+A busca por etapa (`_buscar_numeros_uma`, a mesma do finalizador) lia a tabela 1,5 s
+depois de Pesquisar. O Pesquisar recarrega o frame `pesq` (POST `conoperacao.php`), e antes
+da recarga esse frame mostra as **10 operações mais recentes, de qualquer etapa e das duas
+securitizadoras**. Quando o Smart passava de 1,5 s, o robô lia essa tabela e pegava a
+primeira como se estivesse em "Análise Home". Aconteceu 9 vezes em 22/09:
+
+| ciclo | op | o que o robô fez fora da etapa |
+|---|---|---|
+| 193 | 65854 | classe P→T (1 título), Salvar, moveu para "Análise de crédito" |
+| 369 e 375 | 65877 | classe P→T (13 títulos), Salvar, moveu para "Análise de crédito" duas vezes |
+| 409 | 65883 | classe E→B (5 títulos), Salvar, moveu; não se sabe se estava em "Análise Home" |
+| 447 | 65893 | classe E→B (15 títulos), Salvar, moveu; idem |
+| 17, 26, 107, 153 | 65850 | já concluída: Salvar e etapa bloqueados, sem dano |
+
+65854 e 65877 estavam em "Aguardando Ass." (o finalizador as via lá). Às 16:35 as seis
+estavam `Concluída` no Smart; **a classe de risco trocada ficou**.
+
+**Correção, em produção desde 22/09 16:31:** a busca só lê depois que o frame de resultado
+troca de documento (teto `WAIT_MAX_PESQUISA`, 20 s; sem recarga, falha e tenta de novo uma
+vez) e só devolve a linha cuja **coluna Etapa** é a pesquisada; sem a coluna, não devolve
+nada. Medido no Smart real: a primeira pesquisa numa aba nova levou 2,52 s para recarregar.
+Teste: `tests/unit/test_busca_consulta_etapa.py`. O processo que rodava desde 07:45 foi
+interrompido entre ciclos às 16:28 e o hub o relançou às 16:31 (execução #365); a #19 dele
+fica `ativa` até entrar no limite de 13 h (20:45) e se encerra com
+`encerrar_abandonada.py 19 --pra-valer`.
+
+---
+
 ## O que o robô faz (fluxo real)
 Roda em **loop contínuo** (alvo: 7:45–18:50). A cada ciclo, lendo SEMPRE do **Smart**
 (tela de consulta, abas Home + SmartSecurities — nunca do banco):
