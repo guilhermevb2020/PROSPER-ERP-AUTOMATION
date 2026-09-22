@@ -1079,8 +1079,11 @@ def main():
     try:
         execucao = execucao_job.abrir_execucao(
             "remessa_cobranca",
+            # o nome tem de casar com a TASK que roda, senao a execucao no banco
+            # aponta para o job errado: run_bb.sh e `gerar_remessa_bb`, nao o CNAB-400
             "cancelar_remessa_recusada_cnab_400" if args.cancelar
-            else "gerar_remessa_cobranca_cnab_400",
+            else ("gerar_remessa_bb" if args.bb_api_convenio
+                  else "gerar_remessa_cobranca_cnab_400"),
             flag_ensaio=_dry, obrigatoria=not _dry,
             apelido_credencial=os.environ.get("REMESSA_SENHA"),
             detalhe={"conta": args.conta, "todas_contas": bool(args.todas_contas),
