@@ -192,7 +192,11 @@ produção em 22/09/2026 às 10:50**, antes da imagem do hub que passa `HUB_RUN_
 limite por automação (crédito 13 h — o ciclo diário é de ~11 h e aparecia como abandonado
 todo dia —, doc2you e boletos 1 h, demais 2 h). Só a view muda. Prova:
 `tests/integration/test_erp_005_controle.py::test_abandonada_respeita_o_limite_da_automacao`.
-Aplicar como as anteriores (modelo `erp-automation-ddl`).
+**Aplicada em produção em 22/09/2026 às 17:40** (credencial `tmp_erpddl`, modelo
+`erp-automation-ddl`, revogada em seguida). Conferido com a identidade do ERP: a view traz
+`CASE automacao WHEN 'credito' THEN '13:00:00'` e o crédito das 07:45 deixou de aparecer como
+abandonado. O filtro do crédito que a paridade e `encerrar_abandonada.py` repetem no código
+ficou redundante e é inofensivo.
 
 ### Quando o ledger diz que o conteúdo mudou
 
