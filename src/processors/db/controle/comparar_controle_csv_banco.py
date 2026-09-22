@@ -258,6 +258,9 @@ def montar_parser() -> argparse.ArgumentParser:
     ap.add_argument("--dia", default=None, help="AAAA-MM-DD (padrao: hoje, no fuso do container)")
     ap.add_argument("--tz", default=TZ_PADRAO)
     ap.add_argument("--json", action="store_true", help="imprime tambem o resumo em JSON")
+    ap.add_argument("--com-csv", action="store_true",
+                    help="compara com os CSVs de controle (antes da Fase 4). Padrao desde "
+                         "22/09/2026: so o banco — os CSVs foram congelados")
     return ap
 
 
@@ -274,13 +277,35 @@ def executar(dia: str, tz: str, conn, log=print) -> tuple[int, list, list]:
     return codigo_de_saida(resultados, abandonadas), resultados, abandonadas
 
 
+def executar_sem_csv(dia: str, tz: str, conn, log=print) -> tuple[int, dict, list]:
+    """Fase 4 (22/09/2026): os quatro jobs pararam de gravar o CSV, entao nao ha o que
+    comparar. Audita so o banco: quantos arquivos de cada familia entraram no dia, e se
+    alguma execucao ficou aberta — isso continua sendo exit 3."""
+    contagem = {fam.nome: len(ler_banco(conn, fam.tipos, dia, tz)) for fam in FAMILIAS}
+    abandonadas = listar_abandonadas(conn, tz)
+    out = [f"AUDITORIA DO BANCO — {dia} (CSVs congelados; sem comparacao)"]
+    for nome, n in contagem.items():
+        out.append(f"  {nome:18} banco={n:4}")
+    if abandonadas:
+        out.append(f"EXECUCOES ABANDONADAS: {len(abandonadas)} (ativa alem do limite da automacao)")
+        for ident, automacao, job, gatilho, quando_ in abandonadas[:20]:
+            out.append(f"      #{ident} {automacao}/{job} · {gatilho} · desde {quando_}")
+        out.append("      apure o que houve e encerre com autor e motivo: docker exec -e ERP_OPERADOR=nome "
+                   "-e ERP_MOTIVO=... erp-automation python /app/src/processors/db/controle/"
+                   "encerrar_abandonada.py <id> --pra-valer (nunca UPDATE a mao)")
+    else:
+        out.append("nenhuma execucao abandonada")
+    log("\n".join(out))
+    return (SAIU_DIVERGENTE if abandonadas else SAIU_OK), contagem, abandonadas
+
+
 def main(argv=None) -> int:
     args = montar_parser().parse_args(argv)
     dia = args.dia or hoje(args.tz)
     execucao = execucao_job.abrir_execucao("controle", JOB, flag_ensaio=False, obrigatoria=False,
                                            detalhe={"dia": dia})
     codigo = SAIU_ERRO
-    resultados, abandonadas = [], []
+    resultados, abandonadas, contagem = [], [], {}
     try:
         try:
             conn = execucao_job.conexao_leitura(JOB)
@@ -288,19 +313,28 @@ def main(argv=None) -> int:
             print(f"ERRO: sem banco para comparar ({type(e).__name__}: {str(e)[:160]})")
             return SAIU_ERRO
         try:
-            codigo, resultados, abandonadas = executar(dia, args.tz, conn)
+            if args.com_csv:
+                codigo, resultados, abandonadas = executar(dia, args.tz, conn)
+            else:
+                codigo, contagem, abandonadas = executar_sem_csv(dia, args.tz, conn)
         finally:
             conn.close()
         if args.json:
             print(json.dumps(resumo_json(dia, resultados), ensure_ascii=False, indent=1))
         return codigo
     finally:
-        detalhe = resumo_json(dia, resultados) if resultados else {"dia": dia}
+        if resultados:
+            detalhe = resumo_json(dia, resultados)
+            qtd = sum(len(r.csv.por_hash) for r in resultados)
+        elif contagem:
+            detalhe = {"dia": dia, "modo": "sem_csv", "banco": contagem}
+            qtd = sum(contagem.values())
+        else:
+            detalhe, qtd = {"dia": dia}, None
         detalhe["abandonadas"] = [f"#{a[0]} {a[1]}/{a[2]}" for a in abandonadas]
         execucao_job.fechar_execucao(
             execucao, "sucesso" if codigo == SAIU_OK else "falha", codigo_saida=codigo,
-            qtd_itens=sum(len(r.csv.por_hash) for r in resultados) if resultados else None,
-            detalhe=detalhe)
+            qtd_itens=qtd, detalhe=detalhe)
 
 
 if __name__ == "__main__":

@@ -121,7 +121,7 @@ def test_main_registra_a_execucao_e_devolve_o_exit(tmp_path, monkeypatch):
     monkeypatch.setattr(cmp.execucao_job, "fechar_execucao",
                         lambda ex, status, **k: chamadas.append(("fechar", ex, status, k)))
 
-    assert cmp.main(["--dia", DIA]) == cmp.SAIU_DIVERGENTE
+    assert cmp.main(["--dia", DIA, "--com-csv"]) == cmp.SAIU_DIVERGENTE
     abrir = next(c for c in chamadas if c[0] == "abrir")
     assert abrir[1] == ("controle", "comparar_controle_csv_banco")
     assert abrir[2]["obrigatoria"] is False and abrir[2]["flag_ensaio"] is False
@@ -170,3 +170,32 @@ def test_listar_abandonadas_le_a_view():
     conn = _Conn()
     assert cmp.listar_abandonadas(conn) == [(164, "remessa_cobranca", "gerar_remessa_cobranca_cnab_400", "cron", "22/09 11:30")]
     assert "vw_job_execucao_abandonada" in conn.cur.sql
+
+
+def test_padrao_sem_csv_audita_so_o_banco_e_so_abandonada_sai_3(monkeypatch, capsys):
+    """Fase 4: os CSVs foram congelados. O padrao nao compara: conta o que entrou no banco
+    e sai 3 so se houver execucao abandonada."""
+    chamadas = []
+    monkeypatch.setattr(cmp, "ler_banco", lambda conn, tipos, dia, tz=None: {"a1": "A", "b2": "B"})
+    abandonadas = []
+    monkeypatch.setattr(cmp, "listar_abandonadas", lambda conn, tz=None: abandonadas)
+    monkeypatch.setattr(cmp, "ler_csv", lambda *a, **k: (_ for _ in ()).throw(AssertionError("nao le CSV")))
+
+    class _Conn:
+        def close(self): chamadas.append("close")
+    monkeypatch.setattr(cmp.execucao_job, "conexao_leitura", lambda job: _Conn())
+    monkeypatch.setattr(cmp.execucao_job, "abrir_execucao", lambda *a, **k: "EX")
+    monkeypatch.setattr(cmp.execucao_job, "fechar_execucao",
+                        lambda ex, status, **k: chamadas.append(("fechar", status, k)))
+
+    assert cmp.main(["--dia", DIA]) == cmp.SAIU_OK
+    fechar = next(c for c in chamadas if isinstance(c, tuple))
+    assert fechar[1] == "sucesso" and fechar[2]["qtd_itens"] == 2 * len(cmp.FAMILIAS)
+    assert fechar[2]["detalhe"]["modo"] == "sem_csv" and fechar[2]["detalhe"]["abandonadas"] == []
+    saida = capsys.readouterr().out
+    assert "AUDITORIA DO BANCO" in saida and "nenhuma execucao abandonada" in saida
+
+    chamadas.clear()
+    abandonadas.append((19, "credito", "analisar_credito_operacao", "manual", "22/09 07:45"))
+    assert cmp.main(["--dia", DIA]) == cmp.SAIU_DIVERGENTE
+    assert "#19 credito/analisar_credito_operacao" in capsys.readouterr().out

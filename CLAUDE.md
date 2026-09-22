@@ -153,24 +153,24 @@ túnel ssh ao IP do container (ver `docs/COMO_SUBIR_UM_JOB.md`).
   `src/processors/db/controle/encerrar_abandonada.py <id> --pra-valer` com `ERP_OPERADOR`/
   `ERP_MOTIVO` — grava `abandonada`, nunca `sucesso`; sem isso a paridade das 19:35 sai com
   exit 3 todo dia. Nunca `UPDATE` à mão em `job_execucao`.
-- **Dupla escrita, desde 22/09/2026.** Os quatro jobs de arquivo (retorno e remessa, de
-  cobrança e de pagamento) gravam o CSV de controle **e** as tabelas, no mesmo ponto do
-  código. Nada foi retirado do CSV: o corte vem depois de semanas comparando as duas
-  fontes. Job novo já nasce registrando; quem mexer nesses quatro mantém os dois lados.
-  O `arquivo` é identificado pelo **conteúdo** (sha256), então reprocessar o mesmo arquivo
-  devolve a linha existente em vez de duplicar — a mesma regra do `hash` no CSV.
+- **Só o banco, desde 22/09/2026 às 18h10 (Fase 4, a pedido da Gerência).** Os quatro jobs de
+  arquivo (retorno e remessa, de cobrança e de pagamento) gravam só nas tabelas:
+  `ESCREVER_CSV_*=False` no `config/<job>.env` (voltar = apagar a linha). Os CSVs ficaram
+  congelados no disco como histórico, e os dois retornos ainda consultam essas linhas antigas
+  para não dar baixa em duplicidade num `.RET` de antes de 21/09. O `arquivo` é identificado
+  pelo **conteúdo** (sha256): reprocessar o mesmo arquivo devolve a linha existente.
 - **O banco é a fonte do controle, desde a `erp_005` (22/09/2026).** Plano e fases em
   `docs/PLANO_CONTROLE_NO_BANCO.md`. O que só existia em JSON no disco virou evento
   (`descartado`, `cancelado`, `intencao_envio` do BB; `documentos_baixados`/`etapa_movida`
   do crédito); o que não tem tabela vai por `execucao_job.anotar()` para o `detalhe_json`
   da execução. As views `vw_controle_*` têm as colunas dos CSVs; `vw_job_execucao_ultima`
-  responde "rodou?". A paridade CSV × banco é medida todo dia útil pela task
-  `comparar_controle_csv_banco` (19:35; exit 3 = divergência). As leituras de idempotência
+  responde "rodou?". A task `comparar_controle_csv_banco` (19:35, dia útil) virou auditoria
+  do banco: conta o que entrou no dia e sai 3 se houver execução abandonada (`--com-csv` refaz
+  a comparação antiga). As leituras de idempotência
   vêm do banco (Fase 2) nos quatro jobs de arquivo: `_RET`, `_RETPAG` e `_REM` desde 22/09/2026
   11h47, `_PAG` desde 17h41 — linha `CONTROLE_FONTE_*=banco` no `config/<job>.env`. Nos
   dois retornos, `banco` = banco ∪ histórico do CSV até a Fase 4 (a memória evita baixa em
-  duplicidade); a carga histórica de 45 dias das remessas foi feita (execução #166). O CSV continua
-  sendo escrito: quem mexer nos quatro jobs mantém os dois lados.
+  duplicidade); a carga histórica de 45 dias das remessas foi feita (execução #166).
 - **Execução manual em modo real diz quem e por quê:** `docker exec -e ERP_OPERADOR=nome
   -e ERP_MOTIVO="..." erp-automation sh .../run_agendado.sh`. Desde 22/09/2026 ~11h15 o hub
   passa `HUB_RUN_ID` (o id de lock do run, 32 hex) e `HUB_TASK_NOME` no exec: execução dele

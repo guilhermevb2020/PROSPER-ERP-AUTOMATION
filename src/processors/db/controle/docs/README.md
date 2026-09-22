@@ -1,5 +1,10 @@
 # controle — paridade CSV × banco (`comparar_controle_csv_banco`)
 
+> **Desde 22/09/2026 às 18h10 (Fase 4) o padrão é a auditoria só do banco.** Os quatro jobs
+> pararam de gravar o CSV, então não há o que comparar: a task das 19:35 conta, por família,
+> o que entrou no banco no dia e sai 3 se houver execução abandonada. `--com-csv` refaz a
+> comparação descrita abaixo, útil só para conferir o histórico congelado.
+
 **O que faz.** Uma vez por dia útil compara, por família, o que entrou nos CSVs de
 controle dos quatro jobs de arquivo com o que entrou em `erp_automation.arquivo`, e sai
 com exit 3 se algo só existe de um lado. É a Fase 0 de
