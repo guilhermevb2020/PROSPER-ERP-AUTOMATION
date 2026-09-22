@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-finalizar_operacao.py - ORQUESTRADOR do Robo 7.
+finalizar_operacao.py - ORQUESTRADOR do job finalizar_operacao.
 
 Para cada operacao na etapa "Aguardando Ass.":
   1. le os titulos da tela (tipos: LCB/DUR/DSR/...) e o nome do cedente;
@@ -19,11 +19,11 @@ R7_PAGAMENTO_SO_APOS_ASSINATURAS=0 se quiser as duas sempre.
 Dentro de um mesmo momento o e-mail continua sendo UM por operacao, com tudo o
 que falta naquela etapa - o operador nunca recebe uma pendencia de cada vez.
 
-Uso (rodar da RAIZ; o robo sobe a PROPRIA sessao do Smart - `--cdp` anexa numa ja aberta):
+Uso (rodar da RAIZ; o job sobe a PROPRIA sessao do Smart - `--cdp` anexa numa ja aberta):
   python finalizar_operacao/finalizar_operacao.py                    # DRY, sem e-mail
   python finalizar_operacao/finalizar_operacao.py --ops 64886,64890  # ops especificas
-  python finalizar_operacao/finalizar_operacao.py --email            # DRY + manda o e-mail
-  python finalizar_operacao/finalizar_operacao.py --executar --email # PRODUCAO
+  python finalizar_operacao/finalizar_operacao.py --avisar           # DRY + manda os avisos
+  python finalizar_operacao/finalizar_operacao.py --executar --avisar # PRODUCAO
   python finalizar_operacao/finalizar_operacao.py --loop             # ciclo continuo
 """
 import argparse
@@ -212,7 +212,7 @@ def processar(ctx, op, executar=False, mandar_email=False, execucao=None):
         motivo = (f"Etapa: a operacao esta em '{etapa}', nao em '{cfg.ROTULO_ETAPA_ENTRADA}'"
                   if etapa is not None else
                   "Etapa: nao consegui ler a etapa da operacao no Smart")
-        laudo["pendencias"].append(f"{motivo} - o robo so finaliza na etapa de entrada")
+        laudo["pendencias"].append(f"{motivo} - o job so finaliza na etapa de entrada")
         laudo["acao"] = "fora da etapa (nao finaliza)"
         laudo["pagamento_conferido"] = False
         print(f"\n  >> NAO FINALIZA - {motivo}")
@@ -400,7 +400,7 @@ def _avisar_corte(op, cedente, valor, laudo, mandar_email, execucao):
 
 
 def _rotina_de_avisos(ctx, laudos, execucao):
-    """PIX das ops finalizadas pelo robo, assinaturas paradas e resumo do dia (ver
+    """PIX das ops finalizadas pelo job, assinaturas paradas e resumo do dia (ver
     rotina_avisos.py). Nunca derruba a rodada."""
     nuvem = None
     try:
@@ -522,16 +522,16 @@ def _resumo(laudos, executar):
 
 
 def main():
-    ap = argparse.ArgumentParser(description="Robo 7 - confere e finaliza operacoes.")
+    ap = argparse.ArgumentParser(description="finalizar_operacao - confere e finaliza operacoes.")
     ap.add_argument("--cdp", action="store_true",
                     help=f"anexa num Chrome ja aberto em {cfg.CDP_URL} (desenvolvimento "
                          "pelo VNC) em vez de subir o proprio e logar")
     ap.add_argument("--ops", default="", help="ops especificas (virgula). Vazio = fila da etapa")
     ap.add_argument("--executar", action="store_true",
                     help="clica em Finalizar de verdade (sem isso = DRY)")
-    ap.add_argument("--avisar", "--email", dest="email", action="store_true",
-                    help="manda o aviso de PAGAMENTO pendente (documentos ok) por WhatsApp "
-                         "e/ou e-mail; sem isso, so mostra. --email e o nome antigo")
+    ap.add_argument("--avisar", action="store_true",
+                    help="manda os avisos (pagamento travado, PIX, corte, assinaturas "
+                         "paradas, resumo do dia); sem isso, so mostra")
     ap.add_argument("--loop", action="store_true", help="repete a cada R7_INTERVALO_CICLO_S")
     args = ap.parse_args()
     try:
@@ -544,7 +544,7 @@ def main():
         print("[!] R7_DRY_RUN=1 no ambiente -> --executar IGNORADO (nada sera finalizado).\n"
               "    Para valer: $env:R7_DRY_RUN='0' antes de rodar.")
     modo = "EXECUTAR (finaliza de verdade)" if executar else "DRY (nao finaliza nada)"
-    print(f"=== ROBO 7 | {modo} | avisos: {'SIM' if args.email else 'nao'} | "
+    print(f"=== FINALIZAR OPERACAO | {modo} | avisos: {'SIM' if args.avisar else 'nao'} | "
           f"conta: {cfg.CONTA} ===")
 
     ops = [o.strip() for o in args.ops.split(",") if o.strip()] or None
@@ -556,7 +556,7 @@ def main():
             "finalizar_operacao", "finalizar_operacao_aguardando_assinatura",
             flag_ensaio=not executar, obrigatoria=executar,
             apelido_credencial=os.environ.get("SMART_SENHA"),
-            detalhe={"ops": ops, "loop": bool(args.loop), "email": bool(args.email)})
+            detalhe={"ops": ops, "loop": bool(args.loop), "avisar": bool(args.avisar)})
     except execucao_job.ExecucaoIndisponivel as e:
         print(f"[ERRO] {e}")
         return 2
@@ -564,7 +564,7 @@ def main():
 
     # Sessao pelo modulo comum (o mesmo do remessa_pagamento): sobe o Chrome no
     # display/perfil/porta PROPRIOS e loga via CapSolver com a credencial DESTE
-    # robo (cfg.EMAIL/SENHA). Ate 21/09/2026 o main so anexava num Chrome ja
+    # job (cfg.EMAIL/SENHA). Ate 21/09/2026 o main so anexava num Chrome ja
     # aberto (connect_over_cdp); no container ninguem o abria, e a 1a rodada em
     # producao morreu com "CDP 9228 nao responde" antes de logar.
     from playwright.sync_api import sync_playwright
@@ -574,10 +574,10 @@ def main():
             try:
                 with smart_sessao.sessao(p, cfg, usar_cdp=args.cdp, log=print) as ctx:
                     while True:
-                        laudos = ciclo(ctx, ops, executar, args.email, execucao=execucao)
+                        laudos = ciclo(ctx, ops, executar, args.avisar, execucao=execucao)
                         total += len(laudos)
                         _resumo(laudos, executar)
-                        if args.email and ops is None:
+                        if args.avisar and ops is None:
                             # so na fila inteira: --ops de teste nao vira resumo nem aviso
                             _rotina_de_avisos(ctx, laudos, execucao)
                         if not args.loop:

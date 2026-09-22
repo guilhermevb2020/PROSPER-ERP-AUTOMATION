@@ -23,7 +23,7 @@ Smart faz suas proprias travas antes de finalizar:
 SEGURANCA: este script NAO clica no #pagamento e DISPENSA (dismiss) qualquer
 dialogo, justamente p/ nao finalizar nada por acidente.
 
-Uso (rodar da RAIZ, com a sessao R7 no ar):
+Uso (rodar da RAIZ, com a sessao deste job no ar):
   python finalizar_operacao/mapear_pagamento.py --op 64887
 """
 import argparse

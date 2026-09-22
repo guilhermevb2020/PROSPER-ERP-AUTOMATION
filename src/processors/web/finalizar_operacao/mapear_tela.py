@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
 mapear_tela.py - INSPETOR READ-ONLY da tela da operacao, p/ descobrir as duas
-coisas que o Robo 7 precisa e que ainda NAO estao mapeadas no projeto:
+coisas que o job finalizar_operacao precisa e que ainda NAO estao mapeadas no projeto:
 
   (A) a GRADE DE FORMA DE PAGAMENTO (colunas Tipo | Tipo PIX | Chave PIX |
       Cta. origem | Cta. destino | Bco | Ag | Tp. Conta | CC | Favorecido |
@@ -132,10 +132,10 @@ def _dump_frames(page, rotulo, op, salvar=True):
 
 
 def main():
-    ap = argparse.ArgumentParser(description="Inspetor read-only da tela da operacao (R7).")
+    ap = argparse.ArgumentParser(description="Inspetor read-only da tela da operacao (finalizar_operacao).")
     ap.add_argument("--op", required=True, help="numero da operacao (use uma em 'Aguardando Ass.')")
     ap.add_argument("--cdp", default=str(cfg.CDP_PORT),
-                    help=f"porta CDP da sessao logada (default {cfg.CDP_PORT}; a do R1 e 9222)")
+                    help=f"porta CDP da sessao logada (default {cfg.CDP_PORT}; a do job de credito e outra)")
     ap.add_argument("--sem-resumir", action="store_true",
                     help="nao abre o painel Resumir (so mapeia a tela da operacao)")
     args = ap.parse_args()
@@ -152,7 +152,7 @@ def main():
             browser = p.chromium.connect_over_cdp(f"http://127.0.0.1:{args.cdp}")
         except Exception as e:
             print(f"[ERRO] CDP {args.cdp} nao responde: {e}\n"
-                  f"       Suba a sessao: python finalizar_operacao/sessao_r7.py")
+                  f"       Sem Chrome deste job no ar: a sessao so existe durante uma rodada (smart_sessao.sessao)")
             return 2
         ctx = browser.contexts[0]
         page = ctx.new_page()

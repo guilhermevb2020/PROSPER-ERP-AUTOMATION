@@ -2,10 +2,10 @@
 """
 conftest.py - nenhum teste escreve nos arquivos de estado REAIS do finalizador.
 
-Por que existe: os arquivos de estado do Robo 7 (finalizadas, avisos, a rotina de avisos)
+Por que existe: os arquivos de estado do job finalizar_operacao (finalizadas, avisos, a rotina de avisos)
 moram em src/processors/web/finalizar_operacao/, que e bind-mount do container de
 producao. Em 22/09/2026 os testes que simulam uma finalizacao gravaram ops de mentira
-(65071, "CEDENTE X") no finalizadas_pix.jsonl real - e a rodada seguinte do robo teria
+(65071, "CEDENTE X") no finalizadas_pix.jsonl real - e a rodada seguinte do job teria
 tentado conferir o PIX delas e avisado o WhatsApp. Aqui cada teste ganha uma pasta
 temporaria para esses arquivos, por variavel de ambiente (lida quando o teste importa o
 r7_config) e por atributo (se o r7_config ja estiver carregado).

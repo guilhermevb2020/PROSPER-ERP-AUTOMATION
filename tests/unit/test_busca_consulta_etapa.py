@@ -7,7 +7,7 @@ Etapa e a pesquisada.
 Por que existe: o Pesquisar faz POST de conoperacao.php no frame 'pesq'. Antes da 1a
 pesquisa esse frame ja mostra as 10 operacoes mais recentes, de qualquer etapa e das duas
 securitizadoras. Com a espera fixa de 1,5 s, quando o Smart demorava, a leitura pegava
-essa tabela: 9x no robo de credito em 22/09/2026, e ele processou 65854 e 65877, que
+essa tabela: 9x no job de credito em 22/09/2026, e ele processou 65854 e 65877, que
 estavam em 'Aguardando Ass.' - trocou a classe de risco dos titulos, salvou e as moveu
 para 'Analise de credito'. O finalizador leu a mesma tabela 3x no mesmo dia.
 
@@ -160,7 +160,7 @@ def test_sem_recarga_nao_devolve_nada_e_invalida_a_aba(b, monkeypatch):
 
 
 def test_o_incidente_do_credito_nao_se_repete(b, monkeypatch):
-    """22/09: a Analise Home leu a tabela padrao e o robo pegou a 65877 (Aguardando Ass.).
+    """22/09: a Analise Home leu a tabela padrao e o job pegou a 65877 (Aguardando Ass.).
     Mesmo que a tabela nova traga linha de outra etapa, so volta a da etapa pesquisada."""
     novo = [("65877", "Aguardando Ass."), ("65910", "Análise Home")]
     _armar(b, monkeypatch, _PADRAO, [(2, novo), (2, [])])

@@ -4,7 +4,7 @@ verificar_docs.py - VERIFICA os documentos digitais EMITIDOS de uma operacao,
 consultando o doc2you (provedor de assinatura digital onde o Smart deposita
 Aditivo/Nota Promissoria/Duplicata).
 
-Endpoint (mapeado 2026-05-29 via sniffer R3, op 61270):
+Endpoint (mapeado 2026-05-29 no pacote de origem, op 61270):
   POST https://www.doc2you.com.br/documento/documentos
   form: page=0, numOperacao=<op>, e varios filtros vazios.
   Resposta: HTML com uma tabela; cada documento e uma <tr> com:
@@ -13,11 +13,11 @@ Endpoint (mapeado 2026-05-29 via sniffer R3, op 61270):
     - td Cedente, td Descricao (link visualizar), td Status (Pendente/Concluido),
       td Geracao, td Emissao, td Vencimento, ... Nº operacao, Nº documento.
 
-Usa a sessao VIVA do R3 (CDP 9223) - precisa do sessao_r3.py rodando.
+Usa uma sessao VIVA do Smart por CDP (no pacote de origem era a de outro job, porta 9223).
 
 Uso (da raiz):
-  python robo3/verificar_docs.py 61270
-  python robo3/verificar_docs.py 61270 61256 61247      # varias ops
+  python finalizar_operacao/verificar_docs.py 61270
+  python finalizar_operacao/verificar_docs.py 61270 61256 61247      # varias ops
 """
 import re
 import sys

@@ -25,7 +25,7 @@ PACOTE = RAIZ / "src" / "processors" / "web" / "finalizar_operacao"
 
 @pytest.fixture
 def fin(monkeypatch):
-    """Importa o modulo `finalizar` do pacote, como o robo faz (pelo diretorio)."""
+    """Importa o modulo `finalizar` do pacote, como o job faz (pelo diretorio)."""
     monkeypatch.setenv("R7_DRY_RUN", "1")
     monkeypatch.setenv("DEBUG_DIR_R7", str(RAIZ / "data" / "sandbox" / "finalizar_op" / "debug"))
     if str(PACOTE) not in sys.path:

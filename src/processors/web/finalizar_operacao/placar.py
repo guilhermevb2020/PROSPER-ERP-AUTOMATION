@@ -1,21 +1,21 @@
 # -*- coding: utf-8 -*-
 """
-placar.py - mede a ACURACIA do Robo 7 comparando o veredito dele com o que o
+placar.py - mede a ACURACIA do job finalizar_operacao comparando o veredito dele com o que o
 operador REALMENTE fez com a operacao.
 
-E a evidencia para decidir se o robo pode sair do DRY e ir para o servidor.
+E a evidencia para decidir se o job pode sair do DRY e ir para o servidor.
 
 Como funciona: le os RESUMOs do log do --loop (o ultimo veredito de cada op) e
 confronta com o estado final no espelho do banco (trs.operacao_desagio):
 
-  robo PASSARIA  + op finalizada      -> CONCORDA   (o robo teria feito o mesmo)
-  robo PASSARIA  + op NAO finalizada  -> ADIANTADO  (ninguem finalizou ainda; nao e erro,
+  job PASSARIA  + op finalizada      -> CONCORDA   (o job teria feito o mesmo)
+  job PASSARIA  + op NAO finalizada  -> ADIANTADO  (ninguem finalizou ainda; nao e erro,
                                                      mas se persistir vale entender por que)
-  robo BARRADA   + op NAO finalizada  -> CONCORDA   (os dois seguraram)
-  robo BARRADA   + op finalizada      -> DIVERGE    <<< os casos que importam:
+  job BARRADA   + op NAO finalizada  -> CONCORDA   (os dois seguraram)
+  job BARRADA   + op finalizada      -> DIVERGE    <<< os casos que importam:
                                                      saiu apesar da pendencia apontada
 
-DIVERGE nao significa que o robo errou - hoje (28/08) as duas divergencias foram
+DIVERGE nao significa que o job errou - hoje (28/08) as duas divergencias foram
 operacoes que sairam ERRADAS (conta de origem trocada e pagamento zerado). Por
 isso o relatorio mostra a conta e o valor pago de cada uma: e o que permite
 julgar quem estava certo.
@@ -69,9 +69,9 @@ def estado_no_banco(ops):
         return {}
     try:
         import psycopg2
-        import config as r1_config
-        conn = psycopg2.connect(connect_timeout=r1_config.DB_CONNECT_TIMEOUT,
-                                **r1_config.DB_CONFIG)
+        import config as credito_config
+        conn = psycopg2.connect(connect_timeout=credito_config.DB_CONNECT_TIMEOUT,
+                                **credito_config.DB_CONFIG)
     except Exception as e:
         print(f"[ERRO] banco inacessivel: {e}")
         return {}
@@ -91,24 +91,24 @@ def estado_no_banco(ops):
 def classificar(veredito, banco):
     """-> (classe, explicacao). Classificacao CRUA, so pelo log + banco."""
     if veredito.startswith("ERRO"):
-        return "ERRO", "o robo nao conseguiu concluir a checagem"
+        return "ERRO", "o job nao conseguiu concluir a checagem"
     if not banco:
         return "SEM_DADO", "operacao nao esta no espelho do banco"
     finalizada = bool(banco.get("concluida")) or banco.get("etapa") == "CONCLUIDA"
     aprovou = veredito.startswith("PASSARIA") or veredito.startswith("FINALIZADA")
     if aprovou and finalizada:
-        return "CONCORDA", "robo aprovaria; operador finalizou"
+        return "CONCORDA", "job aprovaria; operador finalizou"
     if aprovou and not finalizada:
-        return "ADIANTADO", f"robo aprovaria; ainda em '{banco.get('etapa')}'"
+        return "ADIANTADO", f"job aprovaria; ainda em '{banco.get('etapa')}'"
     if not aprovou and not finalizada:
-        return "CONCORDA", f"robo barraria; segue em '{banco.get('etapa')}'"
-    return "DIVERGE", "robo barraria, mas foi FINALIZADA"
+        return "CONCORDA", f"job barraria; segue em '{banco.get('etapa')}'"
+    return "DIVERGE", "job barraria, mas foi FINALIZADA"
 
 
 # --------------------------------------------------------------------------- #
 # Reverificacao: separa divergencia REAL de "resolveram depois"
 # --------------------------------------------------------------------------- #
-# Sem isso o placar MENTE: o veredito guardado e o do ULTIMO ciclo em que o robo
+# Sem isso o placar MENTE: o veredito guardado e o do ULTIMO ciclo em que o job
 # olhou a op. Se as assinaturas chegaram DEPOIS (ou o loop estava parado), a op
 # aparece como "barrada mas finalizada" sendo que ela ficou legitima no meio do
 # caminho. Por isso conferimos AGORA como a operacao terminou de fato.
@@ -153,7 +153,7 @@ def reverificar(ctx, op, veredito_pendencias):
 
 
 def main():
-    ap = argparse.ArgumentParser(description="Acuracia do Robo 7 (veredito x realidade).")
+    ap = argparse.ArgumentParser(description="Acuracia do job finalizar_operacao (veredito x realidade).")
     ap.add_argument("--log", default=os.path.join("logs", "r7_loop.log"))
     ap.add_argument("--dia", default="", help="so ops finalizadas nesta data (AAAA-MM-DD)")
     ap.add_argument("--cdp", default=str(cfg.CDP_PORT))
@@ -215,14 +215,14 @@ def main():
         grupos.setdefault(classe, []).append((op, v, b, explic))
 
     total = sum(len(v) for v in grupos.values())
-    print(f"=== PLACAR DO ROBO 7 | {total} operacao(oes) | log: {args.log} ===\n")
+    print(f"=== PLACAR DO FINALIZAR OPERACAO | {total} operacao(oes) | log: {args.log} ===\n")
     for classe in ("CONCORDA", "RESOLVIDO_DEPOIS", "DIVERGE", "ADIANTADO", "ERRO", "SEM_DADO"):
         itens = grupos.get(classe, [])
         if not itens:
             continue
         print(f"  {classe}: {len(itens)}")
-    # RESOLVIDO_DEPOIS conta como acerto: o robo barrou, assinaram depois e a op
-    # foi finalizada - o robo estava certo NO MOMENTO em que olhou. ADIANTADO e
+    # RESOLVIDO_DEPOIS conta como acerto: o job barrou, assinaram depois e a op
+    # foi finalizada - o job estava certo NO MOMENTO em que olhou. ADIANTADO e
     # ERRO ficam FORA da base: ainda nao ha desfecho p/ comparar.
     conc = len(grupos.get("CONCORDA", [])) + len(grupos.get("RESOLVIDO_DEPOIS", []))
     div = len(grupos.get("DIVERGE", []))
@@ -230,11 +230,11 @@ def main():
     if base:
         print(f"\n  concordancia: {conc}/{base} = {100.0 * conc / base:.0f}%"
               f"   ({div} divergencia(s) REAL(is))")
-        print("  (RESOLVIDO_DEPOIS = robo barrou, assinaram depois e finalizaram "
-              "- nao e erro do robo)")
+        print("  (RESOLVIDO_DEPOIS = job barrou, assinaram depois e finalizaram "
+              "- nao e erro do job)")
 
     for classe, titulo in (("DIVERGE", "DIVERGENCIAS REAIS - finalizadas com a pendencia ainda de pe"),
-                           ("ADIANTADO", "APROVADAS PELO ROBO E AINDA NAO FINALIZADAS"),
+                           ("ADIANTADO", "APROVADAS PELO JOB E AINDA NAO FINALIZADAS"),
                            ("ERRO", "CHECAGENS QUE FALHARAM")):
         itens = grupos.get(classe, [])
         if not itens:

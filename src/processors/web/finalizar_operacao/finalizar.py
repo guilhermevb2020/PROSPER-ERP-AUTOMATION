@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-finalizar.py - A ACAO do Robo 7: clicar em FINALIZAR na tela de Resumir.
+finalizar.py - A ACAO do job finalizar_operacao: clicar em FINALIZAR na tela de Resumir.
 
 Caminho (mapeado ao vivo em 28/08/2026):
   novatelaoperacao.php?action=edit&op=<op>
@@ -145,12 +145,12 @@ def confirmar_no_banco(op, tentativas=6, espera=10):
     import time as _t
     try:
         import psycopg2
-        import config as r1_config
+        import config as credito_config
     except Exception as e:
         return None, f"sem acesso ao banco: {str(e)[:60]}"
     for i in range(tentativas):
         try:
-            conn = psycopg2.connect(connect_timeout=8, **r1_config.DB_CONFIG)
+            conn = psycopg2.connect(connect_timeout=8, **credito_config.DB_CONFIG)
             try:
                 cur = conn.cursor()
                 cur.execute("SELECT etapa, flag_operacao_concluida FROM trs.operacao_desagio "
@@ -245,7 +245,7 @@ def finalizar_da_grade(pg, op, aceitar_dialogos=None, log=print):
 
     # CONFIRMACAO. A fonte da verdade e o SMART, nao o banco: o espelho do
     # Postgres NAO e instantaneo e deu falso negativo na 1a finalizacao real
-    # (op 64997, 01/09/2026 - finalizou, o robo disse que falhou e por isso nem
+    # (op 64997, 01/09/2026 - finalizou, o job disse que falhou e por isso nem
     # avisou). O banco fica so como ultimo recurso.
     ok_smart, detalhe_smart = _confirmar_no_smart(pg, op)
     if ok_smart:

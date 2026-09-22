@@ -16,7 +16,7 @@ A) via FINANCEIRO - titulos JA EFETIVADOS (o caso comum; e o que a tela
                 resposta JSON {"resultado":"OK","classeRisco":"..."}
    Simples: SO precisa da classe e do numTitulo (sem sessionId/tokens).
 
-B) via OPERACAO - operacao ainda EM ANALISE (mesmo caminho do robo V4):
+B) via OPERACAO - operacao ainda EM ANALISE (mesmo caminho do credito V4):
      - GET  novatelaoperacao.php?action=edit&op=<op> -> sessionId + id_operacao
             + JSON `dadosTOP` (todos os campos de cada titulo)
      - POST controladoroperacaoajax.php acao=SALVAR_TITULOS ... titulos=<GeraString>

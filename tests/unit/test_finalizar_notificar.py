@@ -36,7 +36,7 @@ def _importar(monkeypatch, nome):
 
 @pytest.fixture
 def n(monkeypatch, tmp_path):
-    for k, v in {"SMTP_SERVER": "guardian", "SMTP_PORT": "2525", "SMTP_USER": "robo",
+    for k, v in {"SMTP_SERVER": "guardian", "SMTP_PORT": "2525", "SMTP_USER": "job",
                  "SMTP_PASSWORD": "", "EMAIL_FROM": "remetente@exemplo.test"}.items():
         monkeypatch.setenv(k, v)
     for k in ("R7_SMTP_SERVER", "R7_SMTP_PORT", "R7_SMTP_USER", "R7_SMTP_SENHA",
@@ -239,7 +239,7 @@ class _Ctx:
 
 
 @pytest.fixture
-def robo(monkeypatch):
+def job(monkeypatch):
     monkeypatch.setenv("R7_DRY_RUN", "0")
     mod = _importar(monkeypatch, "finalizar_operacao")
     monkeypatch.setattr(mod.cfg, "PAGAMENTO_SO_APOS_ASSINATURAS", True)
@@ -250,11 +250,11 @@ def robo(monkeypatch):
     return mod
 
 
-def _armar(robo, monkeypatch, docs_pend, pag_pend, resposta=None):
-    monkeypatch.setattr(robo.checagem_docs, "conferir", lambda ctx, op, tipos, nome_cedente=None: {
+def _armar(job, monkeypatch, docs_pend, pag_pend, resposta=None):
+    monkeypatch.setattr(job.checagem_docs, "conferir", lambda ctx, op, tipos, nome_cedente=None: {
         "ok": not docs_pend, "pendencias": list(docs_pend), "observacoes": [],
         "exigidos": ["aditivo"], "encontrados": {"aditivo": {"assinados": 1, "total": 1}}})
-    monkeypatch.setattr(robo.checagem_pagamento, "conferir", lambda pg, op, log=print: {
+    monkeypatch.setattr(job.checagem_pagamento, "conferir", lambda pg, op, log=print: {
         "ok": not pag_pend, "pendencias": list(pag_pend), "linhas": _CTX["linhas_pagamento"]})
     avisos, eventos = [], []
 
@@ -264,24 +264,24 @@ def _armar(robo, monkeypatch, docs_pend, pag_pend, resposta=None):
                             "destinatarios": ["operacional@exemplo.test"],
                             "canais": {"whatsapp": {"ok": True, "detalhe": "OK"}}}
 
-    monkeypatch.setattr(robo.notificar, "avisar_pagamento_pendente", _avisar)
-    monkeypatch.setattr(robo.execucao_job, "registrar_evento_operacao",
+    monkeypatch.setattr(job.notificar, "avisar_pagamento_pendente", _avisar)
+    monkeypatch.setattr(job.execucao_job, "registrar_evento_operacao",
                         lambda ex, op, tipo, **kw: eventos.append((tipo, kw)))
-    monkeypatch.setattr(robo.fin, "finalizar_da_grade",
+    monkeypatch.setattr(job.fin, "finalizar_da_grade",
                         lambda *a, **k: pytest.fail("com pendencia nao ha clique"))
     return avisos, eventos
 
 
-def test_esperando_assinatura_nao_avisa(robo, monkeypatch):
-    avisos, eventos = _armar(robo, monkeypatch, ["Aditivo: falta assinatura"], [])
-    laudo = robo.processar(_Ctx(), "65879", executar=True, mandar_email=True, execucao=object())
+def test_esperando_assinatura_nao_avisa(job, monkeypatch):
+    avisos, eventos = _armar(job, monkeypatch, ["Aditivo: falta assinatura"], [])
+    laudo = job.processar(_Ctx(), "65879", executar=True, mandar_email=True, execucao=object())
     assert avisos == [] and eventos == []
     assert laudo["acao"] == "aguardando assinatura"
 
 
-def test_documentos_ok_e_pagamento_travando_avisa_e_registra(robo, monkeypatch):
-    avisos, eventos = _armar(robo, monkeypatch, [], _PEND)
-    laudo = robo.processar(_Ctx(), "65879", executar=True, mandar_email=True, execucao=object())
+def test_documentos_ok_e_pagamento_travando_avisa_e_registra(job, monkeypatch):
+    avisos, eventos = _armar(job, monkeypatch, [], _PEND)
+    laudo = job.processar(_Ctx(), "65879", executar=True, mandar_email=True, execucao=object())
     assert avisos == [("65879", _PEND)]
     assert laudo["acao"] == "avisado"
     tipo, kw = eventos[0]
@@ -291,15 +291,15 @@ def test_documentos_ok_e_pagamento_travando_avisa_e_registra(robo, monkeypatch):
     assert kw["detalhe"]["pendencias"] == _PEND
 
 
-def test_sem_email_no_comando_nao_avisa(robo, monkeypatch):
-    avisos, eventos = _armar(robo, monkeypatch, [], _PEND)
-    laudo = robo.processar(_Ctx(), "65879", executar=True, mandar_email=False, execucao=object())
+def test_sem_email_no_comando_nao_avisa(job, monkeypatch):
+    avisos, eventos = _armar(job, monkeypatch, [], _PEND)
+    laudo = job.processar(_Ctx(), "65879", executar=True, mandar_email=False, execucao=object())
     assert avisos == [] and eventos == [] and laudo["acao"] == "avisar"
 
 
-def test_aviso_segurado_pelo_espacamento_nao_vira_evento(robo, monkeypatch):
-    avisos, eventos = _armar(robo, monkeypatch, [], _PEND, resposta={
+def test_aviso_segurado_pelo_espacamento_nao_vira_evento(job, monkeypatch):
+    avisos, eventos = _armar(job, monkeypatch, [], _PEND, resposta={
         "enviado": False, "tentou": False, "motivo": "aguardando espacamento",
         "destinatarios": ["operacional@exemplo.test"]})
-    laudo = robo.processar(_Ctx(), "65879", executar=True, mandar_email=True, execucao=object())
+    laudo = job.processar(_Ctx(), "65879", executar=True, mandar_email=True, execucao=object())
     assert len(avisos) == 1 and eventos == [] and laudo["acao"] == "avisar"

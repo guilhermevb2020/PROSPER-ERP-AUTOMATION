@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-test_finalizar_sessao_propria.py - o robo de finalizar sobe a PROPRIA sessao do
+test_finalizar_sessao_propria.py - o job de finalizar sobe a PROPRIA sessao do
 Smart pelo modulo comum (src.common.clients.smart_sessao), como o remessa_pagamento.
 
 Por que existe: ate 21/09/2026 o main() so anexava num Chrome ja aberto
@@ -89,7 +89,7 @@ def test_main_abre_a_propria_sessao_e_roda_o_ciclo_nela(pacote, monkeypatch):
     assert pacote.main() == 0
     assert chamadas == [(ctx, None, False)], "o ciclo tem de rodar no ctx da sessao, em DRY"
     assert recebido["cfg"] is pacote.cfg
-    assert recebido["usar_cdp"] is False, "sem --cdp o robo sobe o proprio Chrome"
+    assert recebido["usar_cdp"] is False, "sem --cdp o job sobe o proprio Chrome"
     assert recebido["logar"] is True
 
 

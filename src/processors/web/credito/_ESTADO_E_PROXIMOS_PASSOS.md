@@ -5,15 +5,15 @@
 
 ---
 
-## ⚠️ 22/09/2026 — a consulta lia a tabela errada, e o robô mexeu em operação de outra etapa
+## ⚠️ 22/09/2026 — a consulta lia a tabela errada, e o job mexeu em operação de outra etapa
 
 A busca por etapa (`_buscar_numeros_uma`, a mesma do finalizador) lia a tabela 1,5 s
 depois de Pesquisar. O Pesquisar recarrega o frame `pesq` (POST `conoperacao.php`), e antes
 da recarga esse frame mostra as **10 operações mais recentes, de qualquer etapa e das duas
-securitizadoras**. Quando o Smart passava de 1,5 s, o robô lia essa tabela e pegava a
+securitizadoras**. Quando o Smart passava de 1,5 s, o job lia essa tabela e pegava a
 primeira como se estivesse em "Análise Home". Aconteceu 9 vezes em 22/09:
 
-| ciclo | op | o que o robô fez fora da etapa |
+| ciclo | op | o que o job fez fora da etapa |
 |---|---|---|
 | 193 | 65854 | classe P→T (1 título), Salvar, moveu para "Análise de crédito" |
 | 369 e 375 | 65877 | classe P→T (13 títulos), Salvar, moveu para "Análise de crédito" duas vezes |

@@ -1,14 +1,14 @@
 # -*- coding: utf-8 -*-
 """
-listar_fila.py - lista, AO VIVO, as operacoes na etapa de entrada do Robo 7
+listar_fila.py - lista, AO VIVO, as operacoes na etapa de entrada do job finalizar_operacao
 ("Aguardando Ass."), direto da tela do Smart.
 
 Por que nao usar o banco: `trs.operacao_desagio` e um ESPELHO com atraso de ~1
-dia - as operacoes de HOJE (que sao justamente as que o R7 vai finalizar) ainda
+dia - as operacoes de HOJE (que sao justamente as que o job vai finalizar) ainda
 nao estao la. O banco entra so p/ ENRIQUECER (cedente/valor) o que ja veio da
 tela; op sem espelho aparece assim mesmo.
 
-Read-only: so faz a consulta da tela (mesma funcao que o R1 usa).
+Read-only: so faz a consulta da tela (mesma funcao que o job de credito usa).
 
 Uso (rodar da RAIZ, com sessao logada):
   python finalizar_operacao/listar_fila.py
@@ -25,7 +25,7 @@ for _p in (_AQUI, os.path.join(_RAIZ, "credito")):
         sys.path.insert(0, _p)
 
 import r7_config as cfg              # noqa: E402
-import _analisar_credito_base as robo  # noqa: E402
+import _analisar_credito_base as base_credito  # noqa: E402
 
 # nome REAL da tabela (a antiga trs.operacoes_desagio nao existe mais)
 TABELA = os.environ.get("R7_TABELA_ESPELHO", "trs.operacao_desagio")
@@ -37,9 +37,9 @@ def enriquecer(ops):
         return {}
     try:
         import psycopg2
-        import config as r1_config
-        conn = psycopg2.connect(connect_timeout=r1_config.DB_CONNECT_TIMEOUT,
-                                **r1_config.DB_CONFIG)
+        import config as credito_config
+        conn = psycopg2.connect(connect_timeout=credito_config.DB_CONNECT_TIMEOUT,
+                                **credito_config.DB_CONFIG)
     except Exception as e:
         print(f"  (banco indisponivel: {e} - segue so com a tela)")
         return {}
@@ -60,12 +60,12 @@ def enriquecer(ops):
 
 def listar(ctx):
     """Numeros das ops na etapa de entrada, ao vivo (Home + Smart)."""
-    return robo.listar_operacoes_etapa(ctx, cfg.VALOR_ETAPA_ENTRADA,
+    return base_credito.listar_operacoes_etapa(ctx, cfg.VALOR_ETAPA_ENTRADA,
                                        cfg.ROTULO_ETAPA_ENTRADA)
 
 
 def main():
-    ap = argparse.ArgumentParser(description="Lista a fila do Robo 7 ao vivo.")
+    ap = argparse.ArgumentParser(description="Lista a fila do finalizar_operacao ao vivo.")
     ap.add_argument("--cdp", default=str(cfg.CDP_PORT))
     ap.add_argument("--sem-banco", action="store_true", help="nao enriquece pelo espelho")
     args = ap.parse_args()
@@ -80,10 +80,10 @@ def main():
             browser = p.chromium.connect_over_cdp(f"http://127.0.0.1:{args.cdp}")
         except Exception as e:
             print(f"[ERRO] CDP {args.cdp} nao responde: {e}\n"
-                  "       Suba a sessao: python finalizar_operacao/sessao_r7.py")
+                  "       Sem Chrome deste job no ar: a sessao so existe durante uma rodada (smart_sessao.sessao)")
             return 2
         ctx = browser.contexts[0]
-        print(f"=== FILA DO ROBO 7 | etapa '{cfg.ROTULO_ETAPA_ENTRADA}' | CDP {args.cdp} ===")
+        print(f"=== FILA DO FINALIZAR OPERACAO | etapa '{cfg.ROTULO_ETAPA_ENTRADA}' | CDP {args.cdp} ===")
         ops = listar(ctx)
 
     if not ops:

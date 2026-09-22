@@ -16,7 +16,7 @@ O que faz (tudo GET/POST de leitura, nada de escrita):
   4. tenta abrir cada link e dizer se ali tem tabela de assinantes;
   5. mostra o que o parser heuristico (checagem_docs.parse_assinantes) extraiu.
 
-Uso (rodar da RAIZ, com a sessao R7 no ar):
+Uso (rodar da RAIZ, com a sessao deste job no ar):
   python finalizar_operacao/mapear_assinaturas.py --op 64743
   python finalizar_operacao/mapear_assinaturas.py --op 64743 --cdp 9222 --so-aditivo
 
@@ -29,7 +29,7 @@ import sys
 
 _AQUI = os.path.dirname(os.path.abspath(__file__))
 _RAIZ = os.path.dirname(_AQUI)
-for _p in (_AQUI, os.path.join(_RAIZ, "robo3")):
+for _p in (_AQUI,):
     if _p not in sys.path:
         sys.path.insert(0, _p)
 
@@ -66,12 +66,12 @@ def main():
             browser = p.chromium.connect_over_cdp(f"http://127.0.0.1:{args.cdp}")
         except Exception as e:
             print(f"[ERRO] CDP {args.cdp} nao responde: {e}\n"
-                  "       Suba a sessao: python finalizar_operacao/sessao_r7.py")
+                  "       Sem Chrome deste job no ar: a sessao so existe durante uma rodada (smart_sessao.sessao)")
             return 2
         ctx = browser.contexts[0]
 
         print("  fazendo SSO no doc2you...")
-        cd.sso_doc2you(ctx)   # versao robusta do R7 (o vd.sso_doc2you estoura timeout)
+        cd.sso_doc2you(ctx)   # versao robusta deste job (o vd.sso_doc2you estoura timeout)
 
         docs, html = cd._consultar(ctx, args.op)
         print(f"  lista salva em {_salvar(f'doc2you_op{args.op}_lista.html', html)}")

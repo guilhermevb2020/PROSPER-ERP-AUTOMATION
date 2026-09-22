@@ -4,7 +4,7 @@ estado_no_smart.py - a operacao FOI finalizada? Pergunta ao SMART, nao ao banco.
 
 Por que existe: a confirmacao pelo espelho do Postgres (`confirmar_no_banco`)
 deu FALSO NEGATIVO na 1a finalizacao real (op 64997, 01/09/2026) - o espelho NAO
-e instantaneo. O robo entao reportou "falha ao finalizar" numa operacao que
+e instantaneo. O job entao reportou "falha ao finalizar" numa operacao que
 tinha finalizado, e por isso nao mandou os avisos nem registrou o CSV.
 O Smart atualiza na hora, entao a fonte da verdade e ele.
 

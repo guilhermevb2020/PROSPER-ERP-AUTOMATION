@@ -423,7 +423,7 @@ def _pagina_busca(ctx):
 # frame 'pesq', que troca de documento. ANTES da 1a pesquisa esse frame ja mostra as 10
 # operacoes mais recentes, de QUALQUER etapa e das duas securitizadoras. Com a espera
 # fixa de 1,5 s, quando o Smart demorava, a leitura pegava essa tabela (9x no credito em
-# 22/09) e o robo processava operacao de outra etapa: 65854 e 65877 sairam de
+# 22/09) e o job processava operacao de outra etapa: 65854 e 65877 sairam de
 # 'Aguardando Ass.' para 'Analise de credito', com a classe de risco dos titulos trocada.
 # Agora: (1) so le depois que o frame de resultado troca de documento; (2) so devolve a
 # linha cuja coluna Etapa e a pesquisada. Sem a coluna, nada e devolvido: quem consome

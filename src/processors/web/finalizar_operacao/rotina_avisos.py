@@ -1,20 +1,20 @@
 # -*- coding: utf-8 -*-
 """
-rotina_avisos.py - os avisos que acompanham o DIA do Robo 7, alem do aviso de cada op.
+rotina_avisos.py - os avisos que acompanham o DIA do job finalizar_operacao, alem do aviso de cada op.
 
   PIX confirmado pelo banco -> GESTAO: um aviso por rodada com os PIX de ops finalizadas
-                               pelo robo que o retorno trouxe com ocorrencia 00.
+                               pelo job que o retorno trouxe com ocorrencia 00.
   PIX recusado              -> OPERACIONAL, por op: o retorno veio com outro codigo.
-  PIX que nao saiu          -> OPERACIONAL, por op: finalizada pelo robo ha mais de
+  PIX que nao saiu          -> OPERACIONAL, por op: finalizada pelo job ha mais de
                                R7_PIX_ATRASO_MIN min sem retorno; ultima chamada na rodada
                                do resumo do dia.
   pronta depois do corte    -> OPERACIONAL, por op: passou em tudo depois do limite de
-                               hora (18:30), quando o robo nao clica mais.
+                               hora (18:30), quando o job nao clica mais.
   assinaturas paradas       -> OPERACIONAL, nos horarios de R7_RESUMO_ASSINATURAS_HORAS
                                (11:00 e 15:00): quem falta assinar e desde quando.
   resumo do dia             -> GESTAO, na primeira rodada a partir de R7_RESUMO_DIA_HORA.
 
-Por que existe (22/09/2026): o robo avisava "finalizada" e ninguem confirmava o PIX; os
+Por que existe (22/09/2026): o job avisava "finalizada" e ninguem confirmava o PIX; os
 dois primeiros PIX dele so sairam porque alguem gerou a remessa a mao durante a
 manutencao do hub. O relatorio do Financeiro das 18:30 pega op nao paga, mas a ultima
 remessa sai 18:55 - sobra pouco tempo para corrigir.
@@ -22,7 +22,7 @@ remessa sai 18:55 - sobra pouco tempo para corrigir.
 Tudo exige --avisar no comando e sai por WhatsApp (R7_WHATSAPP_ATIVO). GESTAO e
 R7_WHATSAPP_DESTINO; OPERACIONAL e R7_WHATSAPP_DESTINO_OPERACIONAL (numero ou id de grupo).
 Estado em rotina_avisos.json (bind de src/, gitignorado): o que ja foi avisado, os
-retornos ja lidos e quando cada op apareceu na fila. As ops finalizadas pelo robo ficam em
+retornos ja lidos e quando cada op apareceu na fila. As ops finalizadas pelo job ficam em
 finalizadas_pix.jsonl, com CPF/CNPJ e valor de cada linha de pagamento - e o que casa com
 o retorno do banco.
 """
@@ -128,7 +128,7 @@ def _hm(iso):
 
 
 def _rodape(agora):
-    return f"_{agora:%d/%m %H:%M} · Robô 7_"
+    return f"_{agora:%d/%m %H:%M} · finalizar operação_"
 
 
 def _enviar(texto, destinos):
@@ -139,7 +139,7 @@ def _enviar(texto, destinos):
 
 
 # --------------------------------------------------------------------------- #
-# ops finalizadas pelo robo (o lado "nosso" do casamento com o retorno do banco)
+# ops finalizadas pelo job (o lado "nosso" do casamento com o retorno do banco)
 # --------------------------------------------------------------------------- #
 def registrar_finalizada(op, cedente, valor, linhas_pagamento, quando=None):
     linhas = [{"documento": pix_retorno.documento_normalizado(lin.get("cpf_cnpj")),
@@ -251,7 +251,7 @@ def texto_pix_recusado(f, achados, agora):
         f"❌ *PIX da operação {f['op']} foi recusado pelo banco*",
         f"{_curto(f.get('cedente'), 40)} · {brl(_valor_total(f))}",
         f"Ocorrência no retorno: {explica}",
-        f"O robô finalizou às {_hm(f.get('quando'))}. Corrija o cadastro no Smart e refaça o "
+        f"A automação finalizou às {_hm(f.get('quando'))}. Corrija o cadastro no Smart e refaça o "
         "pagamento.",
         "", _rodape(agora)])
 
@@ -262,7 +262,7 @@ def texto_pix_atrasado(f, minutos, final, agora):
     return "\n".join([
         titulo,
         f"{_curto(f.get('cedente'), 40)} · {brl(_valor_total(f))}",
-        f"Finalizada pelo robô às {_hm(f.get('quando'))}, há {minutos:.0f} min, e o banco "
+        f"Finalizada pela automação às {_hm(f.get('quando'))}, há {minutos:.0f} min, e o banco "
         "ainda não devolveu o retorno.",
         "Confira se o pagamento está pendente em Financeiro › Pagamento BMP. A última "
         "remessa do dia sai às 18:55.",
@@ -277,7 +277,7 @@ def texto_corte(op, cedente, valor, agora):
     return "\n".join([
         f"⏰ *Operação {op} ficou pronta depois das {limite}*",
         f"{_curto(cedente, 40)} · {brl(valor)}",
-        "O robô não finaliza depois desse horário, para o PIX não sair amanhã com a data "
+        "A automação não finaliza depois desse horário, para o PIX não sair amanhã com a data "
         "de hoje. Se o pagamento precisa sair hoje, finalize à mão até 18:50; a última "
         "remessa sai às 18:55.",
         "", _rodape(agora)])
@@ -392,15 +392,15 @@ def _na_fila_agora(laudos):
 
 
 def finalizadas_por_operador(est, laudos, finalizadas, hoje, etapa_de, log=print):
-    """Ops que o robo viu na fila HOJE, que sairam dela sem ele finalizar e que o Smart
+    """Ops que o job viu na fila HOJE, que sairam dela sem ele finalizar e que o Smart
     mostra 'Concluída'. None se nao da para consultar."""
     if etapa_de is None:
         return None
     dia = hoje.isoformat()
     na_fila = {str(l.get("op")) for l in laudos or []}
-    do_robo = {f["op"] for f in finalizadas}
+    do_job = {f["op"] for f in finalizadas}
     saiu = [op for op, quando in est["visto"].items()
-            if quando.startswith(dia) and op not in na_fila and op not in do_robo]
+            if quando.startswith(dia) and op not in na_fila and op not in do_job]
     contagem = 0
     for op in sorted(saiu)[:_MAX_CONSULTAS_ETAPA]:
         try:
@@ -415,8 +415,8 @@ def finalizadas_por_operador(est, laudos, finalizadas, hoje, etapa_de, log=print
 
 def texto_resumo_dia(finalizadas, situacoes, operador, laudos, agora):
     total = sum(_valor_total(f) or 0 for f in finalizadas)
-    linhas = [f"📊 *Robô 7 · resumo de {agora:%d/%m}*", "",
-              f"✅ Finalizadas pelo robô: {len(finalizadas)} · {brl(total)}"]
+    linhas = [f"📊 *Finalizar operação · resumo de {agora:%d/%m}*", "",
+              f"✅ Finalizadas pela automação: {len(finalizadas)} · {brl(total)}"]
     for f in finalizadas[:_MAX_LISTA]:
         linhas.append(f"  • {f['op']} {_curto(f.get('cedente'), 22)} · {brl(_valor_total(f))}"
                       f" · {_SITUACAO_PIX.get(situacoes.get(f['op']), 'PIX ?')}")
@@ -453,7 +453,7 @@ def depois_do_ciclo(laudos, nuvem=None, etapa_de=None, registrar=None, anotar=No
     limite_dia = _hora(cfg.RESUMO_DIA_HORA)
     ultima_chamada = limite_dia is not None and agora.time() >= limite_dia
 
-    # ---- PIX das ops finalizadas pelo robo --------------------------------
+    # ---- PIX das ops finalizadas pelo job --------------------------------
     finalizadas = finalizadas_do_dia(hoje)
     situacoes = {}
     if finalizadas and nuvem is not None:
@@ -516,6 +516,6 @@ def depois_do_ciclo(laudos, nuvem=None, etapa_de=None, registrar=None, anotar=No
         if ok:
             est["resumos"][chave_dia] = agora.isoformat(timespec="seconds")
         if anotar:
-            anotar("resumo_dia", {"finalizadas_robo": len(finalizadas), "operador": operador, "ok": ok})
+            anotar("resumo_dia", {"finalizadas_job": len(finalizadas), "operador": operador, "ok": ok})
 
     salvar_estado(est)

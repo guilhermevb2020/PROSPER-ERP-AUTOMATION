@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-checagem_pagamento.py - CHECAGEM 2 do Robo 7: a FORMA DE PAGAMENTO da operacao
+checagem_pagamento.py - CHECAGEM 2 do job finalizar_operacao: a FORMA DE PAGAMENTO da operacao
 esta corretamente preenchida?
 
 A grade fica em operacao/gridpagamentodinheirocheque.php?op=<op>&ced=<ced>,

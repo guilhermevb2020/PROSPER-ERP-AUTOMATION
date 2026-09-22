@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-notificar_whatsapp.py - canal de WhatsApp do robo de finalizar operacao.
+notificar_whatsapp.py - canal de WhatsApp do job finalizar_operacao.
 
 ADAPTADO AO SERVIDOR em 02/09/2026. O pacote de origem tinha tres providers e
 o default era `baileys_local` - um bot Node na maquina Windows do autor, que
@@ -91,7 +91,7 @@ def enviar(texto, destinos=None, provider=None):
 
 
 def main():
-    ap = argparse.ArgumentParser(description="Canal WhatsApp do robo de finalizar.")
+    ap = argparse.ArgumentParser(description="Canal WhatsApp do job finalizar_operacao.")
     ap.add_argument("--teste", action="store_true", help="manda uma mensagem de teste")
     ap.add_argument("--para", default="", help="numero(s) separados por virgula")
     ap.add_argument("--provider", default="", help="evolution | arquivo | nenhum")
@@ -109,7 +109,7 @@ def main():
     if not args.teste:
         print("\n(use --teste para enviar de verdade)")
         return 0
-    texto = args.texto or ("[TESTE] Robo de finalizar operacao - canal de WhatsApp "
+    texto = args.texto or ("[TESTE] finalizar operação - canal de WhatsApp "
                            "funcionando. Este e o aviso das finalizacoes.")
     destinos = [d.strip() for d in args.para.split(",") if d.strip()] or None
     n, res = enviar(texto, destinos, args.provider or None)

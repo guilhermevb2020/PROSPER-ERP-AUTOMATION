@@ -1,10 +1,10 @@
 # -*- coding: utf-8 -*-
 """
-test_finalizar_rotina_avisos.py - a rotina de avisos do Robo 7: PIX confirmado pelo banco,
+test_finalizar_rotina_avisos.py - a rotina de avisos do job finalizar_operacao: PIX confirmado pelo banco,
 PIX recusado ou que nao saiu, op pronta depois do corte, assinaturas paradas e resumo do
 dia. Cada aviso sai UMA vez, para o publico certo (gestao x operacional), no horario certo.
 
-Por que existe: em 22/09/2026 o robo avisava "finalizada" e ninguem confirmava o PIX; os
+Por que existe: em 22/09/2026 o job avisava "finalizada" e ninguem confirmava o PIX; os
 dois primeiros so sairam porque alguem gerou a remessa a mao durante a manutencao do hub.
 
 Sem rede: o Nextcloud e o WhatsApp sao dubles; os retornos CNAB-240 sao montados aqui.
@@ -249,7 +249,7 @@ def test_resumo_do_dia_uma_vez_com_os_numeros(r):
     _finalizar(r, "65879", "SPEED PACK", "12345678000190", 12659.99, datetime(2026, 9, 22, 15, 46))
     nuvem = _Nuvem({("_PROCESSADOS", "CP2209000505.RET"):
                     _retorno(("SPEED PACK", "951838", 12659.99, "00", "12345678000190"))})
-    # 65860 foi vista na fila de manha e saiu sem o robo: o Smart diz Concluida
+    # 65860 foi vista na fila de manha e saiu sem o job: o Smart diz Concluida
     r.depois_do_ciclo([{"op": "65860", "acao": "aguardando assinatura", "pendencias": ["x"]}],
                       None, agora=datetime(2026, 9, 22, 9, 0))
     fila = [dict(_ESPERANDO[0]), {"op": "65873", "cedente": "F4", "acao": "avisar",
@@ -262,7 +262,7 @@ def test_resumo_do_dia_uma_vez_com_os_numeros(r):
     resumos = [t for t in _para(r, GESTAO) if "resumo de 22/09" in t]
     assert len(resumos) == 1
     texto = resumos[0]
-    assert "Finalizadas pelo robô: 1 · R$ 12.659,99" in texto and "PIX confirmado" in texto
+    assert "Finalizadas pela automação: 1 · R$ 12.659,99" in texto and "PIX confirmado" in texto
     assert "Finalizadas por operador: 1" in texto
     assert "esperando assinatura: 1" in texto and "pagamento travado: 1 (65873)" in texto
 
@@ -297,7 +297,7 @@ class _Ctx:
 
 
 @pytest.fixture
-def robo(monkeypatch, tmp_path):
+def job(monkeypatch, tmp_path):
     monkeypatch.setenv("R7_DRY_RUN", "0")
     monkeypatch.setenv("DEBUG_DIR_R7", str(tmp_path))
     for p in (str(RAIZ), str(PACOTE)):
@@ -324,33 +324,33 @@ def robo(monkeypatch, tmp_path):
     return mod
 
 
-def test_op_finalizada_entra_na_lista_do_pix(robo, monkeypatch):
-    monkeypatch.setattr(robo.cfg, "_agora", lambda: datetime(2026, 9, 22, 15, 46))
-    monkeypatch.setattr(robo.fin, "finalizar_da_grade", lambda *a, **k: {
+def test_op_finalizada_entra_na_lista_do_pix(job, monkeypatch):
+    monkeypatch.setattr(job.cfg, "_agora", lambda: datetime(2026, 9, 22, 15, 46))
+    monkeypatch.setattr(job.fin, "finalizar_da_grade", lambda *a, **k: {
         "ok": True, "situacao": "finalizada", "detalhe": "Smart confirma", "dialogos": []})
     registros = []
-    monkeypatch.setattr(robo.rotina_avisos, "registrar_finalizada",
+    monkeypatch.setattr(job.rotina_avisos, "registrar_finalizada",
                         lambda op, cedente, valor, linhas: registros.append((op, cedente, linhas)))
-    robo.processar(_Ctx(), "65879", executar=True, mandar_email=True, execucao=object())
+    job.processar(_Ctx(), "65879", executar=True, mandar_email=True, execucao=object())
     assert registros and registros[0][0] == "65879"
     assert registros[0][2][0]["cpf_cnpj"] == "12.345.678/0001-90"
 
 
 @pytest.mark.parametrize("mandar, esperado", [(True, 1), (False, 0)])
-def test_pronta_depois_do_corte_avisa_so_com_avisar(robo, monkeypatch, mandar, esperado):
-    monkeypatch.setattr(robo.cfg, "_agora", lambda: datetime(2026, 9, 22, 18, 35))
-    monkeypatch.setattr(robo.fin, "finalizar_da_grade", lambda *a, **k: pytest.fail("depois do corte nao clica"))
+def test_pronta_depois_do_corte_avisa_so_com_avisar(job, monkeypatch, mandar, esperado):
+    monkeypatch.setattr(job.cfg, "_agora", lambda: datetime(2026, 9, 22, 18, 35))
+    monkeypatch.setattr(job.fin, "finalizar_da_grade", lambda *a, **k: pytest.fail("depois do corte nao clica"))
     cortes = []
-    monkeypatch.setattr(robo.rotina_avisos, "avisar_corte",
+    monkeypatch.setattr(job.rotina_avisos, "avisar_corte",
                         lambda op, cedente, valor, registrar=None: cortes.append((op, valor)))
-    laudo = robo.processar(_Ctx(), "65873", executar=True, mandar_email=mandar, execucao=object())
+    laudo = job.processar(_Ctx(), "65873", executar=True, mandar_email=mandar, execucao=object())
     assert laudo["acao"] == "finalizaria (fora da janela de horario)"
     assert len(cortes) == esperado
     if cortes:
         assert cortes[0] == ("65873", 12659.99), "sem valor no espelho, usa a soma da grade"
 
 
-def test_rotina_da_rodada_nunca_derruba(robo, monkeypatch):
+def test_rotina_da_rodada_nunca_derruba(job, monkeypatch):
     import src.common.clients.nextcloud_webdav as nc
     monkeypatch.setattr(nc, "NextcloudWebDAV", lambda **k: object())
     chamadas = []
@@ -359,7 +359,7 @@ def test_rotina_da_rodada_nunca_derruba(robo, monkeypatch):
         chamadas.append(k)
         raise RuntimeError("Nextcloud fora")
 
-    monkeypatch.setattr(robo.rotina_avisos, "depois_do_ciclo", _explode)
-    robo._rotina_de_avisos(_Ctx(), [], execucao=None)       # nao levanta
+    monkeypatch.setattr(job.rotina_avisos, "depois_do_ciclo", _explode)
+    job._rotina_de_avisos(_Ctx(), [], execucao=None)       # nao levanta
     assert chamadas and chamadas[0]["registrar"] is None and chamadas[0]["anotar"] is None
     assert callable(chamadas[0]["etapa_de"])

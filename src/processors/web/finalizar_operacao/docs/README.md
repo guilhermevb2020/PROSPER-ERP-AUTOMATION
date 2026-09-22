@@ -5,7 +5,7 @@ verificações, finaliza no Smart. Se não passar, **não finaliza** e avisa.
 
 > ⚠️ **Estado (22/09/2026): EM PRODUÇÃO, por decisão do usuário.** Desde 14:37 a task
 > `finalizar_operacao_aguardando_assinatura` (`*/15 8-18 * * 1-5`) roda com `--executar`
-> e o `.env` tem `R7_DRY_RUN=0`: as duas trancas estão abertas e o robô **clica** em
+> e o `.env` tem `R7_DRY_RUN=0`: as duas trancas estão abertas e o job **clica** em
 > Finalizar quando as checagens passam, a etapa lida no Smart é a de entrada e o
 > relógio não passou de `R7_HORA_LIMITE_FINALIZAR` (18:30). Voltar ao DRY é fechar
 > **uma** tranca: tirar `--executar` da task **ou** `R7_DRY_RUN=1`.
@@ -13,13 +13,13 @@ verificações, finaliza no Smart. Se não passar, **não finaliza** e avisa.
 > **Primeiras finalizações reais, 22/09:** 65879 às 15:46 e 65876 às 15:47, as duas
 > `Concluída` no Smart. Os dois PIX (R$ 12.659,99 e R$ 27.424,40) voltaram
 > `Liquidado` no retorno `CP2209000505.RET`, importado às 15:58. A remessa deles não foi
-> a do robô: o hub ficou em manutenção das 15:48 às 15:53 (deploy do
+> a do job: o hub ficou em manutenção das 15:48 às 15:53 (deploy do
 > `process-automation`) e a remessa foi gerada fora dele. Antes disso, nenhum clique: as
 > rodadas das 14:45 e 15:15 só tinham operações sem assinatura, e as seis que passaram às
 > 15:00 já tinham sido finalizadas pelos operadores e pagas das 12:50 às 14:45 (vieram na
 > tabela errada da fila, ver "Armadilhas medidas"). **Enquanto os operadores finalizarem
-> à mão, eles podem chegar antes**: o robô passa a cada 15 min. Mas nem sempre chegam:
-> ainda em DRY, o robô deu `PASSARIA` para XAVANTES (65864) e COTRI (65871) desde 13:45
+> à mão, eles podem chegar antes**: o job passa a cada 15 min. Mas nem sempre chegam:
+> ainda em DRY, o job deu `PASSARIA` para XAVANTES (65864) e COTRI (65871) desde 13:45
 > de 22/09, e um operador só as finalizou perto de 14:20 e 14:40 (pagas nessas remessas).
 
 Origem: pacote trazido de uma máquina Windows em 01/09/2026, adaptado aqui.
@@ -105,7 +105,7 @@ Tudo, menos o aviso de finalização, exige `--avisar` no comando da task.
 
 | o que aconteceu | aviso | para quem | quando |
 |---|---|---|---|
-| op finalizada pelo robô | WhatsApp | gestão | na hora |
+| op finalizada pela automação | WhatsApp | gestão | na hora |
 | **PIX confirmado pelo banco** | WhatsApp, uma lista por rodada | gestão | quando o retorno chega (uns 7 min depois) |
 | **PIX recusado** pelo banco | WhatsApp, por op, com o código | operacional | na rodada em que o retorno chega |
 | **PIX que não saiu** | WhatsApp, por op | operacional | `R7_PIX_ATRASO_MIN` (30 min) sem retorno; última chamada na rodada do resumo do dia |
@@ -115,7 +115,7 @@ Tudo, menos o aviso de finalização, exige `--avisar` no comando da task.
 | **resumo do dia** | WhatsApp | gestão | primeira rodada depois de `R7_RESUMO_DIA_HORA` (18:40) |
 | esperando assinatura, por op | **nenhum** | — | — |
 
-**Como o robô sabe que o PIX saiu.** Quando ele finaliza, guarda o CPF/CNPJ e o valor de cada
+**Como o job sabe que o PIX saiu.** Quando ele finaliza, guarda o CPF/CNPJ e o valor de cada
 linha de pagamento em `finalizadas_pix.jsonl`. A cada rodada lê os retornos CNAB-240 do dia no
 Nextcloud (`_RETORNOS` e `_PROCESSADOS`, os mesmos que o `retorno_pagamento` importa) e casa por
 documento e valor exato; ocorrência `00` é crédito efetivado. Medido em 22/09/2026 sobre 412
@@ -229,13 +229,13 @@ custo, até a trava de etapa: em DRY, `PASSARIA` para operação já paga; em mo
 mas eram horas antes). **O risco**, com o clique ligado: operação que o operador tirou
 da etapa de propósito, com tudo pronto, ao alcance do Finalizar. Desde 22/09 15:36 a
 etapa é lida no Smart **antes de abrir a grade**: a opção marcada no `<select
-id="etapaOperacao">` do HTML da tela de edição, a mesma que o robô já baixa por HTTP.
+id="etapaOperacao">` do HTML da tela de edição, a mesma que o job já baixa por HTTP.
 Fora da etapa de entrada, ou sem leitura, não finaliza (teste `test_finalizar_trava_etapa`).
 Conferido no Smart em 22/09 15:35: 65879 e 65877 em `Aguardando Ass.`; 65875 e 65846,
 já pagas, em `Concluída`, que é para onde a operação vai ao ser finalizada. Desde 22/09
 16:21 a própria consulta espera o frame de resultado recarregar e confere a coluna Etapa
 de cada linha (ver `credito/_ESTADO_E_PROXIMOS_PASSOS.md`, que tem o dano que a tabela
-errada causou no robô de crédito); a leitura da etapa na operação ficou como segunda
+errada causou no job de crédito); a leitura da etapa na operação ficou como segunda
 barreira.
 
 **Pelo DOM a etapa some depois da grade.** O formulário de edição mora no frame

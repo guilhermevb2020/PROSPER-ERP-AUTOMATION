@@ -6,7 +6,7 @@ depois da hora, em QUALQUER caminho, e o processar() nem registra a intencao de 
 Por que existe: a remessa de pagamento sai a cada 5 min ate 18:55 e exige vencimento =
 hoje. Operacao finalizada depois do limite so entra na remessa de amanha, com o
 vencimento de ontem. Pendencia do README desde 21/09/2026; fechada em 22/09/2026 ao
-tirar o robo do DRY.
+tirar o job do DRY.
 
 Sem navegador: grade, botao, Smart e doc2you sao dubles. Nenhum teste fala com o Smart.
 """
@@ -192,38 +192,38 @@ def _grade_ok(pg, op, log=print):
 
 def _armar_processar(monkeypatch, hhmm):
     fin = _importar(monkeypatch)
-    robo = importlib.import_module("finalizar_operacao")
-    assert robo.fin is fin and robo.cfg is fin.cfg
+    job = importlib.import_module("finalizar_operacao")
+    assert job.fin is fin and job.cfg is fin.cfg
     _relogio(fin, monkeypatch, hhmm)
-    monkeypatch.setattr(robo, "_dados_da_operacao", lambda ctx, op: (["DUR"], "CEDENTE X", 1000.0))
-    monkeypatch.setattr(robo.checagem_docs, "conferir", _docs_ok)
-    monkeypatch.setattr(robo.checagem_docs, "_ROTULO", {"contrato": "Contrato"})
-    monkeypatch.setattr(robo.checagem_pagamento, "conferir", _grade_ok)
-    monkeypatch.setattr(robo.cfg, "PAGAMENTO_SO_APOS_ASSINATURAS", True)
-    monkeypatch.setattr(robo, "_etapa_da_operacao", lambda ctx, op: "Aguardando Ass.")
+    monkeypatch.setattr(job, "_dados_da_operacao", lambda ctx, op: (["DUR"], "CEDENTE X", 1000.0))
+    monkeypatch.setattr(job.checagem_docs, "conferir", _docs_ok)
+    monkeypatch.setattr(job.checagem_docs, "_ROTULO", {"contrato": "Contrato"})
+    monkeypatch.setattr(job.checagem_pagamento, "conferir", _grade_ok)
+    monkeypatch.setattr(job.cfg, "PAGAMENTO_SO_APOS_ASSINATURAS", True)
+    monkeypatch.setattr(job, "_etapa_da_operacao", lambda ctx, op: "Aguardando Ass.")
     cliques, eventos = [], []
-    monkeypatch.setattr(robo.fin, "finalizar_da_grade",
+    monkeypatch.setattr(job.fin, "finalizar_da_grade",
                         lambda pg, op, aceitar_dialogos=None, log=print: (cliques.append(str(op)) or
                         {"ok": True, "situacao": "finalizada", "detalhe": "Smart confirma", "dialogos": []}))
-    monkeypatch.setattr(robo.execucao_job, "registrar_evento_operacao",
+    monkeypatch.setattr(job.execucao_job, "registrar_evento_operacao",
                         lambda ex, op, tipo, **kw: eventos.append(tipo))
-    monkeypatch.setattr(robo, "_registrar_finalizada", lambda op, cedente: None)
-    monkeypatch.setattr(robo, "_avisar_finalizacao",
+    monkeypatch.setattr(job, "_registrar_finalizada", lambda op, cedente: None)
+    monkeypatch.setattr(job, "_avisar_finalizacao",
                         lambda op, cedente, valor, detalhes, confirmacao, execucao=None: None)
-    return robo, cliques, eventos
+    return job, cliques, eventos
 
 
 def test_processar_fora_da_janela_nao_clica_nem_registra_intencao(monkeypatch):
-    robo, cliques, eventos = _armar_processar(monkeypatch, "18:31")
-    laudo = robo.processar(_Ctx(), "65071", executar=True, execucao=object())
+    job, cliques, eventos = _armar_processar(monkeypatch, "18:31")
+    laudo = job.processar(_Ctx(), "65071", executar=True, execucao=object())
     assert cliques == [] and eventos == [], "fora da janela nao pode haver finalizar_clicado"
     assert laudo["acao"] == "finalizaria (fora da janela de horario)"
     assert laudo["erro"] is None and laudo["pendencias"] == []
-    assert robo._veredito(laudo) == "FINALIZARIA", "a op passou; so o clique ficou para amanha"
+    assert job._veredito(laudo) == "FINALIZARIA", "a op passou; so o clique ficou para amanha"
 
 
 def test_processar_dentro_da_janela_clica_e_registra(monkeypatch):
-    robo, cliques, eventos = _armar_processar(monkeypatch, "14:45")
-    laudo = robo.processar(_Ctx(), "65071", executar=True, execucao=object())
+    job, cliques, eventos = _armar_processar(monkeypatch, "14:45")
+    laudo = job.processar(_Ctx(), "65071", executar=True, execucao=object())
     assert cliques == ["65071"] and eventos == ["finalizar_clicado", "finalizada"]
     assert laudo["acao"] == "finalizada"

@@ -9,7 +9,7 @@ Pesquisar. Quando o Smart demora, ela le a tabela que ja estava na tela - as ~10
 operacoes mais recentes, das duas securitizadoras e de qualquer etapa. Medido 3x em
 22/09/2026 (11:00, 14:30 e 15:00), no dia em que o clique foi ligado.
 
-A etapa vem do HTML da tela de edicao (a mesma que o robo ja baixa por HTTP). Pelo DOM
+A etapa vem do HTML da tela de edicao (a mesma que o job ja baixa por HTTP). Pelo DOM
 nao serve: o form mora no frame 'stage', e o Resumir e a grade abrem nesse mesmo
 frame - a primeira versao desta trava leu o DOM depois da grade e barrou a op 65879,
 pronta, em 22/09 15:31.
@@ -44,7 +44,7 @@ _HTML_REAL = """
 
 
 @pytest.fixture
-def robo(monkeypatch):
+def job(monkeypatch):
     monkeypatch.setenv("R7_DRY_RUN", "0")
     monkeypatch.setenv("DEBUG_DIR_R7", str(RAIZ / "data" / "sandbox" / "finalizar_op" / "debug"))
     for p in (str(RAIZ), str(PACOTE)):
@@ -83,10 +83,10 @@ def _docs_ok(ctx, op, tipos, nome_cedente=None):
             "encontrados": {"contrato": {"assinados": 1, "total": 1}}}
 
 
-def _armar(robo, monkeypatch, etapa):
-    monkeypatch.setattr(robo, "_dados_da_operacao", lambda ctx, op: (["DUR"], "CEDENTE X", 1000.0))
-    monkeypatch.setattr(robo.checagem_docs, "conferir", _docs_ok)
-    monkeypatch.setattr(robo.checagem_docs, "_ROTULO", {"contrato": "Contrato"})
+def _armar(job, monkeypatch, etapa):
+    monkeypatch.setattr(job, "_dados_da_operacao", lambda ctx, op: (["DUR"], "CEDENTE X", 1000.0))
+    monkeypatch.setattr(job.checagem_docs, "conferir", _docs_ok)
+    monkeypatch.setattr(job.checagem_docs, "_ROTULO", {"contrato": "Contrato"})
     grades = []
 
     def _grade_ok(pg, op, log=print):
@@ -95,16 +95,16 @@ def _armar(robo, monkeypatch, etapa):
             {"_linha": "1", "tipo": "PIX", "cta_origem": "mp prospere", "favorecido": "F",
              "vencto": "22/09/2026", "sp": "X", "valor": "10,00"}]}
 
-    monkeypatch.setattr(robo.checagem_pagamento, "conferir", _grade_ok)
-    monkeypatch.setattr(robo, "_etapa_da_operacao", lambda ctx, op: etapa)
+    monkeypatch.setattr(job.checagem_pagamento, "conferir", _grade_ok)
+    monkeypatch.setattr(job, "_etapa_da_operacao", lambda ctx, op: etapa)
     cliques, eventos = [], []
-    monkeypatch.setattr(robo.fin, "finalizar_da_grade",
+    monkeypatch.setattr(job.fin, "finalizar_da_grade",
                         lambda pg, op, aceitar_dialogos=None, log=print: (cliques.append(str(op)) or
                         {"ok": True, "situacao": "finalizada", "detalhe": "Smart confirma", "dialogos": []}))
-    monkeypatch.setattr(robo.execucao_job, "registrar_evento_operacao",
+    monkeypatch.setattr(job.execucao_job, "registrar_evento_operacao",
                         lambda ex, op, tipo, **kw: eventos.append(tipo))
-    monkeypatch.setattr(robo, "_registrar_finalizada", lambda op, cedente: None)
-    monkeypatch.setattr(robo, "_avisar_finalizacao",
+    monkeypatch.setattr(job, "_registrar_finalizada", lambda op, cedente: None)
+    monkeypatch.setattr(job, "_avisar_finalizacao",
                         lambda op, cedente, valor, detalhes, confirmacao, execucao=None: None)
     return cliques, eventos, grades
 
@@ -112,48 +112,48 @@ def _armar(robo, monkeypatch, etapa):
 # --------------------------------------------------------------------------- #
 # processar(): a porta
 # --------------------------------------------------------------------------- #
-def test_fora_da_etapa_nao_abre_grade_nem_clica_nem_registra_intencao(robo, monkeypatch):
-    cliques, eventos, grades = _armar(robo, monkeypatch, "Análise de crédito")
+def test_fora_da_etapa_nao_abre_grade_nem_clica_nem_registra_intencao(job, monkeypatch):
+    cliques, eventos, grades = _armar(job, monkeypatch, "Análise de crédito")
     ctx = _Ctx()
-    laudo = robo.processar(ctx, "65871", executar=True, execucao=object())
+    laudo = job.processar(ctx, "65871", executar=True, execucao=object())
     assert grades == [] and ctx.paginas == 0, "fora da etapa nem a grade e aberta"
     assert cliques == [] and eventos == [], "fora da etapa nao pode haver finalizar_clicado"
     assert laudo["etapa"] == "Análise de crédito"
     assert laudo["acao"] == "fora da etapa (nao finaliza)"
     assert laudo["pagamento_conferido"] is False
-    assert robo._veredito(laudo) == "BARRADA"
+    assert job._veredito(laudo) == "BARRADA"
     assert any("Análise de crédito" in p and "Aguardando Ass." in p for p in laudo["pendencias"])
 
 
-def test_etapa_ilegivel_fecha_a_porta(robo, monkeypatch):
-    cliques, eventos, grades = _armar(robo, monkeypatch, None)
-    laudo = robo.processar(_Ctx(), "65871", executar=True, execucao=object())
+def test_etapa_ilegivel_fecha_a_porta(job, monkeypatch):
+    cliques, eventos, grades = _armar(job, monkeypatch, None)
+    laudo = job.processar(_Ctx(), "65871", executar=True, execucao=object())
     assert grades == [] and cliques == [] and eventos == []
-    assert laudo["etapa"] is None and robo._veredito(laudo) == "BARRADA"
+    assert laudo["etapa"] is None and job._veredito(laudo) == "BARRADA"
     assert any("nao consegui ler a etapa" in p for p in laudo["pendencias"])
 
 
 @pytest.mark.parametrize("etapa", ["Aguardando Ass.", "AGUARDANDO ASS", "  aguardando   ass. "])
-def test_na_etapa_de_entrada_o_clique_acontece(robo, monkeypatch, etapa):
-    cliques, eventos, grades = _armar(robo, monkeypatch, etapa)
-    laudo = robo.processar(_Ctx(), "65871", executar=True, execucao=object())
+def test_na_etapa_de_entrada_o_clique_acontece(job, monkeypatch, etapa):
+    cliques, eventos, grades = _armar(job, monkeypatch, etapa)
+    laudo = job.processar(_Ctx(), "65871", executar=True, execucao=object())
     assert grades == ["65871"] and cliques == ["65871"]
     assert eventos == ["finalizar_clicado", "finalizada"]
     assert laudo["acao"] == "finalizada"
 
 
-def test_em_dry_a_etapa_tambem_barra(robo, monkeypatch):
+def test_em_dry_a_etapa_tambem_barra(job, monkeypatch):
     """No DRY o veredito precisa ser o mesmo do modo real: fora da etapa e BARRADA."""
-    cliques, _, _ = _armar(robo, monkeypatch, "Finalizada")
-    laudo = robo.processar(_Ctx(), "65871", executar=False, execucao=None)
-    assert cliques == [] and robo._veredito(laudo) == "BARRADA"
+    cliques, _, _ = _armar(job, monkeypatch, "Finalizada")
+    laudo = job.processar(_Ctx(), "65871", executar=False, execucao=None)
+    assert cliques == [] and job._veredito(laudo) == "BARRADA"
 
 
-def test_etapa_vai_para_a_avaliacao_registrada(robo, monkeypatch):
+def test_etapa_vai_para_a_avaliacao_registrada(job, monkeypatch):
     registros = []
-    monkeypatch.setattr(robo.execucao_job, "registrar_evento_operacao",
+    monkeypatch.setattr(job.execucao_job, "registrar_evento_operacao",
                         lambda ex, op, tipo, **kw: registros.append((tipo, kw)))
-    robo._registrar_avaliacao(object(), {"op": "1", "pendencias": ["x"], "etapa": "Finalizada",
+    job._registrar_avaliacao(object(), {"op": "1", "pendencias": ["x"], "etapa": "Finalizada",
                                          "detalhes": {}})
     assert registros[0][0] == "avaliada" and registros[0][1]["detalhe"]["etapa"] == "Finalizada"
 
@@ -161,8 +161,8 @@ def test_etapa_vai_para_a_avaliacao_registrada(robo, monkeypatch):
 # --------------------------------------------------------------------------- #
 # leitura: do HTML da tela de edicao
 # --------------------------------------------------------------------------- #
-def test_etapa_do_html_real(robo):
-    assert robo._etapa_do_html(_HTML_REAL) == "Aguardando Ass."
+def test_etapa_do_html_real(job):
+    assert job._etapa_do_html(_HTML_REAL) == "Aguardando Ass."
 
 
 @pytest.mark.parametrize("html, esperado", [
@@ -177,8 +177,8 @@ def test_etapa_do_html_real(robo):
     ("", None),
     (None, None),
 ])
-def test_etapa_do_html_casos(robo, html, esperado):
-    assert robo._etapa_do_html(html) == esperado
+def test_etapa_do_html_casos(job, html, esperado):
+    assert job._etapa_do_html(html) == esperado
 
 
 def _smart_falso(monkeypatch, resposta=None, levanta=False):
@@ -198,24 +198,24 @@ def _smart_falso(monkeypatch, resposta=None, levanta=False):
     return pedidos
 
 
-def test_etapa_da_operacao_le_a_tela_de_edicao(robo, monkeypatch):
+def test_etapa_da_operacao_le_a_tela_de_edicao(job, monkeypatch):
     pedidos = _smart_falso(monkeypatch, resposta=(200, _HTML_REAL))
-    assert robo._etapa_da_operacao(object(), "65879") == "Aguardando Ass."
+    assert job._etapa_da_operacao(object(), "65879") == "Aguardando Ass."
     assert pedidos == ["https://smart/edit?op=65879"]
 
 
 @pytest.mark.parametrize("resposta, levanta", [((500, _HTML_REAL), False), (None, True),
                                                ((200, "<html>expira.php</html>"), False)])
-def test_etapa_da_operacao_sem_leitura_devolve_none(robo, monkeypatch, resposta, levanta):
+def test_etapa_da_operacao_sem_leitura_devolve_none(job, monkeypatch, resposta, levanta):
     _smart_falso(monkeypatch, resposta=resposta, levanta=levanta)
-    assert robo._etapa_da_operacao(object(), "65879") is None
+    assert job._etapa_da_operacao(object(), "65879") is None
 
 
-def test_mesma_etapa(robo):
-    assert robo._mesma_etapa("Aguardando Ass.", "Aguardando Ass.")
-    assert robo._mesma_etapa("AGUARDANDO ASS", "Aguardando Ass.")
-    assert not robo._mesma_etapa("Aguardando Assinatura Cedente", "Aguardando Ass.")
-    assert not robo._mesma_etapa("Enviar Digitais", "Aguardando Ass.")
-    assert not robo._mesma_etapa(None, "Aguardando Ass.")
-    assert not robo._mesma_etapa("", "Aguardando Ass.")
-    assert not robo._mesma_etapa("...", "Aguardando Ass.")
+def test_mesma_etapa(job):
+    assert job._mesma_etapa("Aguardando Ass.", "Aguardando Ass.")
+    assert job._mesma_etapa("AGUARDANDO ASS", "Aguardando Ass.")
+    assert not job._mesma_etapa("Aguardando Assinatura Cedente", "Aguardando Ass.")
+    assert not job._mesma_etapa("Enviar Digitais", "Aguardando Ass.")
+    assert not job._mesma_etapa(None, "Aguardando Ass.")
+    assert not job._mesma_etapa("", "Aguardando Ass.")
+    assert not job._mesma_etapa("...", "Aguardando Ass.")

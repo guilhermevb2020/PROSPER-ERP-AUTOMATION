@@ -21,7 +21,7 @@ PACOTE = RAIZ / "src" / "processors" / "web" / "finalizar_operacao"
 
 
 @pytest.fixture
-def robo(monkeypatch):
+def job(monkeypatch):
     monkeypatch.setenv("R7_DRY_RUN", "1")
     monkeypatch.setenv("DEBUG_DIR_R7", str(RAIZ / "data" / "sandbox" / "finalizar_op" / "debug"))
     for p in (str(RAIZ), str(PACOTE)):
@@ -53,8 +53,8 @@ class _Registro:
         return len(self.eventos) if self.registra else None
 
 
-def _armar(robo, monkeypatch, registro):
-    monkeypatch.setattr(robo.execucao_job, "registrar_evento_operacao", registro.registrar_evento_operacao)
+def _armar(job, monkeypatch, registro):
+    monkeypatch.setattr(job.execucao_job, "registrar_evento_operacao", registro.registrar_evento_operacao)
     return registro
 
 
@@ -82,31 +82,31 @@ def _grade_ok(pg, op, log=print):
          "vencto": "18/09/2026", "sp": "X", "valor": "10,00"}]}
 
 
-def _preparar_processar(robo, monkeypatch, resultado_clique):
-    monkeypatch.setattr(robo, "_dados_da_operacao", lambda ctx, op: (["DUR"], "CEDENTE X", 1000.0))
-    monkeypatch.setattr(robo.checagem_docs, "conferir", _docs_ok)
-    monkeypatch.setattr(robo.checagem_docs, "_ROTULO", {"contrato": "Contrato"})
-    monkeypatch.setattr(robo.checagem_pagamento, "conferir", _grade_ok)
-    monkeypatch.setattr(robo, "_etapa_da_operacao", lambda ctx, op: "Aguardando Ass.")
+def _preparar_processar(job, monkeypatch, resultado_clique):
+    monkeypatch.setattr(job, "_dados_da_operacao", lambda ctx, op: (["DUR"], "CEDENTE X", 1000.0))
+    monkeypatch.setattr(job.checagem_docs, "conferir", _docs_ok)
+    monkeypatch.setattr(job.checagem_docs, "_ROTULO", {"contrato": "Contrato"})
+    monkeypatch.setattr(job.checagem_pagamento, "conferir", _grade_ok)
+    monkeypatch.setattr(job, "_etapa_da_operacao", lambda ctx, op: "Aguardando Ass.")
     cliques = []
 
     def _finalizar(pg, op, aceitar_dialogos=None, log=print):
         cliques.append(str(op))
         return dict(resultado_clique)
 
-    monkeypatch.setattr(robo.fin, "finalizar_da_grade", _finalizar)
-    monkeypatch.setattr(robo, "_registrar_finalizada", lambda op, cedente: None)
+    monkeypatch.setattr(job.fin, "finalizar_da_grade", _finalizar)
+    monkeypatch.setattr(job, "_registrar_finalizada", lambda op, cedente: None)
     avisos = []
-    monkeypatch.setattr(robo, "_avisar_finalizacao",
+    monkeypatch.setattr(job, "_avisar_finalizacao",
                         lambda op, cedente, valor, detalhes, confirmacao, execucao=None: avisos.append(str(op)))
     return cliques, avisos
 
 
-def test_em_modo_real_o_clique_e_registrado_antes_e_o_resultado_depois(robo, monkeypatch):
-    reg = _armar(robo, monkeypatch, _Registro())
-    cliques, avisos = _preparar_processar(robo, monkeypatch,
+def test_em_modo_real_o_clique_e_registrado_antes_e_o_resultado_depois(job, monkeypatch):
+    reg = _armar(job, monkeypatch, _Registro())
+    cliques, avisos = _preparar_processar(job, monkeypatch,
                                           {"ok": True, "situacao": "finalizada", "detalhe": "Smart confirma", "dialogos": []})
-    laudo = robo.processar(_Ctx(), "65071", executar=True, execucao=reg)
+    laudo = job.processar(_Ctx(), "65071", executar=True, execucao=reg)
     assert laudo["acao"] == "finalizada" and cliques == ["65071"] and avisos == ["65071"]
     tipos = [t for _, t, _ in reg.eventos]
     assert tipos == ["finalizar_clicado", "finalizada"], tipos
@@ -114,47 +114,47 @@ def test_em_modo_real_o_clique_e_registrado_antes_e_o_resultado_depois(robo, mon
     assert reg.eventos[0][2]["cedente"] == "CEDENTE X" and reg.eventos[0][2]["valor_liquido"] == 1000.0
 
 
-def test_clique_que_falha_vira_finalizacao_falhou(robo, monkeypatch):
-    reg = _armar(robo, monkeypatch, _Registro())
-    cliques, avisos = _preparar_processar(robo, monkeypatch,
+def test_clique_que_falha_vira_finalizacao_falhou(job, monkeypatch):
+    reg = _armar(job, monkeypatch, _Registro())
+    cliques, avisos = _preparar_processar(job, monkeypatch,
                                           {"ok": False, "situacao": "nao_confirmou", "detalhe": "x", "dialogos": ["alert: y"]})
-    laudo = robo.processar(_Ctx(), "65071", executar=True, execucao=reg)
+    laudo = job.processar(_Ctx(), "65071", executar=True, execucao=reg)
     assert laudo["acao"].startswith("falha ao finalizar") and avisos == []
     assert [t for _, t, _ in reg.eventos] == ["finalizar_clicado", "finalizacao_falhou"]
     assert reg.eventos[1][2]["detalhe"]["dialogos"] == ["alert: y"]
 
 
-def test_operador_que_finalizou_antes_vira_finalizada_por_outro(robo, monkeypatch):
-    reg = _armar(robo, monkeypatch, _Registro())
-    _preparar_processar(robo, monkeypatch,
+def test_operador_que_finalizou_antes_vira_finalizada_por_outro(job, monkeypatch):
+    reg = _armar(job, monkeypatch, _Registro())
+    _preparar_processar(job, monkeypatch,
                         {"ok": False, "situacao": "finalizada_por_outro", "detalhe": "ja estava", "dialogos": []})
-    robo.processar(_Ctx(), "65071", executar=True, execucao=reg)
+    job.processar(_Ctx(), "65071", executar=True, execucao=reg)
     assert [t for _, t, _ in reg.eventos] == ["finalizar_clicado", "finalizada_por_outro"]
 
 
-def test_em_dry_nao_ha_clique_nem_evento_de_clique(robo, monkeypatch):
-    reg = _armar(robo, monkeypatch, _Registro())
-    cliques, _ = _preparar_processar(robo, monkeypatch, {"ok": False, "situacao": "dry", "detalhe": "", "dialogos": []})
-    laudo = robo.processar(_Ctx(), "65071", executar=False, execucao=reg)
+def test_em_dry_nao_ha_clique_nem_evento_de_clique(job, monkeypatch):
+    reg = _armar(job, monkeypatch, _Registro())
+    cliques, _ = _preparar_processar(job, monkeypatch, {"ok": False, "situacao": "dry", "detalhe": "", "dialogos": []})
+    laudo = job.processar(_Ctx(), "65071", executar=False, execucao=reg)
     assert laudo["acao"] == "finalizaria (DRY)" and cliques == []
     assert reg.eventos == [], "em DRY o unico evento e a avaliacao, registrada pelo ciclo"
 
 
-def test_em_modo_real_sem_registro_nao_ha_clique(robo, monkeypatch):
+def test_em_modo_real_sem_registro_nao_ha_clique(job, monkeypatch):
     """Sem banco em modo estrito, registrar levanta ANTES do clique: o except de
     processar guarda o erro no laudo e o botao nunca e tocado."""
-    reg = _armar(robo, monkeypatch, _Registro(registra=False, estrito=True))
-    cliques, avisos = _preparar_processar(robo, monkeypatch,
+    reg = _armar(job, monkeypatch, _Registro(registra=False, estrito=True))
+    cliques, avisos = _preparar_processar(job, monkeypatch,
                                           {"ok": True, "situacao": "finalizada", "detalhe": "", "dialogos": []})
-    laudo = robo.processar(_Ctx(), "65071", executar=True, execucao=reg)
+    laudo = job.processar(_Ctx(), "65071", executar=True, execucao=reg)
     assert cliques == [] and avisos == []
     assert laudo["erro"] and "ErroDeRegistro" in laudo["erro"]
 
 
-def test_ciclo_registra_uma_avaliacao_por_operacao_com_o_veredito(robo, monkeypatch):
-    reg = _armar(robo, monkeypatch, _Registro())
-    monkeypatch.setattr(robo.listar_fila, "listar", lambda ctx: ["1", "2", "3"])
-    monkeypatch.setattr(robo.checagem_docs, "sso_doc2you", lambda ctx: True)
+def test_ciclo_registra_uma_avaliacao_por_operacao_com_o_veredito(job, monkeypatch):
+    reg = _armar(job, monkeypatch, _Registro())
+    monkeypatch.setattr(job.listar_fila, "listar", lambda ctx: ["1", "2", "3"])
+    monkeypatch.setattr(job.checagem_docs, "sso_doc2you", lambda ctx: True)
     laudos = {
         "1": {"op": "1", "pendencias": [], "erro": None, "acao": "finalizaria (DRY)", "cedente": "A",
               "valor": 10.0, "tipos": ["DUR"], "detalhes": {"linhas_pagamento": [{"_linha": "1"}]},
@@ -164,9 +164,9 @@ def test_ciclo_registra_uma_avaliacao_por_operacao_com_o_veredito(robo, monkeypa
         "3": {"op": "3", "pendencias": [], "erro": "checagem de documentos falhou: x", "acao": None,
               "cedente": None, "tipos": [], "observacoes": []},
     }
-    monkeypatch.setattr(robo, "processar", lambda ctx, op, executar, mandar_email, execucao=None: laudos[op])
-    monkeypatch.setattr(robo, "_resumo", lambda laudos, executar: None)
-    saida = robo.ciclo(_Ctx(), executar=False, execucao=reg)
+    monkeypatch.setattr(job, "processar", lambda ctx, op, executar, mandar_email, execucao=None: laudos[op])
+    monkeypatch.setattr(job, "_resumo", lambda laudos, executar: None)
+    saida = job.ciclo(_Ctx(), executar=False, execucao=reg)
     assert len(saida) == 3
     assert [(op, t, kw["resultado"]) for op, t, kw in reg.eventos] == [
         ("1", "avaliada", "FINALIZARIA"), ("2", "avaliada", "BARRADA"), ("3", "avaliada", "ERRO")]
@@ -174,10 +174,10 @@ def test_ciclo_registra_uma_avaliacao_por_operacao_com_o_veredito(robo, monkeypa
     assert reg.eventos[1][2]["pendencias"] == ["Aditivo: falta"]
 
 
-def test_ciclo_sem_execucao_continua_funcionando(robo, monkeypatch):
+def test_ciclo_sem_execucao_continua_funcionando(job, monkeypatch):
     """Quem chama ciclo() sem execucao (o sandbox) nao muda de comportamento."""
-    monkeypatch.setattr(robo.listar_fila, "listar", lambda ctx: ["1"])
-    monkeypatch.setattr(robo.checagem_docs, "sso_doc2you", lambda ctx: True)
-    monkeypatch.setattr(robo, "processar", lambda ctx, op, executar, mandar_email, execucao=None: {"op": op, "pendencias": []})
-    monkeypatch.setattr(robo, "_resumo", lambda laudos, executar: None)
-    assert robo.ciclo(_Ctx()) == [{"op": "1", "pendencias": []}]
+    monkeypatch.setattr(job.listar_fila, "listar", lambda ctx: ["1"])
+    monkeypatch.setattr(job.checagem_docs, "sso_doc2you", lambda ctx: True)
+    monkeypatch.setattr(job, "processar", lambda ctx, op, executar, mandar_email, execucao=None: {"op": op, "pendencias": []})
+    monkeypatch.setattr(job, "_resumo", lambda laudos, executar: None)
+    assert job.ciclo(_Ctx()) == [{"op": "1", "pendencias": []}]

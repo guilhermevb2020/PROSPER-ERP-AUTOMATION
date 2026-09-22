@@ -118,7 +118,7 @@ daquela era estão em `docs/deprecated/`.
 | retorno de cobrança CNAB-400, BB e depósito | `retorno_cobranca/` | `run_agendado.sh --pular-processados`, `run_bb.sh`, `run_deposito.sh` | `:95` / 6084 |
 | remessa de pagamento CNAB-240 (BMP) | `remessa_pagamento/` | `run_agendado.sh` — a cada 5 min, 8h–18h55 | `:94` / 6085 |
 | retorno de pagamento CNAB-240 | `retorno_pagamento/` | `run_agendado.sh` | `:93` / 6086 |
-| finalizar operação (Robô 7) | `finalizar_operacao/` | `run_agendado.sh --executar` — **em produção desde 22/09/2026** (clica até 18:30, só se a etapa lida no Smart for "Aguardando Ass.") | `:92` / 6087 |
+| finalizar operação | `finalizar_operacao/` | `run_agendado.sh --executar` — **em produção desde 22/09/2026** (clica até 18:30, só se a etapa lida no Smart for "Aguardando Ass.") | `:92` / 6087 |
 
 Os jobs foram renomeados em 21/09/2026: a pasta leva o nome da automação e a entrada é
 verbo + objeto (`robo_retorno/robo_retorno.py` → `retorno_cobranca/processar_retorno_cobranca.py`).

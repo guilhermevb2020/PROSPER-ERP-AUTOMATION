@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 """
-checagem_docs.py - CHECAGEM 1 do Robo 7: os documentos que compoem a operacao
+checagem_docs.py - CHECAGEM 1 do job finalizar_operacao: os documentos que compoem a operacao
 foram devidamente ASSINADOS?
 
-REUSA o endpoint do doc2you ja mapeado no robo3/verificar_docs.py e aperta a
+REUSA o endpoint do doc2you ja mapeado no verificar_docs.py (pacote de origem) e aperta a
 regra em tres pontos, todos descobertos ao vivo em 28/08/2026 (ops 64887/64882):
 
 1. ASSINADO, nao so EMITIDO. La o criterio e "o documento existe"; aqui e
@@ -30,7 +30,7 @@ documento). Por isso a resolucao e PREGUICOSA - o Aditivo/NPP/Duplicata saem de
 graca (tipo + descricao) e so os "Contrato sem descricao" (LCB vs Carta de
 Cessao) sao abertos, e mesmo assim so quando a operacao tem titulo LCB.
 
-Uso isolado (read-only, precisa da sessao R7 no ar):
+Uso isolado (read-only, precisa da sessao deste job no ar):
   python finalizar_operacao/checagem_docs.py --op 64887
 """
 import argparse
@@ -42,12 +42,12 @@ import unicodedata
 
 _AQUI = os.path.dirname(os.path.abspath(__file__))
 _RAIZ = os.path.dirname(_AQUI)
-for _p in (_AQUI, os.path.join(_RAIZ, "robo3"), os.path.join(_RAIZ, "operacoes")):
+for _p in (_AQUI, os.path.join(_RAIZ, "operacoes")):
     if _p not in sys.path:
         sys.path.insert(0, _p)
 
 import r7_config as cfg          # noqa: E402
-import verificar_docs as vd      # noqa: E402  (robo3 - endpoint doc2you)
+import verificar_docs as vd      # noqa: E402  (endpoint doc2you)
 
 
 def _norm(s):
@@ -62,7 +62,7 @@ def _assinado(doc):
 
     Usa o `status_code` (atributo data-statusdocumento da linha), que e o campo
     confiavel: C=Concluido, P=Pendente, I=Ignorado. O status TEXTUAL vem VAZIO
-    nos ignorados, e tratar vazio como "nao assinado" fazia o robo barrar
+    nos ignorados, e tratar vazio como "nao assinado" fazia o job barrar
     operacao boa (descoberto em 31/08/2026 auditando ops ja finalizadas: 35 de
     104 documentos eram 'I'). O texto fica so como reserva se o code faltar.
     """
@@ -104,7 +104,7 @@ def _autenticado(corpo):
 def sso_doc2you(ctx, esperar_ms=8000, tentativas=3):
     """Estabelece a sessao no doc2you via SSO do Smart (smart/doc2you.php).
 
-    ATENCAO: NAO usar wait_until='domcontentloaded' (o que o robo3 faz) - o
+    ATENCAO: NAO usar wait_until='domcontentloaded' (o que o verificar_docs faz) - o
     doc2you.php e um redirect JS que nao dispara esse evento, o goto estoura os
     60s de timeout e o SSO nunca acontece. 'commit' + espera funciona.
 
@@ -491,7 +491,7 @@ def main():
             browser = p.chromium.connect_over_cdp(f"http://127.0.0.1:{args.cdp}")
         except Exception as e:
             print(f"[ERRO] CDP {args.cdp} nao responde: {e}\n"
-                  "       Suba a sessao: python finalizar_operacao/sessao_r7.py")
+                  "       Sem Chrome deste job no ar: a sessao so existe durante uma rodada (smart_sessao.sessao)")
             return 2
         ctx = browser.contexts[0]
 

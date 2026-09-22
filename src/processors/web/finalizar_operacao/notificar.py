@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 """
-notificar.py - os AVISOS do Robo 7 (finalizar operacao): quem fica sabendo do que.
+notificar.py - os AVISOS do job finalizar_operacao: quem fica sabendo do que.
 
-  op FINALIZADA pelo robo          -> WhatsApp (texto_whatsapp_finalizada; quem envia e o
+  op FINALIZADA pelo job           -> WhatsApp (texto_whatsapp_finalizada; quem envia e o
                                       notificar_whatsapp). Ha tambem um e-mail de
                                       finalizacao, desligado (R7_EMAIL_FINALIZACAO=0).
   documentos assinados, mas o      -> WhatsApp e/ou e-mail (avisar_pagamento_pendente):
@@ -64,7 +64,7 @@ def _smtp_config():
         "user": env("R7_SMTP_USER") or env("SMTP_USER", ""),
         "senha": env("R7_SMTP_SENHA") or env("SMTP_PASSWORD", ""),
         "remetente": env("R7_SMTP_REMETENTE") or env("EMAIL_FROM", ""),
-        "nome": env("R7_SMTP_NOME", "Robo 7 - Prospere"),
+        "nome": env("R7_SMTP_NOME", "Finalizar operacao - Prospere"),
         "starttls": env("R7_SMTP_STARTTLS", "0").strip().lower() in ("1", "true", "sim"),
     }
 
@@ -190,11 +190,11 @@ def montar_corpo(op, cedente, pendencias, contexto=None):
         linhas.append(f"  Tipos titulos . {', '.join(sorted(set(ctx['tipos_titulos'])))}")
     linhas += [
         "",
-        "Resolva os itens acima na tela da operacao. O robo confere de novo no",
-        "proximo ciclo e finaliza sozinho quando estiver tudo certo.",
+        "Resolva os itens acima na tela da operacao. A automacao confere de novo no",
+        "proximo ciclo e finaliza sozinha quando estiver tudo certo.",
         "",
         "-- ",
-        "Robo 7 (finalizar operacao) - ProsperAI",
+        "Automacao finalizar operacao - Prospere",
     ]
     return "\n".join(linhas)
 
@@ -247,7 +247,7 @@ def resumo_das_checagens(detalhes):
 def montar_corpo_finalizada(op, cedente, contexto=None, detalhes=None):
     ctx = contexto or {}
     linhas = [
-        f"A operacao {op} foi FINALIZADA pelo Robo 7.",
+        f"A operacao {op} foi FINALIZADA pela automacao finalizar operacao.",
         "",
         "MOTIVO: as duas verificacoes passaram.",
         "",
@@ -260,7 +260,7 @@ def montar_corpo_finalizada(op, cedente, contexto=None, detalhes=None):
         linhas.append(f"  Valor ......... {ctx['valor']}")
     if ctx.get("confirmacao"):
         linhas += ["", f"Confirmacao: {ctx['confirmacao']}"]
-    linhas += ["", "-- ", "Robo 7 (finalizar operacao) - ProsperAI"]
+    linhas += ["", "-- ", "Automacao finalizar operacao - Prospere"]
     return "\n".join(linhas)
 
 
@@ -336,7 +336,7 @@ def texto_whatsapp_finalizada(op, cedente, contexto=None, detalhes=None):
         linhas.append(f"  • SP {'marcado ✓' if lin.get('sp') == 'SIM' else 'NÃO marcado'}")
         linhas.append("  • Vencimento hoje ✓")
 
-    linhas += ["", f"_{datetime.now():%d/%m %H:%M} · Robô 7_"]
+    linhas += ["", f"_{datetime.now():%d/%m %H:%M} · finalizar operação_"]
     return "\n".join(linhas)
 
 
@@ -352,7 +352,7 @@ def enviar_finalizada(op, cedente, contexto=None, detalhes=None, destinatarios=N
     if not (cfg.EMAIL_ATIVO and cfg.AVISAR_FINALIZACAO and cfg.EMAIL_FINALIZACAO_ATIVO):
         return False, "e-mail de finalizacao desligado (R7_EMAIL_FINALIZACAO=0)"
     corpo = montar_corpo_finalizada(op, cedente, contexto, detalhes)
-    return _enviar_email(f"[Robo 7] Operacao {op} FINALIZADA - {cedente or ''}".strip(),
+    return _enviar_email(f"[finalizar operacao] Operacao {op} FINALIZADA - {cedente or ''}".strip(),
                          corpo, destinatarios)
 
 
@@ -360,7 +360,7 @@ def montar_corpo_pagamento(op, cedente, pendencias, contexto=None):
     """Texto do aviso de PAGAMENTO pendente: a op so nao foi finalizada por causa dele."""
     ctx = contexto or {}
     linhas = [
-        f"Todos os documentos da operacao {op} estao assinados, mas o Robo 7 NAO a",
+        f"Todos os documentos da operacao {op} estao assinados, mas a automacao NAO a",
         "finalizou porque a forma de pagamento tem pendencia:",
         "",
     ]
@@ -377,12 +377,12 @@ def montar_corpo_pagamento(op, cedente, pendencias, contexto=None):
     limite = cfg.HORA_LIMITE_FINALIZAR or "o fim do expediente"
     linhas += [
         "",
-        "Corrija na tela da operacao (Resumir > Pagamento). O robo confere de novo a cada",
-        f"15 minutos e finaliza sozinho quando estiver certo, ate as {limite}. Depois desse",
-        "horario ele nao clica: finalize a mao se o pagamento precisar sair hoje.",
+        "Corrija na tela da operacao (Resumir > Pagamento). A automacao confere de novo a cada",
+        f"15 minutos e finaliza sozinha quando estiver certo, ate as {limite}. Depois desse",
+        "horario ela nao clica: finalize a mao se o pagamento precisar sair hoje.",
         "",
         "-- ",
-        "Robo 7 (finalizar operacao) - Prospere",
+        "Automacao finalizar operacao - Prospere",
     ]
     return "\n".join(linhas)
 
@@ -411,9 +411,9 @@ def texto_whatsapp_pagamento_pendente(op, cedente, pendencias, contexto=None):
     for p in pendencias:
         linhas.append(f"  • {_pendencia_curta(p)}")
     limite = cfg.HORA_LIMITE_FINALIZAR or "o fim do expediente"
-    linhas += ["", f"Corrija no Smart (Resumir › Pagamento). O robô confere a cada 15 min e "
-                   f"finaliza sozinho até as {limite}; depois disso, só à mão.",
-               "", f"_{datetime.now():%d/%m %H:%M} · Robô 7_"]
+    linhas += ["", f"Corrija no Smart (Resumir › Pagamento). A automação confere a cada 15 min e "
+                   f"finaliza sozinha até as {limite}; depois disso, só à mão.",
+               "", f"_{datetime.now():%d/%m %H:%M} · finalizar operação_"]
     return "\n".join(linhas)
 
 
@@ -475,7 +475,7 @@ def _avisar(op, pendencias, assunto, corpo, destinatarios, texto_whatsapp=None, 
 def avisar_pagamento_pendente(op, cedente, pendencias, contexto=None, destinatarios=None):
     """O aviso de pendencia que vale: documentos assinados e o PAGAMENTO travando."""
     destinatarios = destinatarios or cfg.EMAIL_DESTINO
-    assunto = (f"[Robo 7] Operacao {op} pronta, mas o PAGAMENTO impede a finalizacao - "
+    assunto = (f"[finalizar operacao] Operacao {op} pronta, mas o PAGAMENTO impede a finalizacao - "
                f"{len(pendencias)} pendencia(s)")
     return _avisar(op, pendencias, assunto,
                    montar_corpo_pagamento(op, cedente, pendencias, contexto), destinatarios,
@@ -487,7 +487,7 @@ def enviar(op, cedente, pendencias, contexto=None, destinatarios=None, forcar=Fa
            prefixo_assunto=""):
     """Aviso generico de pendencia (compatibilidade). Retorna (enviado, motivo)."""
     destinatarios = destinatarios or cfg.EMAIL_DESTINO
-    assunto = (f"{prefixo_assunto}[Robo 7] Operacao {op} NAO finalizada - "
+    assunto = (f"{prefixo_assunto}[finalizar operacao] Operacao {op} NAO finalizada - "
                f"{len(pendencias)} pendencia(s)")
     r = _avisar(op, pendencias, assunto, montar_corpo(op, cedente, pendencias, contexto),
                 destinatarios, forcar=forcar)
@@ -495,7 +495,7 @@ def enviar(op, cedente, pendencias, contexto=None, destinatarios=None, forcar=Fa
 
 
 def main():
-    ap = argparse.ArgumentParser(description="Mostra o SMTP do Robo 7; com --teste, manda um e-mail de teste.")
+    ap = argparse.ArgumentParser(description="Mostra o SMTP do job finalizar_operacao; com --teste, manda um e-mail de teste.")
     ap.add_argument("--teste", action="store_true", help="manda UM e-mail de teste (R7_EMAIL_TESTE)")
     ap.add_argument("--op", default="00000")
     ap.add_argument("--para", default="", help="destinatario(s) separados por virgula")
@@ -522,7 +522,7 @@ def main():
            "linhas_pagamento": [{"_linha": "1", "tipo": "PIX", "cta_origem": "mp prospere",
                                  "vencto": "2026-09-21", "sp": "NAO"}]}
     ok, motivo = _enviar_email(
-        f"[TESTE] [Robo 7] Operacao {args.op} pronta, mas o PAGAMENTO impede a finalizacao - "
+        f"[TESTE] [finalizar operacao] Operacao {args.op} pronta, mas o PAGAMENTO impede a finalizacao - "
         f"{len(pend)} pendencia(s)",
         montar_corpo_pagamento(args.op, "CEDENTE DE TESTE", pend, ctx), destino)
     print(f">> enviado={ok} | {motivo} | para {', '.join(destino)}")

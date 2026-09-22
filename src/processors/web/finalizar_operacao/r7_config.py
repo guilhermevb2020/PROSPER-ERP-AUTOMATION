@@ -1,23 +1,18 @@
 # -*- coding: utf-8 -*-
 """
-r7_config.py - configuracao do Robo 7 (FINALIZAR OPERACAO).
+r7_config.py - configuracao do job finalizar_operacao, tudo por env. O prefixo R7_ das
+variaveis NAO acompanha o nome do job (REGRA-025): renomear uma variavel a faria cair no
+default sem erro nenhum.
 
-Estrategia (mesma dos R3/R4/R5):
-  - REUSA as credenciais do R1 (mesmo .env raiz via credito/config.py).
-  - PERFIL Chrome PROPRIO (.perfil_chrome_r7) + porta CDP propria (9225), p/ rodar
-    EM PARALELO ao R1 (9222)/R3 (9223)/R4 (9224) sem disputar o profile lock.
-    LEMBRETE: NUNCA rodar 2 scripts no mesmo CDP ao mesmo tempo - colidem.
-
-O QUE O ROBO 7 FAZ (fila de entrada = etapa "Aguardando Ass."):
+O QUE O JOB FAZ (fila de entrada = etapa "Aguardando Ass."):
   1. checa no doc2you se TODOS os documentos da operacao estao ASSINADOS
      (status "Concluido" - nao basta existir);
   2. checa a FORMA DE PAGAMENTO (grade PIX da tela da operacao);
-  3. tudo OK  -> abre "Resumir" e clica em FINALIZAR;
-     algo NOK -> NAO finaliza e manda e-mail p/ o operador com o que falta.
+  3. tudo OK  -> abre "Resumir" e clica em FINALIZAR (so com --executar e R7_DRY_RUN=0);
+     algo NOK -> NAO finaliza; se o que trava e o pagamento, avisa (notificar.py).
 
-Sobrescrever via env (override por run):
-  $env:CDP_PORT_R7="9225"; $env:USER_DATA_DIR_R7=".perfil_chrome_r7"
-  $env:R7_DRY_RUN="1"       # nunca clica em Finalizar (so confere e avisa)
+Sessao propria (display, perfil e porta CDP deste job: ver docs/README.md). Exemplo de
+override por run: R7_DRY_RUN=1 nunca clica em Finalizar (so confere e avisa).
 """
 import os
 import sys
@@ -29,19 +24,19 @@ _RAIZ = os.path.dirname(_AQUI)
 # REUSA o credito do repo em vez de carregar as copias que vieram no pacote
 # de origem (regra 3 do CLAUDE.md: nao duplicar o que ja existe). Conferido em
 # 02/09/2026: `smart_session.py` e byte a byte identico ao do pacote, e os
-# simbolos que este robo consome de `config.py` -- URL_LOGIN, URL_CONSULTA,
+# simbolos que este job consome de `config.py` -- URL_LOGIN, URL_CONSULTA,
 # URL_EDITAR, VALOR_ETAPA_AGUARDANDO_ASS -- tem valores IGUAIS nas duas versoes.
 # A do repo e mais nova e mais segura (nao carrega senha default no fonte).
 #
 # `analisar_credito_operacao`, `banco` e `subfluxos` tambem vem dali.
 # `classe_risco_tool` e `verificar_docs` nao existiam no repo e por isso moram
-# aqui -- candidatos a `src/common/` quando um segundo robo precisar deles.
+# aqui -- candidatos a `src/common/` quando um segundo job precisar deles.
 _CREDITO = os.path.join(_RAIZ, "credito")
 for _p in (_AQUI, _CREDITO):
     if _p not in sys.path:
         sys.path.insert(0, _p)
 
-import config as r1_config  # noqa: E402  -> EMAIL/SENHA/URLs/seletores do credito
+import config as credito_config  # noqa: E402  -> EMAIL/SENHA/URLs/seletores do credito
 
 
 def _s(chave: str, padrao: str) -> str:
@@ -55,24 +50,24 @@ def _b(chave: str, padrao: str) -> bool:
 # --------------------------------------------------------------------------- #
 # Credenciais / sessao
 # --------------------------------------------------------------------------- #
-# O R7 tem SESSAO PROPRIA (perfil + janela + porta CDP so dele) e faz o proprio
-# login - nao depende do robo de credito estar no ar. As credenciais saem do
+# O job tem SESSAO PROPRIA (perfil + janela + porta CDP so dele) e faz o proprio
+# login - nao depende do job de credito estar no ar. As credenciais saem do
 # MESMO .env da raiz; R7_CONTA escolhe qual:
-#   principal -> SMART_EMAIL/SMART_SENHA  (a mesma do R1/R3/R4 - default)
+#   principal -> SMART_EMAIL/SMART_SENHA  (a mesma do job de credito - default)
 #   op2       -> SMART_EMAIL_OP2/SMART_SENHA_OP2 (conta OPERACIONAL 2)
 # ATENCAO: quem finaliza a operacao fica registrado na trilha do Smart com ESTA
 # conta. Trocar p/ op2 muda o nome que aparece la.
 CONTA = _s("R7_CONTA", "principal").strip().lower()
 if CONTA == "op2":
-    EMAIL = os.environ.get("SMART_EMAIL_OP2", "") or r1_config.EMAIL
-    SENHA = os.environ.get("SMART_SENHA_OP2", "") or r1_config.SENHA
+    EMAIL = os.environ.get("SMART_EMAIL_OP2", "") or credito_config.EMAIL
+    SENHA = os.environ.get("SMART_SENHA_OP2", "") or credito_config.SENHA
 else:
-    EMAIL = r1_config.EMAIL
-    SENHA = r1_config.SENHA
+    EMAIL = credito_config.EMAIL
+    SENHA = credito_config.SENHA
 
 USER_DATA_DIR = _s("USER_DATA_DIR_R7", ".perfil_chrome_r7")
 HEADLESS = _b("HEADLESS_R7", "False")
-CDP_PORT = int(_s("CDP_PORT_R7", "9225"))      # R1=9222 R3=9223 R4=9224 R7=9225
+CDP_PORT = int(_s("CDP_PORT_R7", "9225"))      # porta propria: nunca a mesma de outro job
 CDP_URL = f"http://127.0.0.1:{CDP_PORT}"       # IPv4 explicito (NAO 'localhost')
 # Display PROPRIO (Xvfb :92, que o run_agendado.sh sobe). O compose define
 # DISPLAY=:99 (boletos) para o container inteiro; o smart_sessao publica este
@@ -80,15 +75,15 @@ CDP_URL = f"http://127.0.0.1:{CDP_PORT}"       # IPv4 explicito (NAO 'localhost'
 DISPLAY = _s("DISPLAY_R7", ":92")
 
 PING_INTERVALO_S = int(_s("PING_INTERVALO_S_R7", "120"))
-URL_PING = r1_config.URL_CONSULTA
-URL_LOGIN = r1_config.URL_LOGIN
-URL_EDITAR = r1_config.URL_EDITAR              # novatelaoperacao.php?action=edit&op={op}
+URL_PING = credito_config.URL_CONSULTA
+URL_LOGIN = credito_config.URL_LOGIN
+URL_EDITAR = credito_config.URL_EDITAR              # novatelaoperacao.php?action=edit&op={op}
 
 # --------------------------------------------------------------------------- #
 # Fila de entrada
 # --------------------------------------------------------------------------- #
-# Etapa onde a verificacao acontece (o R1 V4 deposita as ops aqui).
-VALOR_ETAPA_ENTRADA = _s("R7_ETAPA_ENTRADA", r1_config.VALOR_ETAPA_AGUARDANDO_ASS)  # "15"
+# Etapa onde a verificacao acontece (o job de credito deposita as ops aqui).
+VALOR_ETAPA_ENTRADA = _s("R7_ETAPA_ENTRADA", credito_config.VALOR_ETAPA_AGUARDANDO_ASS)  # "15"
 ROTULO_ETAPA_ENTRADA = _s("R7_ROTULO_ETAPA_ENTRADA", "Aguardando Ass.")
 
 # --------------------------------------------------------------------------- #
@@ -225,9 +220,7 @@ WHATSAPP_DESTINO = [n.strip() for n in _s(
 # assinaturas paradas, PIX recusado ou que nao saiu -> WHATSAPP_DESTINO_OPERACIONAL.
 # Numero ou id de grupo do WhatsApp; os dois comecam no mesmo numero.
 WHATSAPP_DESTINO_OPERACIONAL = [n.strip() for n in _s(
-    "R7_WHATSAPP_DESTINO_OPERACIONAL",
-    _s("R7_WHATSAPP_DESTINO_PENDENCIA", ",".join(WHATSAPP_DESTINO))).split(",") if n.strip()]
-WHATSAPP_DESTINO_PENDENCIA = WHATSAPP_DESTINO_OPERACIONAL   # nome antigo, mesmo destino
+    "R7_WHATSAPP_DESTINO_OPERACIONAL", ",".join(WHATSAPP_DESTINO)).split(",") if n.strip()]
 
 # Rotina de avisos (rotina_avisos.py), toda sob --avisar:
 # resumo de assinaturas paradas nestes horarios, cada um valendo por JANELA_MIN
@@ -237,7 +230,7 @@ RESUMO_ASSINATURAS_JANELA_MIN = int(_s("R7_RESUMO_ASSINATURAS_JANELA_MIN", "120"
 # resumo do dia na primeira rodada a partir desta hora (o cron roda ate 18:45); e tambem a
 # hora da "ultima chamada" do PIX que nao saiu
 RESUMO_DIA_HORA = _s("R7_RESUMO_DIA_HORA", "18:40").strip()
-# PIX de op finalizada pelo robo sem retorno do banco depois de N min -> aviso ao operacional
+# PIX de op finalizada pelo job sem retorno do banco depois de N min -> aviso ao operacional
 PIX_ATRASO_MIN = int(_s("R7_PIX_ATRASO_MIN", "30"))
 # retornos CNAB-240 de pagamento no Nextcloud (os mesmos que o retorno_pagamento importa)
 NC_RETORNOS = _s("R7_NC_RETORNOS", "FINANCEIRO/Pagamentos-MoneyPlus/_RETORNOS")
@@ -261,7 +254,7 @@ DRY_RUN = _b("R7_DRY_RUN", "1")
 # LIMITE DE HORA para clicar em Finalizar. A remessa de pagamento sai a cada 5 min
 # ate 18:55 e exige vencimento = hoje: operacao finalizada depois disso so entra na
 # remessa de amanha, com o vencimento de ontem. Pendencia do README desde 21/09/2026,
-# fechada em 22/09/2026 ao tirar o robo do DRY. Formato HH:MM, hora local do
+# fechada em 22/09/2026 ao tirar o job do DRY. Formato HH:MM, hora local do
 # container (TZ=America/Sao_Paulo). Vazio desliga o limite; valor invalido FECHA a
 # porta: a acao e irreversivel, entao configuracao errada nunca pode abri-la.
 HORA_LIMITE_FINALIZAR = _s("R7_HORA_LIMITE_FINALIZAR", "18:30").strip()
@@ -305,7 +298,7 @@ INTERVALO_CICLO_S = int(_s("R7_INTERVALO_CICLO_S", "600"))
 AVISO_INTERVALO_BASE_MIN = int(_s("R7_AVISO_INTERVALO_BASE_MIN", "120"))  # 2h
 AVISO_INTERVALO_TETO_H = int(_s("R7_AVISO_INTERVALO_TETO_H", "24"))       # 1x/dia no limite
 ARQ_AVISOS = _s("R7_ARQ_AVISOS", os.path.join(_AQUI, "avisos_enviados.csv"))
-# Ops finalizadas pelo robo (trilha de auditoria).
+# Ops finalizadas pelo job (trilha de auditoria).
 ARQ_FINALIZADAS = _s("R7_ARQ_FINALIZADAS", os.path.join(_AQUI, "finalizadas.csv"))
 DEBUG_DIR = _s("DEBUG_DIR_R7", "debug_r7")
 
