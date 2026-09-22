@@ -5,7 +5,7 @@ pagamento.py - FASE 0 do robo de pagamento, rodando no sandbox (host).
 
 Descobre a tela Financeiro > Sistemas de pagamento > Pagamento BMP Money Plus >
 Gerar Remessa: quais telas existem, que campos elas tem e se o robo sera do
-molde `robo_remessa` (posta formulario) ou `retorno_cobranca` (conversa por `Acao`).
+molde `remessa_cobranca` (posta formulario) ou `retorno_cobranca` (conversa por `Acao`).
 
 Escrito a partir de `_modelo_automacao.py`, como manda o COMO_CRIAR_AUTOMACAO.md:
 o login, o perfil de Chrome, a deteccao de sessao morta e o video/trace vem do

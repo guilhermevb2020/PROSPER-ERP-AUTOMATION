@@ -13,8 +13,8 @@ mudancas para o servidor, todas por env (nada de caminho de Windows no fonte):
                        credito usa remote-debugging-pipe, sem porta)
   - DISPLAY :97     -> :99=boletos, :98=doc2you, :96=credito, :97=remessa
 
-Credenciais: `config/robo_remessa.env` (montado, fora do git). NUNCA no fonte —
-este repo tem remote publico. Ver `robo_remessa.example.env`.
+Credenciais: `config/remessa_cobranca.env` (montado, fora do git). NUNCA no fonte —
+este repo tem remote publico. Ver `remessa_cobranca.example.env`.
 """
 import os
 
@@ -25,7 +25,7 @@ _AQUI = os.path.dirname(os.path.abspath(__file__))
 try:
     from dotenv import load_dotenv
 
-    load_dotenv(os.environ.get("REMESSA_ENV_FILE", "/app/config/robo_remessa.env"))
+    load_dotenv(os.environ.get("REMESSA_ENV_FILE", "/app/config/remessa_cobranca.env"))
 except ImportError:
     pass
 
@@ -59,7 +59,7 @@ def exigir_credenciais() -> None:
     if faltando:
         raise RuntimeError(
             f"Credencial ausente: {', '.join(faltando)}. Defina em "
-            "/app/config/robo_remessa.env (fora do git) ou no ambiente do container.")
+            "/app/config/remessa_cobranca.env (fora do git) ou no ambiente do container.")
 
 
 # --------------------------------------------------------------------------- #

@@ -15,9 +15,9 @@ mkdir -p "$LOG"
 
 # 1) credenciais + flags (arquivo montado, gitignored). SOBRESCREVE o SMART_EMAIL
 #    do container (que e felipe_p, de outra automacao).
-if [ -f /app/config/robo_remessa.env ]; then
+if [ -f /app/config/remessa_cobranca.env ]; then
     set -a
-    . /app/config/robo_remessa.env
+    . /app/config/remessa_cobranca.env
     set +a
 fi
 
@@ -57,7 +57,7 @@ export PYTHONUNBUFFERED=1
 export USER_DATA_DIR_REM="$PERFIL"
 mkdir -p "$PERFIL"
 # DRY_RUN_REM=True e o default do config: gerar consome sequencial e tira titulo
-# da fila. Para valer, ponha DRY_RUN_REM=false no robo_remessa.env.
+# da fila. Para valer, ponha DRY_RUN_REM=false no remessa_cobranca.env.
 export DRY_RUN_REM="${DRY_RUN_REM:-True}"
 
 # 8) roda o robo (uma vez, e sai). `tee` grava um log AO VIVO alem do stdout
@@ -70,7 +70,7 @@ export DRY_RUN_REM="${DRY_RUN_REM:-True}"
 LOGROBO="/app/logs/robo_remessa_$(date +%Y-%m-%d).log"
 RC="/tmp/robo_remessa_rc.$$"
 echo "===== inicio $(date '+%F %T %Z') =====" >> "$LOGROBO"
-{ python /app/src/processors/web/robo_remessa/robo_remessa.py \
+{ python /app/src/processors/web/remessa_cobranca/gerar_remessa_cobranca.py \
       --gerar --todas-contas "$@"; echo $? > "$RC"; } 2>&1 | tee -a "$LOGROBO"
 CODIGO=$(cat "$RC" 2>/dev/null || echo 1)
 rm -f "$RC"

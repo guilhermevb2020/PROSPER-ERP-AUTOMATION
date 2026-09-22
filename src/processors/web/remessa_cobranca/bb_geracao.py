@@ -270,7 +270,7 @@ def executar(robo, ctx, *, conta: str, carteira: str, convenio: str,
     """Gera e entrega uma remessa nova, ou retoma a intenção ainda não concluída.
 
     Args:
-        robo: Processador robo_remessa existente (gerador, download e Nextcloud).
+        robo: Processador remessa_cobranca existente (gerador, download e Nextcloud).
         ctx: Contexto Smart autenticado, sob a trava financeira comum.
         conta: ID exato da conta no Smart; nomes parciais não são aceitos.
         carteira: Carteira exata, sem fallback para outra carteira.

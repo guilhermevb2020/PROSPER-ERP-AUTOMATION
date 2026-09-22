@@ -21,7 +21,7 @@ COMO A TELA CANCELA. Lido do JS de `downloadremessa.php`, nao suposto:
         form.submit();                   // POST na MESMA url da listagem
     }
 
-Ou seja: e o mesmo POST que `robo_remessa.listar_remessas` ja faz, com dois campos
+Ou seja: e o mesmo POST que `remessa_cobranca.listar_remessas` ja faz, com dois campos
 trocados. Nao ha endpoint proprio nem tela extra.
 
 =============================================================================

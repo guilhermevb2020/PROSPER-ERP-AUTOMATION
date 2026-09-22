@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-robo_remessa.py - gera as remessas CNAB no Smart e baixa os .REM.
+gerar_remessa_cobranca.py - gera as remessas CNAB no Smart e baixa os .REM.
 
 Robo do ERP AUTOMATION. Roda DESATENDIDO: sobe o proprio Chrome no display :97,
 loga via CapSolver, percorre as contas, gera a remessa de cada uma, baixa o
@@ -39,18 +39,18 @@ SEGURANCA
 
 Uso:
     # producao (o wrapper do hub chama isto)
-    sh /app/src/processors/web/robo_remessa/run_agendado.sh
+    sh /app/src/processors/web/remessa_cobranca/run_agendado.sh
 
     # manual, dentro do container
-    python /app/src/processors/web/robo_remessa/robo_remessa.py --gerar --todas-contas
-    python .../robo_remessa.py --gerar --conta tigrao --pra-valer
-    python .../robo_remessa.py --gerar --conta tigrao --simular    # so olha a fila
-    python .../robo_remessa.py --listar --conta cast --dias 30
-    python .../robo_remessa.py --contas
-    python .../robo_remessa.py --ids 25521 25522
+    python /app/src/processors/web/remessa_cobranca/gerar_remessa_cobranca.py --gerar --todas-contas
+    python .../gerar_remessa_cobranca.py --gerar --conta tigrao --pra-valer
+    python .../gerar_remessa_cobranca.py --gerar --conta tigrao --simular    # so olha a fila
+    python .../gerar_remessa_cobranca.py --listar --conta cast --dias 30
+    python .../gerar_remessa_cobranca.py --contas
+    python .../gerar_remessa_cobranca.py --ids 25521 25522
 
     # sobre uma janela que voce ja logou no VNC (desenvolvimento)
-    python .../robo_remessa.py --cdp --listar
+    python .../gerar_remessa_cobranca.py --cdp --listar
 """
 import argparse
 import base64
@@ -901,7 +901,7 @@ def montar_parser():
                        help="desliga o DRY_RUN: GERA DE VERDADE no Smart")
     valer.add_argument("--simular", action="store_true",
                        help="forca o DRY_RUN mesmo com DRY_RUN_REM=false no ambiente "
-                            "(no container o robo_remessa.env desliga o dry-run)")
+                            "(no container o remessa_cobranca.env desliga o dry-run)")
     # --- nextcloud ---
     ap.add_argument("--subir-pendentes", action="store_true",
                     help="sobe para o Nextcloud os .REM que JA estao na pasta "
@@ -954,7 +954,7 @@ def executar(ctx, args):
 
     if args.cancelar:
         # ⛔ O cancelamento NAO herda o DRY_RUN do ambiente, e essa e a unica acao
-        # deste robo que nao herda. No container o `robo_remessa.env` poe
+        # deste robo que nao herda. No container o `remessa_cobranca.env` poe
         # DRY_RUN_REM=false — e com isso `--gerar` sem flag GERA DE VERDADE (medido
         # em 08/09/2026, comentario logo abaixo). Gerar de novo e recuperavel:
         # a remessa sai e alguem a cancela. Cancelar NAO e: os titulos voltam a
@@ -964,7 +964,7 @@ def executar(ctx, args):
 
     if args.gerar:
         # --pra-valer manda; --simular forca a simulacao; sem os dois vale o
-        # DRY_RUN_REM do ambiente. ATENCAO: no container o robo_remessa.env poe
+        # DRY_RUN_REM do ambiente. ATENCAO: no container o remessa_cobranca.env poe
         # DRY_RUN_REM=false (e o que a rodada agendada usa), entao `--gerar` SEM
         # flag nenhuma GERA DE VERDADE ali — medido em 08/09/2026.
         return rodada_geracao(ctx, args, dry=(cfg.DRY_RUN or args.simular) and not args.pra_valer)

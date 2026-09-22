@@ -17,9 +17,9 @@ case "$MODO" in
 esac
 
 # Mesma entrega de identidade do robô de remessa, via Guardian.
-if [ -f "$RAIZ/config/robo_remessa.env" ]; then
+if [ -f "$RAIZ/config/remessa_cobranca.env" ]; then
     set -a
-    . "$RAIZ/config/robo_remessa.env"
+    . "$RAIZ/config/remessa_cobranca.env"
     set +a
 fi
 CARTEIRA="${BB_REMESSA_CARTEIRA:-17}"
@@ -33,7 +33,7 @@ export PYTHONUNBUFFERED=1
 export HEADLESS_REM=true
 # O modo BB só gera com a flag explícita, mesmo se o env legado disser false.
 export DRY_RUN_REM=True
-exec python "$RAIZ/src/processors/web/robo_remessa/robo_remessa.py" \
+exec python "$RAIZ/src/processors/web/remessa_cobranca/gerar_remessa_cobranca.py" \
     --gerar --conta 395 --carteira "$CARTEIRA" \
     --bb-api-convenio 3770013 --bb-api-ambiente producao \
     --bb-api-origem "$RAIZ/data/retornos_a_processar/bb_api/origens" "$MODO"

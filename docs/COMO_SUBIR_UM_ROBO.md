@@ -12,7 +12,7 @@ espécie.
 > **Antes de começar, leia o robô que mais se parece com o seu.**
 > `src/processors/web/retorno_cobranca/` é o mais recente e o molde deste guia — é o
 > primeiro a consumir a sessão compartilhada (`src/common/clients/smart_sessao.py`),
-> e por isso tem só 4 arquivos. `robo_remessa/` é anterior a esse módulo: copie
+> e por isso tem só 4 arquivos. `remessa_cobranca/` é anterior a esse módulo: copie
 > dele a **lógica de tela** (`gerar.py`), não a sessão. `doc2you/` é o modelo de
 > "loga 1×/dia, faz o trabalho e fecha".
 
@@ -43,7 +43,7 @@ dois no mesmo `user-data-dir` disputam o lock — um simplesmente não sobe.
 |---|---|---|---|---|---|
 | `boletos` | `:99` | 5900 | 6080 | 9222 | `data/boletos/perfil_chrome` |
 | `doc2you` | `:98` | 5901 | 6081 | 9223 | `data/doc2you/perfil_chrome` |
-| `robo_remessa` | `:97` | 5903 | 6083 | 9224 | `data/robo_remessa/perfil_chrome` |
+| `remessa_cobranca` | `:97` | 5903 | 6083 | 9224 | `data/robo_remessa/perfil_chrome` |
 | `robo_credito` | `:96` | 5902 | 6082 | *(pipe)* | `data/robo_credito/perfil_chrome` |
 | `retorno_cobranca` | `:95` | 5904 | 6084 | 9225 | `data/robo_retorno/perfil_chrome` |
 | `robo_pagamento` | `:94` | 5905 | 6085 | 9226 | `data/robo_pagamento/perfil_chrome` |
@@ -83,7 +83,7 @@ Prefixo `_` = privado ao robô. Sem prefixo = alguém de fora pode importar.
 
 **Sem `_sessao.py` e sem `login.py` próprios.** Subir o Chrome, detectar sessão
 morta e logar já são de `src/common/clients/smart_sessao.py` (§4 e §5). O
-`robo_remessa` ainda tem os dois porque é anterior a esse módulo; o `retorno_cobranca`
+`remessa_cobranca` ainda tem os dois porque é anterior a esse módulo; o `retorno_cobranca`
 é o primeiro a consumi-lo e por isso é **o molde a copiar**.
 
 ---
@@ -173,7 +173,7 @@ ctx = p.chromium.launch_persistent_context(
 ```
 
 **Modelo de produção: self-contained.** Sobe, loga, trabalha, **fecha**. Nada de
-keep-alive 24/7 — é o desenho do `doc2you` e do `robo_remessa`. Keep-alive só onde
+keep-alive 24/7 — é o desenho do `doc2you` e do `remessa_cobranca`. Keep-alive só onde
 já existe (boletos), porque alguém precisa da sessão o dia inteiro.
 
 ---
@@ -296,7 +296,7 @@ devolve 93 bytes:
 Sem `recaptcha`, sem status de erro, e sem a palavra `expirou` — é *"expira"*, sem
 o U. Quem não checa isso lê toda tela como vazia e conclui *"não há nada a
 fazer"*: a rodada termina com cara de sucesso **sem ter olhado nada**. Use
-`robo_remessa/login.py::parece_deslogado` como referência, e chame-a em **todo**
+`remessa_cobranca/login.py::parece_deslogado` como referência, e chame-a em **todo**
 ponto que lê resposta do Smart.
 
 **2. `DRY_RUN` no `.env` + comando agendado sem a flag.** O robô de remessa ficou

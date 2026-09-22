@@ -12,7 +12,7 @@ desatualizado, `--todas-contas` percorre a lista velha: conta nova nao entra na
 rodada (e ninguem avisa), conta fechada gera um ciclo perdido.
 
 Uso (dentro do container):
-    python /app/src/processors/web/robo_remessa/atualizar_contas.py
+    python /app/src/processors/web/remessa_cobranca/atualizar_contas.py
     python .../atualizar_contas.py --cdp     # sobre a janela ja aberta no VNC
 """
 import argparse

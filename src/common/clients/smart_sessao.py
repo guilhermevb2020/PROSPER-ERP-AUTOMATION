@@ -4,7 +4,7 @@ smart_sessao.py - sessao do Smart para robos self-contained (COMPARTILHADO).
 
 Um robo "self-contained" sobe o proprio Chrome num display isolado, loga via
 CapSolver, faz o trabalho por HTTP e FECHA. E o desenho do doc2you e do
-robo_remessa — nada de keep-alive 24/7.
+remessa_cobranca — nada de keep-alive 24/7.
 
 O que este modulo resolve, e que todo robo do Smart precisa:
 

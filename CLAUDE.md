@@ -108,7 +108,7 @@ daquela era estão em `docs/deprecated/`.
 | boletos: emissão, envio, healthcheck, mantenedor de sessão | `boletos/` | `python -m src.processors.web.boletos.{emitir_lote,enviar_lote,healthcheck}`; o `manter_sessao` sobe no `scripts/boot_vnc.sh` | `:99` / 6080 |
 | doc2you (download diário de documentos) | `doc2you/` | `sh .../doc2you/run_agendado.sh [--antecipado]` | `:98` / 6081 |
 | análise de crédito | `robo_credito/` | `sh .../robo_credito/run_agendado.sh` (roda a v4) | `:96` / 6082 |
-| remessa de cobrança CNAB-400, BB e cancelamento | `robo_remessa/` | `run_agendado.sh`, `run_bb.sh`, `run_cancelamento.sh` | `:97` / 6083 |
+| remessa de cobrança CNAB-400, BB e cancelamento | `remessa_cobranca/` | `run_agendado.sh`, `run_bb.sh`, `run_cancelamento.sh` | `:97` / 6083 |
 | retorno de cobrança CNAB-400, BB e depósito | `retorno_cobranca/` | `run_agendado.sh --pular-processados`, `run_bb.sh`, `run_deposito.sh` | `:95` / 6084 |
 | remessa de pagamento CNAB-240 (BMP) | `robo_pagamento/` | `run_agendado.sh` — a cada 5 min, 8h–18h55 | `:94` / 6085 |
 | retorno de pagamento CNAB-240 | `retorno_pagamento/` | `run_agendado.sh` | `:93` / 6086 |

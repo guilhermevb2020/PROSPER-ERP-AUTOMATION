@@ -38,7 +38,7 @@ cobrança e `02` quitação/cancelamento. Nome: `CB` + `DDMM` + sequencial(7) +
 | Destino 1 — disco | `/app/data/remessas_a_enviar` | fonte de verdade da idempotência |
 | Destino 2 — Nextcloud | `FINANCEIRO/CNAB/Remessas/…` | **é onde o Financeiro enxerga** |
 | Controle | `/app/data/robo_remessa/controle_remessas.csv` | idempotência (id/arquivo/md5) |
-| Credenciais Smart | `/app/config/robo_remessa.env` | fora do git |
+| Credenciais Smart | `/app/config/remessa_cobranca.env` | fora do git |
 | Credenciais Nextcloud | `/app/config/nextcloud.env` | usuário `automacao`, fora do git |
 | Log ao vivo | `/app/logs/robo_remessa_<data>.log` | além do stdout que o hub captura |
 
@@ -65,24 +65,24 @@ cobrança e `02` quitação/cancelamento. Nome: `CB` + `DDMM` + sequencial(7) +
 
 ```bash
 # produção (é o que o hub chama)
-sh /app/src/processors/web/robo_remessa/run_agendado.sh
+sh /app/src/processors/web/remessa_cobranca/run_agendado.sh
 
 # manual, dentro do container
 docker exec -e PYTHONPATH=/app erp-automation \
-  python /app/src/processors/web/robo_remessa/robo_remessa.py --contas
+  python /app/src/processors/web/remessa_cobranca/gerar_remessa_cobranca.py --contas
 docker exec -e PYTHONPATH=/app erp-automation \
-  python /app/src/processors/web/robo_remessa/robo_remessa.py --gerar --conta tigrao
+  python /app/src/processors/web/remessa_cobranca/gerar_remessa_cobranca.py --gerar --conta tigrao
 docker exec -e PYTHONPATH=/app erp-automation \
-  python /app/src/processors/web/robo_remessa/robo_remessa.py --listar --conta cast --dias 30
+  python /app/src/processors/web/remessa_cobranca/gerar_remessa_cobranca.py --listar --conta cast --dias 30
 
 # sobe para o Nextcloud o que JÁ está na pasta local (não abre navegador,
 # não fala com o Smart). Serve p/ histórico e p/ tentar de novo o que falhou.
 docker exec -e PYTHONPATH=/app erp-automation \
-  python /app/src/processors/web/robo_remessa/robo_remessa.py --subir-pendentes
+  python /app/src/processors/web/remessa_cobranca/gerar_remessa_cobranca.py --subir-pendentes
 
 # quando abrirem/fecharem conta no Smart
 docker exec -e PYTHONPATH=/app erp-automation \
-  python /app/src/processors/web/robo_remessa/atualizar_contas.py
+  python /app/src/processors/web/remessa_cobranca/atualizar_contas.py
 ```
 
 **`--gerar` é DRY_RUN por padrão.** Sem `--pra-valer` (ou sem
@@ -363,7 +363,7 @@ nome e guarda as duas remessas de mesmo nome.
 
 ## Armadilhas de operação
 
-**`--gerar` sem flag, dentro do container, é PRA VALER.** O `robo_remessa.env` de
+**`--gerar` sem flag, dentro do container, é PRA VALER.** O `remessa_cobranca.env` de
 produção tem `DRY_RUN_REM=false` e o módulo o carrega via dotenv, então o padrão
 `DRY_RUN=True` do fonte não vale ali. Chamada direta para olhar a fila leva `--simular`,
 que força a simulação; `--pra-valer` e `--simular` não convivem. Medido em 08/09/2026:

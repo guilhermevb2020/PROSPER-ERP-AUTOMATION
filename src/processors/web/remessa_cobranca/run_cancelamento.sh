@@ -24,9 +24,9 @@ cd /app || exit 1
 LOG=/app/logs/vnc
 mkdir -p "$LOG"
 
-if [ -f /app/config/robo_remessa.env ]; then
+if [ -f /app/config/remessa_cobranca.env ]; then
     set -a
-    . /app/config/robo_remessa.env
+    . /app/config/remessa_cobranca.env
     set +a
 fi
 
@@ -53,7 +53,7 @@ mkdir -p "$PERFIL"
 LOGROBO="/app/logs/robo_remessa_$(date +%Y-%m-%d).log"
 RC="/tmp/robo_cancelamento_rc.$$"
 echo "===== cancelamento inicio $(date '+%F %T %Z') =====" >> "$LOGROBO"
-{ python /app/src/processors/web/robo_remessa/robo_remessa.py --cancelar "$@"; echo $? > "$RC"; } 2>&1 | tee -a "$LOGROBO"
+{ python /app/src/processors/web/remessa_cobranca/gerar_remessa_cobranca.py --cancelar "$@"; echo $? > "$RC"; } 2>&1 | tee -a "$LOGROBO"
 CODIGO=$(cat "$RC" 2>/dev/null || echo 1)
 rm -f "$RC"
 echo "===== cancelamento fim $(date '+%F %T %Z') exit=$CODIGO =====" >> "$LOGROBO"
