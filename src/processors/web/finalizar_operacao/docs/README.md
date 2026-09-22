@@ -21,6 +21,11 @@ verificações, finaliza no Smart. Se não passar, **não finaliza** e avisa.
 > à mão, eles podem chegar antes**: o job passa a cada 15 min. Mas nem sempre chegam:
 > ainda em DRY, o job deu `PASSARIA` para XAVANTES (65864) e COTRI (65871) desde 13:45
 > de 22/09, e um operador só as finalizou perto de 14:20 e 14:40 (pagas nessas remessas).
+>
+> **Fechamento da frente, 22/09 18:30:** o job finalizou 7 operações no dia (65879, 65876,
+> 65883, 65904, 65891, 65882, 65902) e os 7 PIX voltaram `00` nos retornos. A rotina de
+> avisos está no ar; o primeiro envio real foi às 17:45 (PIX confirmado de 5 operações).
+> O que ficou aberto está em "Pendências para produção".
 
 Origem: pacote trazido de uma máquina Windows em 01/09/2026, adaptado aqui.
 
@@ -261,9 +266,14 @@ clicado (teste `test_finalizar_trava_titulos`).
 - [x] Etapa conferida no Smart (HTML da tela de edição) antes de abrir a grade — 22/09/2026 (teste `test_finalizar_trava_etapa`)
 - [x] Títulos não lidos fecham a porta — 22/09/2026 (teste `test_finalizar_trava_titulos`)
 - [x] Produção: `R7_DRY_RUN=0` no `.env` e `--executar` na task — 22/09/2026 14:37, por decisão do usuário
-- [ ] `placar.py` por alguns dias úteis e a primeira finalização **supervisionada** — dispensados pelo usuário ao ligar a produção em 22/09; acompanhar a primeira finalização real até o retorno do banco
+- [x] Primeira finalização real acompanhada até o retorno do banco — 22/09/2026: as 7 do dia com PIX `00`. O `placar.py` por alguns dias úteis foi dispensado pelo usuário ao ligar a produção
 - [x] Consulta da fila: espera a recarga do frame de resultado e confere a coluna Etapa, em vez de 1,5 s fixos — 22/09/2026 (`_buscar_numeros_uma`, compartilhada com o `credito`; teste `test_busca_consulta_etapa`)
 - [x] Botão Pagamento desabilitado: espera até 90 s e diagnóstico "operação aberta por outro usuário" — 22/09/2026
 - [x] `notificar.py` sem o `email_config.json` de Windows: SMTP pelo broker do Guardian, aviso só de pagamento travado, por WhatsApp — 22/09/2026 (teste `test_finalizar_notificar`)
+- [x] Rotina de avisos: PIX confirmado, recusado ou sem retorno, corte das 18:30, assinaturas paradas e resumo do dia — 22/09/2026 (teste `test_finalizar_rotina_avisos`); primeiro envio real às 17:45
+- [x] Vocabulário da REGRA-025: "job" e "automação" no lugar de "robô"/R7, sem alias (`--email` e `R7_WHATSAPP_DESTINO_PENDENCIA` saíram) — 22/09/2026, `4f009d7`
 - [ ] E-mail dos avisos: o relay SMTP do Guardian recusa na saída (451); depende da Gerência (consertar o relay ou dar ao erp a API HTTP do MailerSend)
+- [ ] WhatsApp do operacional separado da gestão: preencher `R7_WHATSAPP_DESTINO_OPERACIONAL` (hoje cai no mesmo número de `R7_WHATSAPP_DESTINO`); falta o grupo
+- [ ] Conferir o primeiro resumo do dia (rodada das 18:45 de 22/09): a frente fechou antes
+- [ ] `finalizadas.csv` e `avisos_enviados.csv` para o banco, pela meta da Gerência de 22/09 (nenhuma escrita em CSV; ver `docs/PLANO_CONTROLE_NO_BANCO.md`): combinado para depois da rodada das 18:45, com quem fez a Fase 4
 - [ ] Renomear `r7_config.py` → `finalizar_config.py` (convenção do guia §2)
