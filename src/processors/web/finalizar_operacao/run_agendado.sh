@@ -40,8 +40,8 @@ export PYTHONUNBUFFERED=1
 #    O hub chama este wrapper com `sh` (= dash aqui): o shebang nao vale e
 #    ${PIPESTATUS[0]} e bashism. Sem o truque do $RC o hub le o exit do `tee`,
 #    que e SEMPRE 0 - o job falha e a task fica verde.
-LOG_JOB="/app/logs/robo_finalizar_$(date +%Y-%m-%d).log"
-RC="/tmp/robo_finalizar_rc.$$"
+LOG_JOB="/app/logs/finalizar_operacao_$(date +%Y-%m-%d).log"
+RC="/tmp/finalizar_operacao_rc.$$"
 { python /app/src/processors/web/finalizar_operacao/finalizar_operacao.py "$@"; echo $? > "$RC"; } 2>&1 \
     | tee -a "$LOG_JOB"
 CODIGO=$(cat "$RC" 2>/dev/null || echo 1); rm -f "$RC"

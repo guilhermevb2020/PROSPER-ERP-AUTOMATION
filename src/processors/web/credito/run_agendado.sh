@@ -61,19 +61,19 @@ export SALVAR_NEXTCLOUD="${SALVAR_NEXTCLOUD:-True}"
 export SKIP_DIGITAIS="${SKIP_DIGITAIS:-False}"
 export DRY_RUN="${DRY_RUN:-False}"
 
-# 8) roda o robo (loop infinito; para sozinho as 18:50). Script direto: o dir do
+# 8) roda o job (loop infinito; para sozinho as 18:50). Script direto: o dir do
 #    script vira sys.path[0] (imports flat) e o PYTHONPATH=/app resolve `src.*`.
 #    `tee` grava um LOG AO VIVO (observabilidade) alem do stdout capturado pelo hub.
-LOGROBO="/app/logs/robo_credito_$(date +%Y-%m-%d).log"
-echo "===== inicio $(date '+%F %T %Z') =====" >> "$LOGROBO"
+LOG_JOB="/app/logs/credito_$(date +%Y-%m-%d).log"
+echo "===== inicio $(date '+%F %T %Z') =====" >> "$LOG_JOB"
 # BEGIN EXECUCAO_CREDITO
 # sh nao possui PIPESTATUS: preservar o retorno do Python, como no retorno_cobranca.
-RC_CREDITO=$(mktemp "${TMPDIR:-/tmp}/robo_credito_rc.XXXXXX") || exit 1
+RC_CREDITO=$(mktemp "${TMPDIR:-/tmp}/credito_rc.XXXXXX") || exit 1
 trap 'rm -f "$RC_CREDITO"' EXIT
 { python /app/src/processors/web/credito/analisar_credito.py "$@";
   echo $? > "$RC_CREDITO";
-} 2>&1 | tee -a "$LOGROBO"
+} 2>&1 | tee -a "$LOG_JOB"
 CODIGO_CREDITO=$(cat "$RC_CREDITO" 2>/dev/null)
 case "$CODIGO_CREDITO" in ''|*[!0-9]*) CODIGO_CREDITO=1 ;; esac
-echo "===== fim $(date '+%F %T %Z') exit=$CODIGO_CREDITO =====" >> "$LOGROBO"
+echo "===== fim $(date '+%F %T %Z') exit=$CODIGO_CREDITO =====" >> "$LOG_JOB"
 exit "$CODIGO_CREDITO"

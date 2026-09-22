@@ -211,9 +211,9 @@ export PYTHONPATH=/app          # resolve `src.processors.web.boletos...`
 export PYTHONUNBUFFERED=1
 
 # 8) roda e PROPAGA O EXIT CODE do python (não o do tee)
-LOGROBO="/app/logs/<job>_$(date +%Y-%m-%d).log"
+LOG_JOB="/app/logs/<job>_$(date +%Y-%m-%d).log"
 RC="/tmp/<job>_rc.$$"
-{ python /app/src/processors/web/<job>/<job>.py "$@"; echo $? > "$RC"; } 2>&1 | tee -a "$LOGROBO"
+{ python /app/src/processors/web/<job>/<job>.py "$@"; echo $? > "$RC"; } 2>&1 | tee -a "$LOG_JOB"
 CODIGO=$(cat "$RC" 2>/dev/null || echo 1); rm -f "$RC"
 exit "$CODIGO"
 ```

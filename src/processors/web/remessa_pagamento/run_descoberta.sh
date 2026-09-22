@@ -50,10 +50,10 @@ export PYTHONUNBUFFERED=1
 export USER_DATA_DIR_PAG="$PERFIL"
 mkdir -p "$PERFIL"
 
-LOGROBO="/app/logs/robo_pagamento_descoberta_$(date +%Y-%m-%d).log"
-RC="/tmp/robo_pagamento_desc_rc.$$"
+LOG_JOB="/app/logs/remessa_pagamento_descoberta_$(date +%Y-%m-%d).log"
+RC="/tmp/remessa_pagamento_desc_rc.$$"
 { python /app/src/processors/web/remessa_pagamento/descobrir.py "$@"; echo $? > "$RC"; } \
-    2>&1 | tee -a "$LOGROBO"
+    2>&1 | tee -a "$LOG_JOB"
 CODIGO=$(cat "$RC" 2>/dev/null || echo 1)
 rm -f "$RC"
 exit "$CODIGO"

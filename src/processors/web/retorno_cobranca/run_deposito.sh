@@ -61,10 +61,10 @@ export USER_DATA_DIR_RET="$PERFIL"
 mkdir -p "$PERFIL"
 
 PASTA="${PASTA_DEPOSITO_RET:-/app/data/retornos_a_processar/_deposito}"
-LOGROBO="/app/logs/robo_deposito_$(date +%Y-%m-%d).log"
+LOG_JOB="/app/logs/retorno_cobranca_deposito_$(date +%Y-%m-%d).log"
 
 if [ ! -d "$PASTA" ]; then
-    echo "[$(date '+%F %T')] sem pasta ($PASTA) — nada a processar" >> "$LOGROBO"
+    echo "[$(date '+%F %T')] sem pasta ($PASTA) — nada a processar" >> "$LOG_JOB"
     exit 0
 fi
 
@@ -72,12 +72,12 @@ fi
 # deposito conciliou e ainda nao foi baixado). Marcar falha num dia sem deposito
 # ensinaria a ignorar o alarme.
 if [ -z "$(ls "$PASTA"/*.RET "$PASTA"/*.ret 2>/dev/null)" ]; then
-    echo "[$(date '+%F %T')] nenhum .RET em $PASTA — nada a baixar" >> "$LOGROBO"
+    echo "[$(date '+%F %T')] nenhum .RET em $PASTA — nada a baixar" >> "$LOG_JOB"
     exit 0
 fi
 
-echo "===== inicio $(date '+%F %T %Z') =====" >> "$LOGROBO"
-RC="/tmp/robo_deposito_rc.$$"
+echo "===== inicio $(date '+%F %T %Z') =====" >> "$LOG_JOB"
+RC="/tmp/retorno_cobranca_deposito_rc.$$"
 # ⛔ `--pular-processados` NAO e opcional aqui, e custou uma baixa dupla para eu
 # aprender: em 21/08/2026 esta rodada reprocessou `DEP2108261035345.RET` porque o
 # arquivo continua na pasta (`MOVER_PROCESSADOS_RET=False`, imposto pela montagem `:ro`
@@ -87,7 +87,7 @@ RC="/tmp/robo_deposito_rc.$$"
 { python /app/src/processors/web/retorno_cobranca/processar_retorno_cobranca.py \
       --pasta "$PASTA" --deposito --portao --detalhes --pra-valer \
       --pular-processados --recibos-dir "$PASTA/_RESULTADOS" "$@"; \
-  echo $? > "$RC"; } 2>&1 | tee -a "$LOGROBO"
+  echo $? > "$RC"; } 2>&1 | tee -a "$LOG_JOB"
 CODIGO=$(cat "$RC" 2>/dev/null || echo 1)
 rm -f "$RC"
 
@@ -98,5 +98,5 @@ rm -f "$RC"
 # Erro operacional anterior ao passo irreversivel permanece na entrada para retry.
 # O recibo JSON fica em _RESULTADOS e e a ponte auditavel com process-automation.
 
-echo "===== fim $(date '+%F %T %Z') exit=$CODIGO =====" >> "$LOGROBO"
+echo "===== fim $(date '+%F %T %Z') exit=$CODIGO =====" >> "$LOG_JOB"
 exit "$CODIGO"

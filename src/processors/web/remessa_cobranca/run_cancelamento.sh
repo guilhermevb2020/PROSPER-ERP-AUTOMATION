@@ -56,11 +56,11 @@ mkdir -p "$PERFIL"
 
 # ⚠️ O exit code que o hub precisa ver e o do PYTHON, nao o do `tee`. `PIPESTATUS`
 # e bashism e o hub chama com `sh`, que aqui e DASH — dai o arquivo de retorno.
-LOGROBO="/app/logs/robo_remessa_$(date +%Y-%m-%d).log"
-RC="/tmp/robo_cancelamento_rc.$$"
-echo "===== cancelamento inicio $(date '+%F %T %Z') =====" >> "$LOGROBO"
-{ python /app/src/processors/web/remessa_cobranca/gerar_remessa_cobranca.py --cancelar "$@"; echo $? > "$RC"; } 2>&1 | tee -a "$LOGROBO"
+LOG_JOB="/app/logs/remessa_cobranca_$(date +%Y-%m-%d).log"
+RC="/tmp/remessa_cobranca_cancelamento_rc.$$"
+echo "===== cancelamento inicio $(date '+%F %T %Z') =====" >> "$LOG_JOB"
+{ python /app/src/processors/web/remessa_cobranca/gerar_remessa_cobranca.py --cancelar "$@"; echo $? > "$RC"; } 2>&1 | tee -a "$LOG_JOB"
 CODIGO=$(cat "$RC" 2>/dev/null || echo 1)
 rm -f "$RC"
-echo "===== cancelamento fim $(date '+%F %T %Z') exit=$CODIGO =====" >> "$LOGROBO"
+echo "===== cancelamento fim $(date '+%F %T %Z') exit=$CODIGO =====" >> "$LOG_JOB"
 exit "$CODIGO"

@@ -70,12 +70,12 @@ export DRY_RUN_RETPAG="${DRY_RUN_RETPAG:-True}"
 # 8) roda o robo (uma vez, e sai). exit code do PYTHON, nao do tee (que e
 #    sempre 0) — o hub le o exit code; PIPESTATUS e bashism e este wrapper
 #    roda em dash via `sh`.
-LOGROBO="/app/logs/robo_retorno_pagamento_$(date +%Y-%m-%d).log"
-RC="/tmp/robo_retorno_pagamento_rc.$$"
-echo "===== inicio $(date '+%F %T %Z') =====" >> "$LOGROBO"
+LOG_JOB="/app/logs/retorno_pagamento_$(date +%Y-%m-%d).log"
+RC="/tmp/retorno_pagamento_rc.$$"
+echo "===== inicio $(date '+%F %T %Z') =====" >> "$LOG_JOB"
 { python /app/src/processors/web/retorno_pagamento/processar_retorno_pagamento.py \
-      "$@"; echo $? > "$RC"; } 2>&1 | tee -a "$LOGROBO"
+      "$@"; echo $? > "$RC"; } 2>&1 | tee -a "$LOG_JOB"
 CODIGO=$(cat "$RC" 2>/dev/null || echo 1)
 rm -f "$RC"
-echo "===== fim $(date '+%F %T %Z') exit=$CODIGO =====" >> "$LOGROBO"
+echo "===== fim $(date '+%F %T %Z') exit=$CODIGO =====" >> "$LOG_JOB"
 exit "$CODIGO"

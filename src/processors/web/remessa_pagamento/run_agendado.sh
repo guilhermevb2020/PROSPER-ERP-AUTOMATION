@@ -165,13 +165,13 @@ PRA_VALER="${PRA_VALER_PAG:-}"
 #    sempre 0). `PIPESTATUS` resolveria, mas e bashism e o hub chama este
 #    wrapper com `sh ...`, que aqui e DASH — o shebang nao vale nesse caso.
 #    Dai o arquivo de retorno, que funciona nos dois shells.
-LOGROBO="$RAIZ/logs/robo_pagamento_$(date +%Y-%m-%d).log"
-RC="/tmp/robo_pagamento_rc.$$"
-echo "===== inicio $(date '+%F %T %Z') =====" >> "$LOGROBO"
+LOG_JOB="$RAIZ/logs/remessa_pagamento_$(date +%Y-%m-%d).log"
+RC="/tmp/remessa_pagamento_rc.$$"
+echo "===== inicio $(date '+%F %T %Z') =====" >> "$LOG_JOB"
 # shellcheck disable=SC2086  # $PRA_VALER e uma flag ou vazio: nao pode ir com aspas
 { "${PYTHON_PAG:-python}" "$RAIZ/src/processors/web/remessa_pagamento/gerar_remessa_pagamento.py" $PRA_VALER "$@"; \
-  echo $? > "$RC"; } 2>&1 | tee -a "$LOGROBO"
+  echo $? > "$RC"; } 2>&1 | tee -a "$LOG_JOB"
 CODIGO=$(cat "$RC" 2>/dev/null || echo 1)
 rm -f "$RC"
-echo "===== fim $(date '+%F %T %Z') exit=$CODIGO =====" >> "$LOGROBO"
+echo "===== fim $(date '+%F %T %Z') exit=$CODIGO =====" >> "$LOG_JOB"
 exit "$CODIGO"

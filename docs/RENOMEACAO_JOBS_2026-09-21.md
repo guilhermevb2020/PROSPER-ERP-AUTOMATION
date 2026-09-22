@@ -41,9 +41,15 @@ Não há `delete` nem `rename` na CLI: renomear task é criar a nova e aposentar
 
 ## O que NÃO mudou, de propósito
 
-- **Caminhos de estado e de log**: `data/robo_*`, `logs/robo_*_<data>.log`,
-  `data/sandbox/robo_pagamento`. São armazenamento, não nome de job; renomear moveria perfis
-  de Chrome logados e CSVs de controle. Fica para uma janela própria.
+- **Caminhos de estado**: `data/robo_*` e `data/sandbox/robo_pagamento`. São armazenamento,
+  não nome de job; renomear move perfis de Chrome logados (e as planilhas de controle,
+  congeladas desde 22/09/2026). Fica para uma janela própria.
+- ✅ **Logs e temporários renomeados em 22/09/2026 à noite**, a pedido da Gerência ("robo é
+  job"): `logs/<job>_<data>.log` (`remessa_cobranca_`, `retorno_cobranca_`,
+  `retorno_cobranca_deposito_`, `remessa_pagamento_`, `remessa_pagamento_descoberta_`,
+  `retorno_pagamento_`, `credito_`, `finalizar_operacao_`), os `/tmp/<job>_*` dos wrappers e a
+  variável `LOGROBO` → `LOG_JOB`. Os logs até 22/09 ficam com o nome antigo; ninguém fora do
+  ERP lia esses arquivos pelo nome.
 - **Nomes de variáveis de ambiente** (`DRY_RUN_RET`, `USER_DATA_DIR_PAG`, `R7_*`…). O retorno
   roda com dry-run desligado em produção (ACHADO-123); uma variável renomeada cairia no
   default sem erro (LIC-058).
@@ -79,6 +85,6 @@ Não há `delete` nem `rename` na CLI: renomear task é criar a nova e aposentar
 
 - `robo_smart_ativo()` em `boletos/healthcheck.py` (nome de função) e as expressões
   "Robô 7" / "Robo 1" em prosa e docstrings; `r7_config.py`.
-- `data/robo_*` e `logs/robo_*` (ver acima).
+- `data/robo_*` (ver acima); os logs já saíram de `robo_*` em 22/09/2026.
 - `hub-orchestration` (docs, testes, comentários) e `access-guardian` (comentários em
   `projetos.yaml`, nota em `contas.yaml`) ainda citam `robo_analise_credito` e `robo_credito`.

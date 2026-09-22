@@ -40,7 +40,7 @@ cobrança e `02` quitação/cancelamento. Nome: `CB` + `DDMM` + sequencial(7) +
 | Controle | banco (`vw_controle_remessa`) desde 22/09/2026 | idempotência (id/arquivo/md5); `controle_remessas.csv` ficou congelado |
 | Credenciais Smart | `/app/config/remessa_cobranca.env` | fora do git |
 | Credenciais Nextcloud | `/app/config/nextcloud.env` | usuário `automacao`, fora do git |
-| Log ao vivo | `/app/logs/robo_remessa_<data>.log` | além do stdout que o hub captura |
+| Log ao vivo | `/app/logs/remessa_cobranca_<data>.log` (até 22/09/2026: `robo_remessa_<data>.log`) | além do stdout que o hub captura |
 
 > ### O destino no disco JÁ MUDOU — e a pasta não está em share nenhum
 >

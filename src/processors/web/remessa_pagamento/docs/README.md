@@ -111,7 +111,7 @@ As vírgulas no fim de cada lista (`"143,"`) são fiéis ao `+=` do JS.
 | Controle | banco (`erp_automation`, `vw_controle_pagamento`) desde 22/09/2026; `controle_pagamentos.csv` ficou congelado como histórico |
 | Credenciais | `/app/config/remessa_pagamento.env` (fora do git) |
 | Conta | `404` = `mp prospere \| 274 \| 0001 \| 0986952` |
-| Log ao vivo | `/app/logs/robo_pagamento_<data>.log` |
+| Log ao vivo | `/app/logs/remessa_pagamento_<data>.log` (até 22/09/2026: `robo_pagamento_<data>.log`) |
 
 > ⚠️ **O caminho de saída tem espaços.** Em shell, sempre `"$PASTA"`. Há
 > precedente: o destino do `remessa_cobranca` é `remessas a enviar`.

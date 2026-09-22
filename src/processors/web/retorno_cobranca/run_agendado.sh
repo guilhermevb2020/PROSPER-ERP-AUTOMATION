@@ -117,7 +117,7 @@ done
 # de sempre. O md5 e o de MODO TEXTO nos dois lados (o job grava o mesmo valor no banco).
 CONTROLE_FONTE_RET="${CONTROLE_FONTE_RET:-${CONTROLE_FONTE:-csv}}"
 MEMORIA_RET="$CONTROLE_RET"
-LISTA_MD5_RET="/tmp/robo_retorno_md5_banco.$$"
+LISTA_MD5_RET="/tmp/retorno_cobranca_md5_banco.$$"
 if [ "$CONTROLE_FONTE_RET" = "banco" ]; then
     export PYTHONPATH=/app
     _rc=0
@@ -135,7 +135,7 @@ if [ "$CONTROLE_FONTE_RET" = "banco" ]; then
         echo "controle: fonte BANCO indisponivel — usando o CSV de reserva $CONTROLE_RET"
     fi
 fi
-PASTAS_RET="/tmp/robo_retorno_pastas.$$"
+PASTAS_RET="/tmp/retorno_cobranca_pastas.$$"
 : > "$PASTAS_RET"
 if [ "$TEM_PASTA" -eq 0 ]; then
     # ⚠️ `-maxdepth`/`-mtime` limitam a varredura; sem eles seriam 534 arquivos.
@@ -160,25 +160,25 @@ rm -f "$LISTA_MD5_RET"
 #    sempre 0). `PIPESTATUS` resolveria, mas e bashism e o hub chama este
 #    wrapper com `sh ...`, que aqui e DASH — o shebang nao vale nesse caso.
 #    Dai o arquivo de retorno, que funciona nos dois shells.
-LOGROBO="/app/logs/robo_retorno_$(date +%Y-%m-%d).log"
-RC="/tmp/robo_retorno_rc.$$"
-PIOR="/tmp/robo_retorno_pior.$$"
+LOG_JOB="/app/logs/retorno_cobranca_$(date +%Y-%m-%d).log"
+RC="/tmp/retorno_cobranca_rc.$$"
+PIOR="/tmp/retorno_cobranca_pior.$$"
 echo 0 > "$PIOR"
 
 rodar() {   # $1 = pasta ou vazio; demais argumentos vao depois
     _p="$1"; shift
-    echo "===== inicio $(date '+%F %T %Z') ${_p:+pasta=$_p} =====" >> "$LOGROBO"
+    echo "===== inicio $(date '+%F %T %Z') ${_p:+pasta=$_p} =====" >> "$LOG_JOB"
     # ⚠️ `--pasta` vai ANTES de "$@": se o chamador tambem passou um, o dele
     # vence no argparse, que fica com o ultimo.
     if [ -n "$_p" ]; then
         { python /app/src/processors/web/retorno_cobranca/processar_retorno_cobranca.py \
-              --pasta "$_p" "$@"; echo $? > "$RC"; } 2>&1 | tee -a "$LOGROBO"
+              --pasta "$_p" "$@"; echo $? > "$RC"; } 2>&1 | tee -a "$LOG_JOB"
     else
         { python /app/src/processors/web/retorno_cobranca/processar_retorno_cobranca.py \
-              "$@"; echo $? > "$RC"; } 2>&1 | tee -a "$LOGROBO"
+              "$@"; echo $? > "$RC"; } 2>&1 | tee -a "$LOG_JOB"
     fi
     _c=$(cat "$RC" 2>/dev/null || echo 1)
-    echo "===== fim $(date '+%F %T %Z') exit=$_c =====" >> "$LOGROBO"
+    echo "===== fim $(date '+%F %T %Z') exit=$_c =====" >> "$LOG_JOB"
     [ "$_c" -gt "$(cat "$PIOR")" ] && echo "$_c" > "$PIOR"
     return 0
 }
@@ -188,7 +188,7 @@ if [ "$TEM_PASTA" -eq 1 ] || [ ! -s "$PASTAS_RET" ]; then
         # ⭐ Nada novo NAO e falha. Antes disto a task terminava em `exit=6` todo
         # dia por reler arquivo velho, e aviso que sempre falha se aprende a ignorar.
         echo "nenhum retorno bancario novo em $ARVORE_RET (janela de $DIAS_RET dias)" \
-            | tee -a "$LOGROBO"
+            | tee -a "$LOG_JOB"
         rm -f "$RC" "$PIOR" "$PASTAS_RET"
         exit 0
     fi

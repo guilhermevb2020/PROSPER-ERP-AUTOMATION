@@ -309,7 +309,7 @@ gerado pelo próprio código:
 **Onde procurar:**
 
 ```bash
-grep -i 'PORTAO' /home/prospere/docker/automation/erp-automation/logs/robo_retorno_$(date +%F).log
+grep -i 'PORTAO' /home/prospere/docker/automation/erp-automation/logs/retorno_cobranca_$(date +%F).log
 grep    'PORTAO' /home/prospere/docker/automation/erp-automation/data/robo_retorno/controle_processados.csv
 ```
 
@@ -481,7 +481,7 @@ linha antes de sair de perto.**
 | ligar em definitivo | `echo 'PORTAO_RET=true' >> .../config/retorno_cobranca.env` |
 | ligar só nesta rodada | `--portao` |
 | desligar só nesta rodada | `--sem-portao` |
-| ver recusas de hoje | `grep -i PORTAO .../logs/robo_retorno_$(date +%F).log` |
+| ver recusas de hoje | `grep -i PORTAO .../logs/retorno_cobranca_$(date +%F).log` |
 | ver recusas antigas | `grep PORTAO .../data/robo_retorno/controle_processados.csv` |
 | a grade inteira de um arquivo | `--arquivo X.RET --csv-titulos /app/data/robo_retorno/x.csv` |
 | ver se há rodada em voo | `docker exec erp-automation pgrep -af processar_retorno_cobranca.py` |
