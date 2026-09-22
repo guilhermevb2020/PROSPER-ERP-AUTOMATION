@@ -520,3 +520,10 @@ SELECT conta_label, qtd_titulos, qtd_apos_2pass, emitido_em
 FROM operacional.boleto_emissao_log
 WHERE status = 'alerta_sem_efeito' AND emitido_em > NOW() - INTERVAL '24 hours';
 ```
+
+## Healthcheck e sessão (medido em 07/09/2026)
+
+O healthcheck efetivo usa a janela 7h–18h (os padrões do módulo são sobrescritos pelo Hub);
+`needs_login_fora_janela` com exit 0 **não** significa sessão saudável. O mantenedor loga ao
+iniciar; emissão e healthcheck fazem a recuperação posterior. PDFs de emissão ficam em
+`/app/data/boletos/emitidos`, com manifesto; não versionar esses documentos.

@@ -116,3 +116,6 @@ Ela entrou no Hub às 20:08 pela imagem `79bca6c`, após drain certificado com
 contadores zerados. Os endpoints de saúde e retomada passaram; ERP, data-hub
 e Guardian não foram reiniciados. Tarefa crítica permanece agendada e o aviso
 agora informa esse estado. O teste das mensagens foi isolado, sem envio externo.
+
+Reconferência de 07/09/2026 às 16:32:55: 3.735 arquivos varridos; só o material de VNC
+esperado, sem erros de leitura (registro que ficava no `CLAUDE.md` até 22/09/2026).

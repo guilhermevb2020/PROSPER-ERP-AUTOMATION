@@ -218,3 +218,88 @@ Crédito 2665935 continua em execução, sem novo restart. O catálogo mantém p
 enabled=true. A correção de texto `b9367b4`, pendente nesta conferência das
 14:30, foi publicada às 20:08 pela imagem `79bca6c` do Hub, com drain
 certificado e saúde/retomada aprovadas. ERP, data-hub e Guardian preservados.
+
+---
+
+## Anexo — o que o CLAUDE.md dizia em 07/09/2026 (movido em 22/09/2026)
+
+Texto original, sem edição, retirado do `CLAUDE.md` na reorganização de 22/09/2026 para que o arquivo
+carregado em toda sessão trouxesse só o que vale hoje. As regras que continuam valendo (trava por conta,
+identidades do Smart, `pytest.ini`, PDFs dos boletos) foram para as regras do `CLAUDE.md`.
+
+### Estado verificado em 07/09/2026
+
+Nova rodada manual autorizada em andamento desde 17:03, dentro da validação de
+16:34:17 até 08/09 00:34:17. Abrange as 11 tarefas finitas habilitadas; crédito
+foi acompanhado na execução 2665935, sem duplicação, até a saída normal às
+18:50:28: success/exit 0, ciclo 306, fim do expediente configurado. Não reiniciar
+o robô fora dessa janela para continuar a observação. O histórico abaixo registra
+a rodada anterior e não encerra o acompanhamento atual. Resultados e limites:
+`docs/VALIDACAO_OITO_HORAS_2026-09-07.md`.
+
+Rodada manual: 11 tarefas finitas conferidas. Emissão adicional 2670656
+recuperou sessão expirada via CapSolver e concluiu às 19:21:39, 55 contas vazias.
+O healthcheck efetivo usa 7h–18h (padrões do módulo são sobrescritos pelo Hub);
+`needs_login_fora_janela` com exit 0 não significa sessão saudável. O mantenedor
+loga ao iniciar; emissão e healthcheck fazem a recuperação posterior.
+
+Às 18:13, retorno de pagamento 2669741 falhou por
+`ERROR_CAPTCHA_SOLVE_FAILED`; retentativa 2669760 recuperou às 18:15:45.
+O solver compartilhado ganhou uma segunda tentativa de desafio, limitada ao
+mesmo prazo total, sem repetir erros de chave/saldo. 36 testes isolados sem
+rede aprovados; publicação alcança novos processos pelo bind de `/app/src`,
+sem reiniciar ERP/crédito. Commit `d244857` aplicado às 18:18:37; retorno
+2669905 usou o solver novo, confirmou login e concluiu às 18:24:25, sem arquivo
+de entrada. Não precisou da segunda resolução; esse ramo tem prova automatizada.
+Não confundir os 11 sucessos manuais com ausência
+de falhas posteriores; acompanhar cada tentativa até 00:34:17.
+
+Consulte [a matriz de validação](docs/VALIDACAO_ERP_2026-09-07.md) antes de
+repetir testes operacionais: 382 testes no host; 20 tarefas inventariadas, das
+quais 12 habilitadas foram alcançadas na rodada real de feriado (11 concluídas
+e crédito em execução). Sessão principal saudável às 15:30, após recuperação
+automática e emissão da tarde. Veja `docs/VALIDACAO_FERIADO_2026-09-07.md`.
+O Smart tem sessão única por identidade; novos logins podem
+interromper outro robô. Testes de regressão usam serviços simulados.
+Geração e retorno de pagamento usam uma trava financeira comum antes do Chrome
+(`src/common/smart_financeiro_lock.sh`). Não remover a trava nem apagar seu
+arquivo enquanto houver uso. **Desde 22/09/2026 a trava é por CONTA do Smart:** a
+família de pagamento (`prosperito_financeiro`) fica em `/tmp/smart_financeiro.lock`, a
+original; a família de cobrança (remessa, retorno, BB, depósito, cancelamento, conta
+`prosperito`) usa `/tmp/smart_cobranca.lock`, definida em cada wrapper antes de carregar
+a trava. Uma trava só para as duas fazia a remessa de cobrança das 18h derrubar o
+pagamento das 18h00–18h20 todo dia útil (exit 6), sem ganho: contas diferentes não
+disputam sessão. Gate: `tests/unit/test_trava_por_conta.py`. A falha do aviso de segurança às 16:03 recuperou
+na retentativa; retorno e geração concluíram novamente às 16:14 e 16:16.
+
+A rodada real das 12:25–13:15 confirmou 683 documentos enviados,
+registro no banco e remessa CNAB400 de 14 títulos entregue ao Nextcloud.
+Emissão/envio executaram em modo real sem novos títulos; pagamentos logaram
+sem entrada pendente. Retorno e depósito também executaram, sem arquivos novos.
+Consulte a matriz para os IDs e limites: isso não comprova baixas sem entrada.
+A manutenção manual do Hub pausou o despacho e foi liberada externamente;
+a sequência terminou após a retomada. O mantenedor normal do Chrome foi
+restaurado com login automático e keepalive válido. Crédito segue o ciclo diário.
+
+O ERP usa o Guardian para banco e integrações. A conta financeira usa
+`PAGAMENTO_SENHA=GSMARTPWD2` no ambiente; não restaurar a senha real em
+`config/remessa_pagamento.env`. O valor da fonte foi corrigido para respeitar os
+11 caracteres efetivamente enviados pelo campo antes da migração. Logins de
+pagamento confirmados após a correção. Credenciais nunca devem ser exibidas.
+
+`pytest` coleta somente a suíte automatizada definida em `pytest.ini`.
+Scripts manuais de email e browser em `tests/` têm efeitos externos ao importar.
+Dependências de teste: `requirements-test.txt`. PDFs de emissão são guardados
+em `/app/data/boletos/emitidos`, com manifesto; não versionar esses documentos.
+
+### Registro de 03/08/2026 sobre as tabelas de log
+
+**Registro histórico (03/08; não usar como estado atual):** `operacional.boleto_envio_log` /
+`boleto_emissao_log` / `boleto_sessao_healthcheck`, e `stg.doc*` / `stg.robo_analise_*`.
+⚠️ A tabela `operacional.boleto_envio_log` foi **criada pela migration 079 do
+`process-automation`** e é escrita daqui — dependência cross-repo real, sem contrato de
+schema versionado do lado de quem escreve.
+
+Mapa completo: registro
+`2026-08-03-quem-escreve-no-banco-o-mapa-que-nunca-existiu` no PostgreSQL do Learn
+(`learn contexto "quem escreve no banco"`).
