@@ -271,19 +271,27 @@ def _registrar_no_banco(execucao, res, caminho, bb: bool):
 
     O arquivo e identificado pelo CONTEUDO: o mesmo .RET reprocessado nao cria linha
     nova, devolve a que existe — que e a mesma regra do `hash` no controle. Os titulos
-    detalhados entram como arquivo_titulo quando o processamento os devolveu."""
+    detalhados entram como arquivo_titulo quando o processamento os devolveu.
+
+    `res["detalhes"]` e a GRADE que o Smart devolve no upload (`retorno.extrair_titulos`):
+    as chaves sao `numero_titulo`, `acao_tomada`, `valor_titulo`... — nao `numTitulo`/
+    `ocorrencia`, que sao das CRITICAS. A grade nao traz o codigo CNAB da ocorrencia;
+    `codigo_ocorrencia` recebe a "acao tomada" do Smart (Liquidado, Entrada confirmada...).
+    Entre 21 e 22/09/2026 o mapeamento lia as chaves erradas e 95 titulos entraram so com
+    o numero da linha; a tabela nao aceita UPDATE, entao esses ficam assim (o CSV tem tudo)."""
     if not os.path.exists(caminho):
         return None
     titulos = []
     for i, t in enumerate(res.get("detalhes") or [], start=1):
         titulos.append({"numero_linha": i,
-                        "id_titulo": t.get("numTitulo") or t.get("id_titulo"),
-                        "codigo_ocorrencia": t.get("ocorrencia") or t.get("codigo_ocorrencia"),
-                        "valor_titulo": t.get("valor")})
+                        "id_titulo": t.get("numero_titulo") or None,
+                        "codigo_ocorrencia": t.get("acao_tomada") or None,
+                        "valor_titulo": t.get("valor_titulo") or t.get("valor_titulo_arq")})
     arq_id = execucao_job.registrar_arquivo(
         execucao, "retorno_bb" if bb else "retorno_cobranca_cnab_400", "recebido",
         nome_arquivo=res.get("arquivo") or os.path.basename(caminho), caminho=caminho,
-        qtd_registros=res.get("titulos"), conta_id=(str(res["conta"]) if res.get("conta") else None),
+        qtd_registros=res.get("titulos"), valor_total=res.get("valor_total"),
+        conta_id=(str(res["conta"]) if res.get("conta") else None),
         origem_caminho=caminho, destino_caminho=res.get("arquivado_em"),
         detalhe={"md5": res.get("hash"), "nome_smart": res.get("nome_smart"),
                  "motivo": res.get("motivo"),

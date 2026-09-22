@@ -29,6 +29,10 @@ sys.path.insert(0, str(RAIZ))
 psycopg2 = pytest.importorskip("psycopg2")
 from src.common.clients import execucao_job  # noqa: E402
 
+sys.path.insert(0, str(RAIZ / "src/processors/web/retorno_cobranca"))
+import retorno  # noqa: E402
+import processar_retorno_cobranca as robo_retorno  # noqa: E402
+
 ADMIN = os.environ.get("BANCADA_ADMIN_DSN")
 RUNTIME = os.environ.get("ERP_BANCADA_DSN")
 
@@ -135,30 +139,45 @@ def test_retorno_pagamento_grava_o_recebido_e_o_evento_processado(execucao, tmp_
     assert (sentido, tipo) == ("recebido", "processado")
 
 
-def test_retorno_cobranca_grava_os_titulos_detalhados(execucao, tmp_path):
-    """O trecho de `_registrar_no_banco()` do retorno: titulos com ocorrencia e valor.
+def _grade_do_smart(linhas):
+    """A grade como o upload devolve: HTML ISO-8859-1 em base64, uma <tr> por titulo,
+    colunas na ordem de `retorno.extrair_titulos`."""
+    import base64
+    html = "<table>" + "".join(
+        "<tr>" + "".join(f"<td>{c}</td>" for c in linha) + "</tr>" for linha in linhas
+    ) + "</table>"
+    return base64.b64encode(html.encode("iso-8859-1")).decode("ascii")
 
-    Este e o unico caminho que JA rodou em producao (13 arquivos em 21/09), mas entra
-    aqui para o conjunto cobrir os quatro e nao so os tres que faltavam."""
+
+def test_retorno_cobranca_grava_os_titulos_detalhados(execucao, tmp_path):
+    """Pela funcao REAL do job (`_registrar_no_banco`), a partir da grade do Smart.
+
+    Este e o unico caminho que JA rodou em producao (13 arquivos em 21/09), e foi
+    justamente onde a versao anterior deste teste enganou: alimentava o cliente com
+    dicionarios ja mapeados e nao viu que o job lia chaves erradas da grade — 95 titulos
+    entraram sem numero, acao ou valor entre 21 e 22/09/2026."""
     caminho = tmp_path / "CP22090000321.RET"
     caminho.write_bytes(_unico(b"4"))
-    arq_id = execucao_job.registrar_arquivo(
-        execucao, "retorno_cobranca_cnab_400", "recebido",
-        nome_arquivo=caminho.name, caminho=str(caminho), qtd_registros=2, conta_id="291",
-        origem_caminho=str(caminho), destino_caminho=None,
-        detalhe={"md5": "jkl012", "ocorrencias": {"refinan": 2}, "qtd_criticas": 0,
-                 "divergencias": []},
-        titulos=[{"numero_linha": 1, "id_titulo": "7021-001",
-                  "codigo_ocorrencia": "06", "valor_titulo": "1.234,56"},
-                 {"numero_linha": 2, "id_titulo": "7021-002",
-                  "codigo_ocorrencia": "06", "valor_titulo": "78,90"}])
+    dados = {"titulos": _grade_do_smart([
+        ["1.234,56", "10/10/2026", "SACADO UM", "Liquidado", "OK", "0,00",
+         "7021-001", "1.234,56", "1.234,56", "21/09/2026"],
+        ["78,90", "11/10/2026", "SACADO DOIS", "Liquidado", "OK", "0,00",
+         "7021-002", "78,90", "78,90", "21/09/2026"]]),
+        "valorTotalTitulos": "1.313,46"}
+    res = {"arquivo": caminho.name, "titulos": 2, "conta": 291, "processado": True,
+           "motivo": "OK", "hash": "jkl012", "ocorrencias": {"refinan": 2},
+           "detalhes": retorno.extrair_titulos(dados),
+           "valor_total": dados["valorTotalTitulos"]}
+    arq_id = robo_retorno._registrar_no_banco(execucao, res, str(caminho), bb=False)
     assert arq_id
+    (total,), = _ler("select valor_total from erp_automation.arquivo where id = %s", (arq_id,))
+    assert str(total) == "1313.46", "o total do Smart vai para arquivo.valor_total"
     linhas = _ler("select id_titulo, codigo_ocorrencia, valor_titulo "
                   "from erp_automation.arquivo_titulo where fk_arquivo = %s "
                   "order by numero_linha", (arq_id,))
     assert [(t, o, str(v)) for t, o, v in linhas] == [
-        ("7021-001", "06", "1234.56"), ("7021-002", "06", "78.90")], \
-        "o valor em pt-BR tem de virar numeric"
+        ("7021-001", "Liquidado", "1234.56"), ("7021-002", "Liquidado", "78.90")], \
+        "numero, acao tomada e valor (pt-BR -> numeric) tem de chegar ao banco"
 
 
 def test_o_mesmo_arquivo_duas_vezes_nao_duplica(execucao, tmp_path):

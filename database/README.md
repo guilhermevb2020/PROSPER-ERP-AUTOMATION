@@ -130,6 +130,18 @@ abre execução e grava evento (permitido), fecha uma vez (a segunda o gatilho r
 `UPDATE`/`DELETE` em `operacao_evento` negados por privilégio, `DISABLE TRIGGER` negado
 por não ser dona. A primeira execução real registrada é a #2, do finalizador pelo hub.
 
+⚠️ **Lacuna conhecida em `arquivo_titulo`:** os arquivos `id` 1 a 21 (retorno de cobrança
+e retorno BB, de 21/09 até 22/09 08:43) têm os títulos gravados só com `numero_linha` —
+`id_titulo`, `codigo_ocorrencia` e `valor_titulo` vazios, 95 linhas. O job lia as chaves
+das *críticas* (`numTitulo`/`ocorrencia`/`valor`) em vez das da *grade* do Smart
+(`numero_titulo`/`acao_tomada`/`valor_titulo`), e o teste de integração não viu porque
+alimentava o cliente com dicionários já mapeados. Corrigido em 22/09/2026 (teste
+`tests/unit/test_retorno_registro_banco.py` parte do HTML em base64, como o upload devolve).
+A tabela não aceita `UPDATE`, então essas 95 linhas ficam como estão: a contagem por
+arquivo está certa e o CSV de controle tem os títulos. Para o retorno, `codigo_ocorrencia`
+carrega a **ação tomada** do Smart (Liquidado, Entrada Confirmada…): a grade não traz o
+código CNAB.
+
 O modelo `erp-automation-ddl` **existe** no `roles.yaml` do Guardian desde 21/09/2026
 (`herda: [access_admin, app_erp_automation]`, 2 h, sem permanente). Para aplicar:
 
