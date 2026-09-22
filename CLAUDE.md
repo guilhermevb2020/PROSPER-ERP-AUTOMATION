@@ -170,7 +170,9 @@ túnel ssh ao IP do container (ver `docs/COMO_SUBIR_UM_JOB.md`).
 - **Execução manual em modo real diz quem e por quê:** `docker exec -e ERP_OPERADOR=nome
   -e ERP_MOTIVO="..." erp-automation sh .../run_agendado.sh`. Desde 22/09/2026 ~11h15 o hub
   passa `HUB_RUN_ID` (o id de lock do run, 32 hex) e `HUB_TASK_NOME` no exec: execução dele
-  entra como `gatilho cron`, com `run_id` e `task_nome`; `manual` é só quem rodou `docker exec` à mão.
+  entra como `gatilho cron`, com `run_id` e `task_nome`; `manual` é só quem rodou `docker exec` à mão
+  (e, em modo real sem `ERP_OPERADOR`/`ERP_MOTIVO`, o job avisa no log). O retorno BB registra a
+  intenção no banco **antes** do recibo e do POST: sem registro, sem POST (arquivo fica pendente).
 - **O nome do job na execução tem de casar com a task do hub.** `run_bb.sh` é
   `gerar_remessa_bb`/`processar_retorno_bb`, `run_deposito.sh` é `baixar_deposito_no_erp`.
   Errar isso faz a execução apontar para o job errado, e ninguém percebe até procurar. Tabela de evento nunca muda: corrigir é outro evento.

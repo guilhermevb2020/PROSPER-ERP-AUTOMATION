@@ -18,6 +18,17 @@ import processar_retorno_cobranca as robo  # noqa: E402
 from test_retorno_bb_api import arquivo, grade, preparar  # noqa: E402
 
 
+#: A intencao estrita (22/09/2026) exige execucao aberta e banco em modo real. Os testes
+#: desta suite provam o RECIBO (tentativa unica) sem banco nenhum: o registro sai do
+#: caminho por padrao; quem prova o registro devolve a funcao original.
+_REGISTRAR_INTENCAO_ORIGINAL = bb_entrega._registrar_intencao_no_banco
+
+
+@pytest.fixture(autouse=True)
+def _sem_banco_por_padrao(monkeypatch):
+    monkeypatch.setattr(bb_entrega, "_registrar_intencao_no_banco", lambda *a, **k: None)
+
+
 def _execucao_degradada():
     """Uma execucao que nao fala com banco nenhum: o job segue, nada e registrado.
     E o mesmo objeto que `abrir_execucao(obrigatoria=False)` devolve sem banco."""
@@ -163,9 +174,11 @@ def test_cli_bb_exige_flag_real_mesmo_com_env_legado_e_grava_recibos(tmp_path, m
     monkeypatch.setattr(robo.smart_sessao, "sessao", MagicMock())
     monkeypatch.setattr(robo.smart_sessao, "sessao_viva", Mock(return_value=True))
     # O registro no banco tem teste proprio (abaixo). Aqui ele sai do caminho: sem isto,
-    # o ramo --pra-valer pararia em "sem banco" antes de exercitar a entrega BB.
+    # o ramo --pra-valer pararia em "sem banco" antes de exercitar a entrega BB — e, desde
+    # a intencao estrita (22/09/2026), tambem pararia antes do POST.
     monkeypatch.setattr(robo.execucao_job, "abrir_execucao",
                         Mock(return_value=_execucao_degradada()))
+    monkeypatch.setattr(bb_entrega, "_registrar_intencao_no_banco", lambda *a, **k: None)
     args = ["processar_retorno_cobranca.py", "--pasta", str(tmp_path), "--conta-bb-api", "395",
             "--recibos-dir", str(recibos), "--pausa", "0"]
     monkeypatch.setattr(sys, "argv", args + (["--pra-valer"] if pra_valer else []))
@@ -209,3 +222,32 @@ def test_pra_valer_sem_banco_recusa_antes_de_tocar_no_smart(tmp_path, monkeypatc
     assert robo.main() == robo.SAIU_SEM_SESSAO
     browser.assert_not_called()
     assert caminho.exists(), "o .RET tem de continuar na entrada para a proxima rodada"
+
+
+def test_intencao_nao_registrada_no_banco_nao_ha_post_nem_recibo(tmp_path, monkeypatch):
+    """Modo real: a intencao vai ao banco ANTES do recibo e do POST. Sem banco, levanta,
+    nao grava recibo de intencao (senao o arquivo ficaria inconclusivo para sempre) e o
+    Smart nao e chamado; com o banco de volta, a mesma entrega segue limpa."""
+    from src.common.clients import execucao_job
+    caminho = arquivo(tmp_path)
+    recibos = tmp_path / "recibos"
+    chamada = preparar(monkeypatch, grade(), {"message": "OK", "liquidacao": 1})
+    monkeypatch.setattr(bb_entrega, "_registrar_intencao_no_banco", _REGISTRAR_INTENCAO_ORIGINAL)
+    degradada = _execucao_degradada()
+    degradada.estrito = True
+    monkeypatch.setattr(execucao_job, "atual", lambda: degradada)
+    with pytest.raises(execucao_job.ErroDeRegistro):
+        bb_entrega.processar(None, caminho, conta=395, pasta_recibos=recibos, dry_run=False)
+    assert chamada.call_count == 0, "sem registro nao ha POST"
+    assert ler_recibos(recibos) == [], "sem recibo de intencao: a proxima rodada tenta limpa"
+
+    registrado = []
+    monkeypatch.setattr(execucao_job, "registrar_arquivo", lambda ex, *a, **k: registrado.append(("arquivo", k)) or 7)
+    monkeypatch.setattr(execucao_job, "registrar_evento_arquivo",
+                        lambda ex, arq, tipo, **k: registrado.append((tipo, arq, k)) or 9)
+    resultado = bb_entrega.processar(None, caminho, conta=395, pasta_recibos=recibos, dry_run=False)
+    assert resultado["processado"] and chamada.call_count == 1
+    assert registrado[0][0] == "arquivo" and registrado[1][0] == "intencao_envio"
+    assert registrado[1][2]["estrito"] is True
+    etapas = sorted(r["metadados"]["etapa"] for r in ler_recibos(recibos))
+    assert etapas == ["intencao", "resultado"]

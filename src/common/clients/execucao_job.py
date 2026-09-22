@@ -315,10 +315,12 @@ def abrir_execucao(automacao: str, job: str, *, flag_ensaio: bool, gatilho: str 
 
     ex = Execucao(id=None, automacao=automacao, job=job, flag_ensaio=flag_ensaio, estrito=obrigatoria)
     _ATUAL = ex
-    # Sem aviso quando faltam operador/motivo: o hub (22/09/2026) ainda nao injeta
-    # HUB_RUN_ID/HUB_TASK_NOME no docker exec, entao TODA execucao dele chega como
-    # "manual" e o aviso viraria ruido em cada job. Quando o hub passar a identificar-se,
-    # o gatilho vira cron sozinho e o aviso para execucao manual sem autor passa a valer.
+    # Desde 22/09/2026 ~11h15 o hub se identifica (HUB_RUN_ID/HUB_TASK_NOME), entao
+    # "manual" e so quem rodou `docker exec` a mao — e execucao manual em modo REAL sem
+    # autor e sem motivo e um buraco na auditoria. Avisa; nao barra (o job e de quem roda).
+    if gatilho == "manual" and not flag_ensaio and not (operador and motivo):
+        ex._avisar(log, "execucao MANUAL em modo REAL sem ERP_OPERADOR/ERP_MOTIVO: a auditoria "
+                        "nao sabera quem nem por que (docker exec -e ERP_OPERADOR=nome -e ERP_MOTIVO=...)")
     campos = {"automacao": automacao, "job": job, "task_nome": task_nome, "run_id": run_id,
               "gatilho": gatilho, "ambiente": ambiente, "flag_ensaio": flag_ensaio,
               "apelido_credencial": apelido, "versao_codigo": versao_codigo,

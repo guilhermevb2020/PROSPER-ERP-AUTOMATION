@@ -69,26 +69,39 @@ def _anterior(pasta, sha, conta):
             "motivo": "tentativa BB já iniciada sem confirmação durável; não reenviar"}
 
 
-def _espelhar_intencao_no_banco(etapa, resultado, *, caminho, conta, tentativa):
-    """erp_005: a INTENCAO (antes do POST irreversivel) vai ao banco tambem, como
-    `intencao_envio` do arquivo. O recibo em disco continua sendo a prova de tentativa
-    unica; aqui e registro — fato consumado, falha de banco avisa e nao barra. Promover
-    a estrito (sem registro, sem POST) e da Fase 2, quando o recibo migrar. O resultado
-    nao entra aqui: `processar_retorno_cobranca._registrar_no_banco` ja o grava."""
-    if etapa != "intencao" or execucao_job is None:
+def _registrar_intencao_no_banco(resultado, *, caminho, conta, tentativa, estrito):
+    """A INTENCAO vai ao banco ANTES do recibo e do POST (`intencao_envio` do arquivo).
+
+    Em modo real (estrito) vale a regra da casa: sem registro nao ha acao irreversivel —
+    falha de banco levanta ErroDeRegistro, o recibo de intencao NAO e gravado e o POST
+    nao acontece; a rodada marca o arquivo como pendente (exit 6) e a proxima tenta de
+    novo, limpa. A ordem importa: recibo gravado + banco falhando deixaria o arquivo
+    "inconclusivo para sempre" (o recibo e o que impede a repeticao). Em ensaio nao ha
+    intencao (o retorno devolve antes). Fase 2 de docs/PLANO_CONTROLE_NO_BANCO.md,
+    ligada em 22/09/2026 junto com CONTROLE_FONTE_RET=banco."""
+    if execucao_job is None:
+        if estrito:
+            raise RuntimeError("cliente de execucao indisponivel: sem registro da intencao nao ha POST")
         return
     ex = execucao_job.atual()
     if ex is None:
+        if estrito:
+            raise execucao_job.ErroDeRegistro("sem execucao aberta: sem registro da intencao nao ha POST")
         return
     arq_id = execucao_job.registrar_arquivo(
         ex, "retorno_bb", "recebido", nome_arquivo=Path(caminho).name, caminho=str(caminho),
         qtd_registros=resultado.get("titulos"), conta_id=str(conta),
         detalhe={"md5": resultado.get("hash"), "nome_smart": resultado.get("nome_smart"),
                  "tentativa": tentativa})
-    if arq_id:
-        execucao_job.registrar_evento_arquivo(
-            ex, arq_id, "intencao_envio",
-            detalhe={"tentativa": tentativa, "conta_bb_api": conta})
+    if not arq_id:
+        if estrito:
+            raise execucao_job.ErroDeRegistro("arquivo nao registrado no banco: sem intencao nao ha POST")
+        return
+    evento = execucao_job.registrar_evento_arquivo(
+        ex, arq_id, "intencao_envio", estrito=estrito,
+        detalhe={"tentativa": tentativa, "conta_bb_api": conta})
+    if estrito and not evento:
+        raise execucao_job.ErroDeRegistro("intencao_envio nao registrada: sem registro nao ha POST")
 
 
 def processar(ctx, caminho, *, conta, pasta_recibos, dry_run=True):
@@ -112,13 +125,15 @@ def processar(ctx, caminho, *, conta, pasta_recibos, dry_run=True):
         def registrar(etapa, resultado):
             if resultado.get("sha256") != sha:
                 raise ValueError("arquivo BB mudou durante o processamento")
+            if etapa == "intencao":
+                # banco ANTES do recibo (ver _registrar_intencao_no_banco)
+                _registrar_intencao_no_banco(resultado, caminho=arquivo, conta=conta,
+                                             tentativa=tentativa, estrito=not dry_run)
             artefatos.gravar_recibo_atomico(
                 pasta, resultado, schema=SCHEMA,
                 metadados={"etapa": etapa, "tentativa": tentativa, "conta_bb_api": conta},
             )
             gravados.add(etapa)
-            _espelhar_intencao_no_banco(etapa, resultado, caminho=arquivo, conta=conta,
-                                        tentativa=tentativa)
 
         resultado = retorno.processar(ctx, caminho, dry_run=dry_run,
                                       conta_bb_api=conta, registrar_bb=registrar)

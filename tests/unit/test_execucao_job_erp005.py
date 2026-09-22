@@ -64,12 +64,17 @@ def test_manual_registra_operador_e_motivo_do_ambiente(banco, monkeypatch):
     assert ex.avisos == [], "com operador e motivo nao ha o que avisar"
 
 
-def test_sem_operador_abre_sem_avisar(banco):
-    """O hub ainda nao se identifica no docker exec (toda execucao dele chega como
-    manual): avisar aqui seria ruido em cada job. Registra o que ha, sem aviso."""
+def test_manual_real_sem_operador_abre_e_avisa(banco):
+    """Desde que o hub se identifica (22/09/2026), manual e so quem rodou a mao: sem
+    ERP_OPERADOR/ERP_MOTIVO em modo real a auditoria fica sem autor — avisa, nao barra."""
     ex = ej.abrir_execucao("controle", "comparar_controle_csv_banco", flag_ensaio=False, log=lambda m: None)
     assert ex.id == 101
     assert _insert_execucao(banco)["operador"] is None
+    assert any("ERP_OPERADOR" in a for a in ex.avisos)
+
+
+def test_manual_em_ensaio_nao_avisa(banco):
+    ex = ej.abrir_execucao("controle", "comparar_controle_csv_banco", flag_ensaio=True, log=lambda m: None)
     assert ex.avisos == []
 
 
