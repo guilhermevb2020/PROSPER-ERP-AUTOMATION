@@ -46,12 +46,11 @@ cada operação com eventos; tudo imutável por dono separado e gatilho.
 
 - Execução **manual em modo real** informa quem e por quê: `ERP_OPERADOR=nome ERP_MOTIVO="..."`
   no ambiente (`docker exec -e ...`). Sem isso o job roda; a auditoria fica sem autor.
-- ⚠️ **O hub ainda não se identifica** (medido em 22/09/2026): o `docker exec` do
-  hub-orchestration não passa `HUB_RUN_ID`/`HUB_TASK_NOME`, então toda execução dele é
-  registrada como `gatilho manual` e `run_id` fica nulo — a ligação `job_execucao` ↔
-  `hub_orchestration.task_execucao` não fecha. Pendência para a frente do hub: passar
-  `-e HUB_RUN_ID=<id> -e HUB_TASK_NOME=<task>` no exec; o cliente já lê os dois e o gatilho
-  vira `cron` sozinho. Até lá, quem quiser saber se foi o hub olha o horário contra o cron.
+- ✅ **O hub se identifica desde 22/09/2026 ~11h15** (frente do hub, a pedido desta): o
+  `docker exec` passa `HUB_RUN_ID` (id de lock do run, 32 hex) e `HUB_TASK_NOME`; a execução
+  entra como `gatilho cron` com `run_id` e `task_nome` (primeira medida: #153, 11h17). Antes
+  disso toda execução do hub está gravada como `manual` com `run_id` nulo. A `erp_006`
+  (índice de `run_id` não único) foi aplicada antes, porque um run abre várias execuções.
 - O que aconteceu com um arquivo é **evento**, não coluna do arquivo: o processamento
   grava ocorrências, críticas e divergências no `detalhe_json` do evento `processado`/`retido`.
 - Fato sem tabela própria (remessa que não baixou, cancelamento de remessa anterior ao

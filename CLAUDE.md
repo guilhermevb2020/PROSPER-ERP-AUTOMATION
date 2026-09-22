@@ -166,9 +166,9 @@ túnel ssh ao IP do container (ver `docs/COMO_SUBIR_UM_JOB.md`).
   `_PAG`/`_RET`/`_REM` (padrão `csv`, inerte; a carga histórica de 45 dias das remessas foi feita em
   22/09/2026, execução #166); quem mexer nos quatro jobs de arquivo mantém os dois lados.
 - **Execução manual em modo real diz quem e por quê:** `docker exec -e ERP_OPERADOR=nome
-  -e ERP_MOTIVO="..." erp-automation sh .../run_agendado.sh`. O hub ainda não se identifica
-  no exec (`HUB_RUN_ID`/`HUB_TASK_NOME` não chegam), então toda execução dele aparece como
-  `gatilho manual` — pendência da frente do hub, não deste repositório.
+  -e ERP_MOTIVO="..." erp-automation sh .../run_agendado.sh`. Desde 22/09/2026 ~11h15 o hub
+  passa `HUB_RUN_ID` (o id de lock do run, 32 hex) e `HUB_TASK_NOME` no exec: execução dele
+  entra como `gatilho cron`, com `run_id` e `task_nome`; `manual` é só quem rodou `docker exec` à mão.
 - **O nome do job na execução tem de casar com a task do hub.** `run_bb.sh` é
   `gerar_remessa_bb`/`processar_retorno_bb`, `run_deposito.sh` é `baixar_deposito_no_erp`.
   Errar isso faz a execução apontar para o job errado, e ninguém percebe até procurar. Tabela de evento nunca muda: corrigir é outro evento.
