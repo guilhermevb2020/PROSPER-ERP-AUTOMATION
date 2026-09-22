@@ -53,13 +53,22 @@ def test_csv_padrao_acha_so_o_arquivo_novo(tmp_path):
     assert saida.strip().splitlines()[-1] == str(arvore), "uma pasta com novidade (NOVO.RET)"
 
 
-def test_banco_responde_e_a_lista_dele_e_a_memoria(tmp_path):
+def test_banco_responde_e_a_lista_dele_mais_o_csv_e_a_memoria(tmp_path):
     arvore, controle, md5_velho, md5_novo = _preparar(tmp_path)
-    # o banco conhece os DOIS: nada e novidade, e o CSV (que so tem o velho) nao e consultado
+    # o banco conhece os DOIS: nada e novidade
     falso = f"python() {{ echo {md5_velho}; echo {md5_novo}; return 0; }}"
     saida = _rodar(tmp_path, "banco", falso, arvore, controle)
-    assert "controle: fonte BANCO (2 md5 registrados)" in saida
+    assert "controle: fonte BANCO (2 md5 registrados) + historico do CSV" in saida
     assert str(arvore) not in saida
+
+
+def test_banco_sem_historico_ainda_respeita_o_csv(tmp_path):
+    """O banco so conhece o que entrou desde 21/09/2026: o VELHO (so no CSV) nao pode virar
+    novidade — e o NOVO, que nao esta em lugar nenhum, tem de aparecer."""
+    arvore, controle, md5_velho, md5_novo = _preparar(tmp_path)
+    saida = _rodar(tmp_path, "banco", "python() { return 0; }", arvore, controle)   # banco vazio
+    assert "controle: fonte BANCO (0 md5 registrados) + historico do CSV" in saida
+    assert saida.strip().splitlines()[-1] == str(arvore), "so o NOVO.RET e novidade"
 
 
 def test_banco_indisponivel_volta_ao_csv_e_diz(tmp_path):

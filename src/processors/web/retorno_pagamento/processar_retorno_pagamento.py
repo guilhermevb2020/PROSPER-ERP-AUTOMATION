@@ -92,8 +92,13 @@ def hashes_ja_tratados(execucao=None) -> set:
     if fonte == "banco":
         do_banco = execucao_job.listar_md5(execucao, "retorno_pagamento_cnab_240", log=log)
         if do_banco is not None:
-            log(f"  controle: fonte BANCO ({len(do_banco)} hash(es) registrados)")
-            return do_banco
+            # ⛔ banco ∪ historico do CSV, ate a Fase 4: esta memoria evita INSERIR DE NOVO um
+            # arquivo re-entregue (baixa em duplicidade no Smart), e o banco so conhece o que
+            # entrou desde 22/09/2026. O CSV entra como historia congelada, nao como decisao.
+            do_csv = hashes_do_csv()
+            log(f"  controle: fonte BANCO ({len(do_banco)} hash(es)) + historico do CSV "
+                f"({len(do_csv - do_banco)} so no CSV)")
+            return do_banco | do_csv
         log("  controle: fonte BANCO indisponivel nesta execucao — usando o CSV de reserva")
     elif fonte != "csv":
         log(f"  controle: CONTROLE_FONTE={fonte!r} desconhecida — usando o CSV")

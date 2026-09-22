@@ -62,9 +62,10 @@ def test_banco_le_os_md5_registrados(robo, monkeypatch):
     chamadas = []
     monkeypatch.setattr(robo.execucao_job, "listar_md5",
                         lambda ex, tipo, log=print: chamadas.append((ex, tipo)) or {"bbbb", "cccc"})
-    assert robo.hashes_ja_tratados(execucao="EX") == {"bbbb", "cccc"}
+    assert robo.hashes_ja_tratados(execucao="EX") == {"aaaa", "bbbb", "cccc"}, \
+        "banco ∪ historico do CSV: o aaaa do CSV continua na memoria (evita baixa em duplicidade)"
     assert chamadas == [("EX", "retorno_pagamento_cnab_240")]
-    assert any("fonte BANCO (2 hash" in l for l in robo._linhas)
+    assert any("fonte BANCO (2 hash(es)) + historico do CSV (1 so no CSV)" in l for l in robo._linhas)
 
 
 def test_banco_indisponivel_volta_ao_csv_e_avisa(robo, monkeypatch):

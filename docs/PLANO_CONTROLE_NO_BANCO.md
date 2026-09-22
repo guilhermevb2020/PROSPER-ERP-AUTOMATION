@@ -44,6 +44,13 @@ cada operação com eventos; tudo imutável por dono separado e gatilho.
 
 ## 4. Regras que valem desde já
 
+- **Memória de idempotência em `banco` = banco ∪ histórico do CSV, até a Fase 4** — nos dois
+  retornos (`_RET`, `_RETPAG`), onde a memória é o que impede **baixa em duplicidade** de um
+  `.RET` re-entregue: o banco só conhece o que entrou desde 21/09/2026, e o CSV entra como
+  história congelada, não como decisão. Na Fase 4 o CSV para de ser escrito, é renomeado
+  como histórico e continua lido até uma carga histórica o substituir. Remessa de pagamento
+  (controle informativo) e remessa de cobrança (carga de 45 dias feita) não precisam disso.
+
 - Execução **manual em modo real** informa quem e por quê: `ERP_OPERADOR=nome ERP_MOTIVO="..."`
   no ambiente (`docker exec -e ...`). Sem isso o job roda; a auditoria fica sem autor.
 - ✅ **O hub se identifica desde 22/09/2026 ~11h15** (frente do hub, a pedido desta): o

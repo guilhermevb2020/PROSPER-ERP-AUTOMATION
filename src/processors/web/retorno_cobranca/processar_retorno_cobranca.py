@@ -155,8 +155,17 @@ def historico_controle(execucao=None):
             por_nome = {}
             for h, r in do_banco.items():
                 por_nome.setdefault(r.get("nome_smart") or "", set()).add(h)
-            log(f"  controle: fonte BANCO ({len(do_banco)} arquivo(s) registrados, "
-                f"{len(hashes)} processados)")
+            # ⛔ banco ∪ historico do CSV, ate a Fase 4: esta memoria e o que impede tratar
+            # como NOVO um arquivo de mesmo nome que o Smart ja processou (baixa em
+            # duplicidade), e o banco so conhece o que entrou desde 21/09/2026. O CSV entra
+            # como historia congelada, nao como decisao.
+            h_csv, n_csv = historico_controle_do_csv()
+            so_csv = len(h_csv - hashes)
+            hashes |= h_csv
+            for nome, hs in n_csv.items():
+                por_nome.setdefault(nome, set()).update(hs)
+            log(f"  controle: fonte BANCO ({len(do_banco)} arquivo(s), {len(hashes) - so_csv} "
+                f"processados) + historico do CSV ({so_csv} so no CSV)")
             return hashes, por_nome
         log("  controle: fonte BANCO indisponivel nesta execucao — usando o CSV de reserva")
     elif fonte != "csv":

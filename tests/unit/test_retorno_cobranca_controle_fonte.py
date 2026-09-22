@@ -62,7 +62,20 @@ def test_banco_monta_o_mesmo_par_a_partir_da_view(robo, monkeypatch):
     hashes, por_nome = robo.historico_controle(execucao="EX")
     assert hashes == {"aaaa", "cccc"}
     assert por_nome == {"A.RET": {"aaaa", "cccc"}, "B.RET": {"bbbb"}}
-    assert any("fonte BANCO (3 arquivo" in l and "2 processados" in l for l in robo._linhas)
+    assert any("fonte BANCO (3 arquivo(s), 2 processados) + historico do CSV (0 so no CSV)" in l
+               for l in robo._linhas)
+
+
+def test_banco_soma_o_historico_do_csv(robo, monkeypatch):
+    """O banco so conhece o que entrou desde 21/09/2026; um .RET antigo re-entregue, de mesmo
+    nome, seria tratado como NOVO sem o historico do CSV (baixa em duplicidade)."""
+    monkeypatch.setattr(robo.cfg, "CONTROLE_FONTE", "banco")
+    monkeypatch.setattr(robo.execucao_job, "listar_controle", lambda ex, fam, chave, log=print: {
+        "dddd": {"nome_smart": "D.RET", "processado": "True"}})
+    hashes, por_nome = robo.historico_controle(execucao="EX")
+    assert hashes == {"dddd", "aaaa"}, "aaaa vem do CSV (processado=True); bbbb nao (False)"
+    assert por_nome == {"D.RET": {"dddd"}, "A.RET": {"aaaa"}, "B.RET": {"bbbb"}}
+    assert any("+ historico do CSV (1 so no CSV)" in l for l in robo._linhas)
 
 
 def test_banco_indisponivel_volta_ao_csv_e_avisa(robo, monkeypatch):
