@@ -18,6 +18,14 @@ import processar_retorno_cobranca as robo  # noqa: E402
 from test_retorno_bb_api import arquivo, grade, preparar  # noqa: E402
 
 
+def _execucao_degradada():
+    """Uma execucao que nao fala com banco nenhum: o job segue, nada e registrado.
+    E o mesmo objeto que `abrir_execucao(obrigatoria=False)` devolve sem banco."""
+    from src.common.clients import execucao_job
+    return execucao_job.Execucao(id=None, automacao="retorno_cobranca",
+                                 job="processar_retorno_bb", flag_ensaio=True)
+
+
 def ler_recibos(pasta):
     return [json.loads(p.read_text()) for p in pasta.rglob("*.json")]
 
@@ -154,6 +162,10 @@ def test_cli_bb_exige_flag_real_mesmo_com_env_legado_e_grava_recibos(tmp_path, m
     monkeypatch.setattr(robo, "sync_playwright", MagicMock())
     monkeypatch.setattr(robo.smart_sessao, "sessao", MagicMock())
     monkeypatch.setattr(robo.smart_sessao, "sessao_viva", Mock(return_value=True))
+    # O registro no banco tem teste proprio (abaixo). Aqui ele sai do caminho: sem isto,
+    # o ramo --pra-valer pararia em "sem banco" antes de exercitar a entrega BB.
+    monkeypatch.setattr(robo.execucao_job, "abrir_execucao",
+                        Mock(return_value=_execucao_degradada()))
     args = ["processar_retorno_cobranca.py", "--pasta", str(tmp_path), "--conta-bb-api", "395",
             "--recibos-dir", str(recibos), "--pausa", "0"]
     monkeypatch.setattr(sys, "argv", args + (["--pra-valer"] if pra_valer else []))
@@ -173,3 +185,27 @@ def test_cli_bb_configuracao_invalida_nao_abre_browser(tmp_path, monkeypatch, ex
     monkeypatch.setattr(sys, "argv", args)
     assert robo.main() == 4
     browser.assert_not_called()
+
+
+def test_pra_valer_sem_banco_recusa_antes_de_tocar_no_smart(tmp_path, monkeypatch):
+    """A regra que protege dinheiro: em modo real o registro da execucao e OBRIGATORIO.
+
+    Sem banco, o job tem de sair com codigo de erro ANTES de abrir o navegador — dar
+    baixa sem deixar rastro e pior do que nao dar baixa. Em DRY o mesmo job segue,
+    porque ali nada e irreversivel (esse ramo e o do parametrizado acima)."""
+    from src.common.clients import execucao_job
+    caminho = arquivo(tmp_path)
+    browser = Mock(side_effect=AssertionError("nao pode abrir o navegador sem registro"))
+    monkeypatch.setattr(robo, "sync_playwright", browser)
+    monkeypatch.setattr(robo.cfg, "DRY_RUN", False)
+    monkeypatch.setattr(robo.cfg, "ARQ_CONTROLE", str(tmp_path / "controle.csv"))
+    monkeypatch.setattr(
+        robo.execucao_job, "abrir_execucao",
+        Mock(side_effect=execucao_job.ExecucaoIndisponivel("banco fora do ar")))
+    monkeypatch.setattr(sys, "argv",
+                        ["processar_retorno_cobranca.py", "--pasta", str(tmp_path),
+                         "--conta-bb-api", "395", "--recibos-dir", str(tmp_path / "r"),
+                         "--pausa", "0", "--pra-valer"])
+    assert robo.main() == robo.SAIU_SEM_SESSAO
+    browser.assert_not_called()
+    assert caminho.exists(), "o .RET tem de continuar na entrada para a proxima rodada"

@@ -56,6 +56,7 @@ import artefatos                                   # noqa: E402
 import bb_entrega                                  # noqa: E402
 import retorno as ret                             # noqa: E402
 import retorno_config as cfg                      # noqa: E402
+from src.common.clients import execucao_job    # noqa: E402
 from src.common.clients import smart_sessao       # noqa: E402
 
 CABECALHO = ["arquivo", "nome_smart", "hash", "conta", "titulos", "ja_processado",
@@ -265,7 +266,40 @@ def relatar(res, args, dry):
 # --------------------------------------------------------------------------- #
 # rodada
 # --------------------------------------------------------------------------- #
-def rodada(ctx, args, dry):
+def _registrar_no_banco(execucao, res, caminho, bb: bool):
+    """Espelha no banco a linha que acabou de entrar no controle CSV.
+
+    O arquivo e identificado pelo CONTEUDO: o mesmo .RET reprocessado nao cria linha
+    nova, devolve a que existe — que e a mesma regra do `hash` no controle. Os titulos
+    detalhados entram como arquivo_titulo quando o processamento os devolveu."""
+    if not os.path.exists(caminho):
+        return None
+    titulos = []
+    for i, t in enumerate(res.get("detalhes") or [], start=1):
+        titulos.append({"numero_linha": i,
+                        "id_titulo": t.get("numTitulo") or t.get("id_titulo"),
+                        "codigo_ocorrencia": t.get("ocorrencia") or t.get("codigo_ocorrencia"),
+                        "valor_titulo": t.get("valor")})
+    arq_id = execucao_job.registrar_arquivo(
+        execucao, "retorno_bb" if bb else "retorno_cobranca_cnab_400", "recebido",
+        nome_arquivo=res.get("arquivo") or os.path.basename(caminho), caminho=caminho,
+        qtd_registros=res.get("titulos"), conta_id=(str(res["conta"]) if res.get("conta") else None),
+        origem_caminho=caminho, destino_caminho=res.get("arquivado_em"),
+        detalhe={"md5": res.get("hash"), "nome_smart": res.get("nome_smart"),
+                 "motivo": res.get("motivo"),
+                 "ocorrencias": res.get("ocorrencias") or {},
+                 "qtd_criticas": len(res.get("criticas") or []),
+                 "divergencias": res.get("divergencias") or []},
+        titulos=titulos, log=log)
+    if arq_id:
+        execucao_job.registrar_evento_arquivo(
+            execucao, arq_id, "processado" if res.get("processado") else "retido",
+            resultado=res.get("motivo"),
+            detalhe={"dry": bool(res.get("motivo", "").startswith("DRY_RUN"))}, log=log)
+    return arq_id
+
+
+def rodada(ctx, args, dry, execucao=None):
     """Percorre os arquivos alvo. Retorna o exit code."""
     if args.arquivo:
         alvos = [args.arquivo]
@@ -353,6 +387,8 @@ def rodada(ctx, args, dry):
         linha["divergencias"] = "; ".join(res.get("divergencias") or [])
         # o controle vem ANTES de mover: se o move falhar, o registro ja existe
         gravar_controle(linha)
+        # ... e o mesmo fato no banco, ao lado do CSV (dupla escrita ate o corte)
+        _registrar_no_banco(execucao, res, caminho, args.conta_bb_api is not None)
         if args.deposito or args.conta_bb_api is not None:
             categoria = artefatos.categoria_do_resultado(res)
             if categoria and not dry:
@@ -501,6 +537,36 @@ def main():
     log(f"pasta   : {args.pasta}")
     log(f"controle: {cfg.ARQ_CONTROLE}")
 
+    # A execucao no banco: em DRY pode faltar (degrada e avisa); PRA VALER e obrigatoria —
+    # dar baixa no Smart nao tem desfazer, entao sem registro nao se processa.
+    try:
+        execucao = execucao_job.abrir_execucao(
+            "retorno_cobranca",
+            "processar_retorno_bb" if args.conta_bb_api is not None
+            else ("baixar_deposito_no_erp" if args.deposito
+                  else "processar_retorno_cobranca_cnab_400"),
+            flag_ensaio=dry, obrigatoria=not dry,
+            apelido_credencial=os.environ.get("RETORNO_SENHA"),
+            detalhe={"pasta": args.pasta, "arquivo": args.arquivo or None,
+                     "limite": args.limite, "conta_bb_api": args.conta_bb_api,
+                     "deposito": bool(args.deposito), "portao": bool(args.portao)})
+    except execucao_job.ExecucaoIndisponivel as e:
+        log(f"ERRO: {e}")
+        return SAIU_SEM_SESSAO
+
+    codigo = SAIU_SEM_NAVEGADOR
+    try:
+        codigo = _com_sessao(args, dry, execucao)
+    finally:
+        execucao_job.fechar_execucao(
+            execucao, "sucesso" if codigo == SAIU_OK else "falha",
+            codigo_saida=codigo, log=log)
+    return codigo
+
+
+def _com_sessao(args, dry, execucao):
+    """O corpo que precisa do Chrome logado. Separado do main() so para o
+    fecha-execucao ficar num finally unico, sem aninhar mais um try."""
     with sync_playwright() as p:
         try:
             with smart_sessao.sessao(p, cfg, usar_cdp=args.cdp, log=log) as ctx:
@@ -515,7 +581,7 @@ def main():
                         "(isto NAO quer dizer deslogado)")
                     return SAIU_SMART_MUDO
                 log("sessao do Smart OK (logada).")
-                return rodada(ctx, args, dry)
+                return rodada(ctx, args, dry, execucao=execucao)
         except smart_sessao.SmartIndisponivel as e:
             log(f"ERRO: {e}")
             return SAIU_SMART_MUDO

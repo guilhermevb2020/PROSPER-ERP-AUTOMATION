@@ -59,6 +59,7 @@ from playwright.sync_api import sync_playwright  # noqa: E402
 import gerar as ger                              # noqa: E402
 import _nextcloud as nuvem                       # noqa: E402
 import pagamento_config as cfg                   # noqa: E402
+from src.common.clients import execucao_job     # noqa: E402
 from src.common.clients import smart_sessao      # noqa: E402
 
 CABECALHO_CONTROLE = ["arquivo", "bytes", "md5", "titulos", "ids", "pix", "quando"]
@@ -120,7 +121,24 @@ def gravar_controle(registro):
 # --------------------------------------------------------------------------- #
 # rodada
 # --------------------------------------------------------------------------- #
-def rodada(ctx, args, dry):
+def _registrar_no_banco(execucao, r):
+    """Espelha no banco o que acabou de entrar no controle CSV. So le o arquivo do
+    disco; qualquer falha de registro e tratada dentro do execucao_job."""
+    if not r.get("caminho"):
+        return None
+    titulos = [{"numero_linha": i, "id_titulo": t}
+               for i, t in enumerate(r.get("ids") or [], start=1)]
+    return execucao_job.registrar_arquivo(
+        execucao, "remessa_pagamento_cnab_240", "gerado",
+        nome_arquivo=os.path.basename(r["caminho"]), caminho=r["caminho"],
+        qtd_registros=r.get("pendentes"), conta_id=str(cfg.CONTA),
+        destino_caminho=r["caminho"],
+        detalhe={"md5": r.get("md5"), "qtd_pix": r.get("pix"),
+                 "nome_do_smart": r.get("arquivo")},
+        titulos=titulos, log=log)
+
+
+def rodada(ctx, args, dry, execucao=None):
     log("=" * 66)
     log(f"PAGAMENTO BMP {'(DRY_RUN - nao gera nada)' if dry else '*** PRA VALER ***'}"
         f"  |  conta {args.conta}")
@@ -155,6 +173,13 @@ def rodada(ctx, args, dry):
                 "ids": ",".join(r["ids"]), "pix": r["pix"],
                 "quando": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             })
+            # O mesmo fato no banco, ao lado do CSV (dupla escrita ate o corte). Os ids
+            # da grade viram linhas de arquivo_titulo; a marca de PIX e do lote, entao
+            # vai no detalhe do arquivo, nao em cada titulo.
+            _arq_id = _registrar_no_banco(execucao, r)
+            if _arq_id:
+                execucao_job.registrar_evento_arquivo(
+                    execucao, _arq_id, "gerado", detalhe={"motivo": r.get("motivo")}, log=log)
 
         # Sobe pro Nextcloud na hora — mesmo padrao do remessa_cobranca (CNAB 400):
         # quem chama ja tem o arquivo local, entao falha de rede aqui NUNCA
@@ -210,6 +235,31 @@ def main():
     dry = cfg.DRY_RUN and not args.pra_valer
     cfg.exigir_tela()
 
+    # A execucao no banco: em DRY pode faltar (degrada e avisa); PRA VALER e obrigatoria —
+    # gerar remessa de pagamento move dinheiro, entao sem registro nao se gera.
+    try:
+        execucao = execucao_job.abrir_execucao(
+            "remessa_pagamento", "gerar_remessa_pagamento_cnab_240",
+            flag_ensaio=dry, obrigatoria=not dry,
+            apelido_credencial=os.environ.get("PAGAMENTO_SENHA"),
+            detalhe={"conta": args.conta, "listar": bool(args.listar)})
+    except execucao_job.ExecucaoIndisponivel as e:
+        log(f"ERRO: {e}")
+        return SAIU_SEM_SESSAO
+
+    codigo = SAIU_SEM_NAVEGADOR
+    try:
+        codigo = _com_sessao(args, dry, execucao)
+    finally:
+        execucao_job.fechar_execucao(
+            execucao, "sucesso" if codigo == SAIU_OK else "falha",
+            codigo_saida=codigo, log=log)
+    return codigo
+
+
+def _com_sessao(args, dry, execucao):
+    """O corpo que precisa do Chrome logado. Separado do main() so para o
+    fecha-execucao ficar num finally unico, sem aninhar mais um try."""
     with sync_playwright() as p:
         try:
             with smart_sessao.sessao(p, cfg, usar_cdp=args.cdp, log=log) as ctx:
@@ -225,7 +275,7 @@ def main():
                     return SAIU_SMART_MUDO
                 log("sessao do Smart OK (logada).")
                 try:
-                    return rodada(ctx, args, dry)
+                    return rodada(ctx, args, dry, execucao=execucao)
                 except ger.SessaoCaiu as e:
                     log(f"ABORTANDO: {e}")
                     log("A rodada NAO terminou. Isto nao e 'nada pendente'.")

@@ -52,6 +52,7 @@ from playwright.sync_api import sync_playwright  # noqa: E402
 import _nextcloud as nuvem                        # noqa: E402
 import retorno_pagamento as ret                    # noqa: E402
 import retorno_pagamento_config as cfg             # noqa: E402
+from src.common.clients import execucao_job      # noqa: E402
 from src.common.clients import smart_sessao        # noqa: E402
 
 CABECALHO_CONTROLE = ["arquivo", "hash", "status_http", "quando"]
@@ -118,7 +119,7 @@ def salvar_resposta(nome_arquivo: str, html: str | None) -> str | None:
 # --------------------------------------------------------------------------- #
 # um arquivo
 # --------------------------------------------------------------------------- #
-def tratar(ctx, nome_arquivo: str, dry: bool, feitos: set) -> str:
+def tratar(ctx, nome_arquivo: str, dry: bool, feitos: set, execucao=None) -> str:
     """Devolve: 'pendente' (nada feito, tenta de novo depois) | 'ok' | 'repete'."""
     dados = nuvem.baixar(nome_arquivo)
     if dados is None:
@@ -179,6 +180,19 @@ def tratar(ctx, nome_arquivo: str, dry: bool, feitos: set) -> str:
         "arquivo": nome_arquivo, "hash": digest, "status_http": resposta2["status"],
         "quando": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
     })
+    # O mesmo fato no banco, ao lado do CSV (dupla escrita ate o corte). O arquivo e
+    # identificado pelo CONTEUDO: reenviar o mesmo .RET nao cria linha nova, devolve a
+    # que existe. O md5 do controle vai no detalhe para casar as duas fontes na conferencia.
+    arq_id = execucao_job.registrar_arquivo(
+        execucao, "retorno_pagamento_cnab_240", "recebido",
+        nome_arquivo=nome_arquivo, conteudo=dados,
+        origem_caminho=cfg.NC_DEST_BASE, destino_caminho=cfg.SUB_PROCESSADOS,
+        detalhe={"md5": digest, "status_http_etapa1": resposta1["status"],
+                 "status_http_etapa2": resposta2["status"]}, log=log)
+    execucao_job.registrar_evento_arquivo(
+        execucao, arq_id, "processado", resultado=str(resposta2["status"]),
+        detalhe={"resposta_etapa1": os.path.basename(caminho1 or ""),
+                 "resposta_etapa2": os.path.basename(caminho2 or "")}, log=log)
     nuvem.mover_para(nome_arquivo, cfg.SUB_PROCESSADOS)
     return "ok"
 
@@ -186,7 +200,7 @@ def tratar(ctx, nome_arquivo: str, dry: bool, feitos: set) -> str:
 # --------------------------------------------------------------------------- #
 # rodada
 # --------------------------------------------------------------------------- #
-def rodada(ctx, args, dry: bool) -> int:
+def rodada(ctx, args, dry: bool, execucao=None) -> int:
     log("=" * 66)
     log(f"RETORNO PAGAMENTO BMP {'(DRY_RUN — não envia nada)' if dry else '*** PRA VALER ***'}")
     log(f"entrada : {cfg.NC_DEST_BASE}")
@@ -208,7 +222,7 @@ def rodada(ctx, args, dry: bool) -> int:
     feitos = hashes_ja_tratados()
     contagem = {"pendente": 0, "ok": 0, "repete": 0}
     for nome in pendentes:
-        efeito = tratar(ctx, nome, dry, feitos)
+        efeito = tratar(ctx, nome, dry, feitos, execucao=execucao)
         contagem[efeito] = contagem.get(efeito, 0) + 1
 
     log("=" * 66)
@@ -256,28 +270,48 @@ def main():
         log(f"{len(pendentes)} arquivo(s) na entrada: {pendentes}")
         return SAIU_OK
 
-    with sync_playwright() as p:
-        try:
-            with smart_sessao.sessao(p, cfg, usar_cdp=args.cdp, log=log) as ctx:
-                estado = smart_sessao.sessao_viva(ctx, cfg, log=log)
-                if estado == "deslogado":
-                    log("ERRO: a sessão do Smart não está logada.")
-                    return SAIU_SEM_SESSAO
-                if estado is None:
-                    log("ERRO: não consegui falar com o Smart. Rede? Smart fora? "
-                        "(isto NÃO quer dizer deslogado)")
-                    return SAIU_SMART_MUDO
-                log("sessão do Smart OK (logada).")
-                return rodada(ctx, args, dry)
-        except smart_sessao.SmartIndisponivel as e:
-            log(f"ERRO: {e}")
-            return SAIU_SMART_MUDO
-        except smart_sessao.SemSessao as e:
-            log(f"ERRO: {e}")
-            return SAIU_SEM_SESSAO
-        except smart_sessao.SemNavegador as e:
-            log(f"ERRO: {e}")
-            return SAIU_SEM_NAVEGADOR
+    # A execucao no banco: em DRY pode faltar (degrada e avisa); PRA VALER e obrigatoria —
+    # dar baixa no Smart e irreversivel, entao sem registro nao se envia nada.
+    try:
+        execucao = execucao_job.abrir_execucao(
+            "retorno_pagamento", "processar_retorno_pagamento_cnab_240",
+            flag_ensaio=dry, obrigatoria=not dry,
+            apelido_credencial=os.environ.get("RETPAG_SENHA"),
+            detalhe={"arquivo": args.arquivo or None, "limite": args.limite})
+    except execucao_job.ExecucaoIndisponivel as e:
+        log(f"ERRO: {e}")
+        return SAIU_SEM_SESSAO
+
+    codigo = SAIU_SEM_NAVEGADOR
+    try:
+        with sync_playwright() as p:
+            try:
+                with smart_sessao.sessao(p, cfg, usar_cdp=args.cdp, log=log) as ctx:
+                    estado = smart_sessao.sessao_viva(ctx, cfg, log=log)
+                    if estado == "deslogado":
+                        log("ERRO: a sessão do Smart não está logada.")
+                        codigo = SAIU_SEM_SESSAO
+                    elif estado is None:
+                        log("ERRO: não consegui falar com o Smart. Rede? Smart fora? "
+                            "(isto NÃO quer dizer deslogado)")
+                        codigo = SAIU_SMART_MUDO
+                    else:
+                        log("sessão do Smart OK (logada).")
+                        codigo = rodada(ctx, args, dry, execucao=execucao)
+            except smart_sessao.SmartIndisponivel as e:
+                log(f"ERRO: {e}")
+                codigo = SAIU_SMART_MUDO
+            except smart_sessao.SemSessao as e:
+                log(f"ERRO: {e}")
+                codigo = SAIU_SEM_SESSAO
+            except smart_sessao.SemNavegador as e:
+                log(f"ERRO: {e}")
+                codigo = SAIU_SEM_NAVEGADOR
+    finally:
+        execucao_job.fechar_execucao(
+            execucao, "sucesso" if codigo == SAIU_OK else "falha",
+            codigo_saida=codigo, log=log)
+    return codigo
 
 
 if __name__ == "__main__":

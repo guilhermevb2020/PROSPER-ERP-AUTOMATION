@@ -282,6 +282,11 @@ def abrir_execucao(automacao: str, job: str, *, flag_ensaio: bool, gatilho: str 
 
 def _executar(ex: Execucao, log, descricao: str, sql: str, params: tuple, *, devolve=False):
     """Roda um comando na execucao. Degradada: avisa e devolve None. Estrita: levanta."""
+    if ex is None:
+        # Sem execucao nenhuma: o job foi chamado fora do fluxo que a abre (teste de
+        # unidade, uso manual de uma funcao interna). Nao ha o que registrar, e isto
+        # nao e erro — quem exige registro usa `obrigatoria=True` no abrir_execucao.
+        return None
     if not ex.registra:
         ex._avisar(log, "registro nao feito: execucao sem banco (o ensaio segue; em modo real isto levanta)")
         return None
@@ -304,6 +309,8 @@ def registrar_evento_operacao(ex: Execucao, id_operacao, tipo_evento: str, *,
                               valor_liquido=None, pendencias=None, detalhe: dict | None = None,
                               linhas_pagamento: list | None = None, log=print) -> int | None:
     """Um fato sobre a operacao. Devolve o id do evento (None se nao registrou)."""
+    if ex is None:
+        return None
     if tipo_evento not in TIPOS_EVENTO_OPERACAO:
         raise ValueError(f"tipo_evento desconhecido: {tipo_evento!r}")
     evento_id = _executar(
@@ -337,6 +344,8 @@ def registrar_arquivo(ex: Execucao, tipo_arquivo: str, sentido: str, *, nome_arq
                       log=print) -> int | None:
     """Registra um arquivo pelo conteudo (sha256). O mesmo conteudo nao entra duas vezes:
     devolve o id ja existente. titulos: [{numero_linha, id_titulo, id_operacao, ...}]."""
+    if ex is None:
+        return None
     if tipo_arquivo not in TIPOS_ARQUIVO:
         raise ValueError(f"tipo_arquivo desconhecido: {tipo_arquivo!r}")
     if sentido not in ("gerado", "recebido"):
@@ -382,6 +391,8 @@ def registrar_arquivo(ex: Execucao, tipo_arquivo: str, sentido: str, *, nome_arq
 def registrar_evento_arquivo(ex: Execucao, fk_arquivo: int | None, tipo_evento: str, *,
                              resultado: str | None = None, detalhe: dict | None = None,
                              log=print) -> int | None:
+    if ex is None:
+        return None
     if tipo_evento not in TIPOS_EVENTO_ARQUIVO:
         raise ValueError(f"tipo_evento desconhecido: {tipo_evento!r}")
     if fk_arquivo is None:
@@ -397,6 +408,8 @@ def registrar_evento_arquivo(ex: Execucao, fk_arquivo: int | None, tipo_evento: 
 def fechar_execucao(ex: Execucao, status: str, *, codigo_saida: int | None = None,
                     qtd_itens: int | None = None, detalhe: dict | None = None, log=print) -> bool:
     """Fecha UMA vez. status: sucesso|falha|abandonada. Fecha a conexao sempre."""
+    if ex is None:
+        return False
     if status not in ("sucesso", "falha", "abandonada"):
         raise ValueError("status de fechamento e sucesso|falha|abandonada")
     ok = False

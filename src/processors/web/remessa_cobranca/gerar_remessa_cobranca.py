@@ -78,6 +78,7 @@ import falhas                                     # noqa: E402
 import cancelar
 import login as autenticacao                      # noqa: E402
 import remessa_config as cfg                      # noqa: E402
+from src.common.clients import execucao_job       # noqa: E402
 
 # Tipos de remessa na chave de `idsSucesso` (a tela "Remessa gerada" agrupa o
 # que gerou por tipo). A chave NAO e o codigo de ocorrencia do CNAB - esse fica
@@ -345,7 +346,7 @@ def nome_para_nuvem(nome_local: str) -> str:
     return _SUFIXO_DUP.sub("", nome_local)
 
 
-def processar(ctx, itens, forcar=False):
+def processar(ctx, itens, forcar=False, execucao=None):
     """Baixa, valida e salva cada item ({'id':..., 'rotulo':...}). Retorna quantos salvou."""
     controle = ler_controle()
     salvos = 0
@@ -422,6 +423,20 @@ def processar(ctx, itens, forcar=False):
             "bytes": len(dados), "md5": md5, "titulos": titulos,
             "baixado_em": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         })
+        # O mesmo fato no banco, ao lado do CSV (dupla escrita ate o corte). O nome
+        # gravado e o do SMART, como no Nextcloud, nao o `_dup` do disco.
+        _arq_id = execucao_job.registrar_arquivo(
+            execucao, "remessa_cobranca_cnab_400", "gerado",
+            nome_arquivo=nome, conteudo=dados, qtd_registros=titulos,
+            conta_id=(str(item.get("conta")) if item.get("conta") else None),
+            conta_label=rotulo, destino_caminho=destino,
+            detalhe={"md5": md5, "id_no_smart": fid,
+                     "nome_no_disco": os.path.basename(destino)}, log=log)
+        if _arq_id:
+            execucao_job.registrar_evento_arquivo(execucao, _arq_id, "gerado", log=log)
+            if cfg.ENVIAR_NEXTCLOUD and ok_nc:
+                execucao_job.registrar_evento_arquivo(
+                    execucao, _arq_id, "enviado", resultado=alvo_nc, log=log)
         salvos += 1
 
     if falhas_nc:
@@ -478,7 +493,7 @@ def guardar_tela(pagina, conta, rotulo, dias=7):
         log(f"  {rotulo}: nao guardei a tela ({e}) — segue sem ela")
 
 
-def ciclo_conta(ctx, conta, rotulo, carteira, dry_run=True, forcar=False):
+def ciclo_conta(ctx, conta, rotulo, carteira, dry_run=True, forcar=False, execucao=None):
     """Gera a remessa de UMA conta e baixa os arquivos. Retorna dict do resultado."""
     saida = {"conta": conta, "rotulo": rotulo, "carteira": carteira,
              "titulos": 0, "gerou": False, "ids": [], "baixados": 0, "motivo": "",
@@ -554,7 +569,7 @@ def ciclo_conta(ctx, conta, rotulo, carteira, dry_run=True, forcar=False):
         log(f"  {rotulo}: RECUPERADO -> ids {saida['ids']}")
         saida["baixados"] = processar(
             ctx, [{"id": a["id"], "rotulo": f"{rotulo} (recuperado)", "conta": conta} for a in novas],
-            forcar)
+            forcar, execucao=execucao)
         return saida
 
     saida["gerou"] = True
@@ -566,7 +581,7 @@ def ciclo_conta(ctx, conta, rotulo, carteira, dry_run=True, forcar=False):
               # a grade so descreve as ENTRADAS (tipo 1); baixas vao pelo campo instrucoes
               "titulos_grade": marcados if str(tipo) == "1" else None}
              for tipo, fid in res["ids"]]
-    saida["baixados"] = processar(ctx, itens, forcar)
+    saida["baixados"] = processar(ctx, itens, forcar, execucao=execucao)
 
     # confere que os arquivos existem mesmo na pasta
     controle = ler_controle()
@@ -602,7 +617,7 @@ def _ler_controle():
         return {}
 
 
-def rodada_cancelamento(ctx, args, dry):
+def rodada_cancelamento(ctx, args, dry, execucao=None):
     """Cancela no Smart as remessas que o process-automation apontou. Exit code.
 
     ⛔ **A lista vem PRONTA, e este robo nao a discute.** Cancelar devolve a fila
@@ -704,7 +719,7 @@ def rodada_cancelamento(ctx, args, dry):
     return SAIU_RODADA_INCOMPLETA if (incertos or falhos) else SAIU_OK
 
 
-def rodada_geracao(ctx, args, dry):
+def rodada_geracao(ctx, args, dry, execucao=None):
     """Percorre as contas alvo gerando e baixando. Retorna o exit code."""
     contas_mapa, carteiras_mapa = carregar_contas_carteiras()
 
@@ -736,7 +751,7 @@ def rodada_geracao(ctx, args, dry):
             log(f"  {rot}: carteira {args.carteira} nao existe nessa conta -> "
                 f"usando {cart}")
         try:
-            resumo.append(ciclo_conta(ctx, num, rot, cart, dry, args.forcar))
+            resumo.append(ciclo_conta(ctx, num, rot, cart, dry, args.forcar, execucao=execucao))
         except SessaoCaiu as e:
             log("!" * 66)
             log(f"ABORTANDO: {e}")
@@ -918,7 +933,7 @@ def montar_parser():
     return ap
 
 
-def executar(ctx, args):
+def executar(ctx, args, execucao=None):
     """O que fazer com um contexto ja logado. Retorna o exit code."""
     log(f"pasta de destino: {cfg.PASTA_REMESSAS}")
     log(f"controle        : {cfg.ARQ_CONTROLE}")
@@ -960,18 +975,21 @@ def executar(ctx, args):
         # a remessa sai e alguem a cancela. Cancelar NAO e: os titulos voltam a
         # fila e o sequencial daquela remessa morre. Por isso aqui a regra e
         # invertida — so executa com --pra-valer EXPLICITO.
-        return rodada_cancelamento(ctx, args, dry=not args.pra_valer)
+        return rodada_cancelamento(ctx, args, dry=not args.pra_valer, execucao=execucao)
 
     if args.gerar:
         # --pra-valer manda; --simular forca a simulacao; sem os dois vale o
         # DRY_RUN_REM do ambiente. ATENCAO: no container o remessa_cobranca.env poe
         # DRY_RUN_REM=false (e o que a rodada agendada usa), entao `--gerar` SEM
         # flag nenhuma GERA DE VERDADE ali — medido em 08/09/2026.
-        return rodada_geracao(ctx, args, dry=(cfg.DRY_RUN or args.simular) and not args.pra_valer)
+        return rodada_geracao(ctx, args,
+                              dry=(cfg.DRY_RUN or args.simular) and not args.pra_valer,
+                              execucao=execucao)
 
     if args.ids:
         log(f"ids informados: {args.ids}")
-        processar(ctx, [{"id": i, "rotulo": "id manual"} for i in args.ids], args.forcar)
+        processar(ctx, [{"id": i, "rotulo": "id manual"} for i in args.ids], args.forcar,
+                  execucao=execucao)
         return SAIU_OK
 
     if args.resultado:
@@ -982,7 +1000,7 @@ def executar(ctx, args):
         itens = [{"id": int(i), "rotulo": TIPOS.get(str(t), f"tipo {t}")}
                  for t, i in (dados.get("idsSucesso") or {}).items()]
         log(f"resultado decodificado: {[(i['id'], i['rotulo']) for i in itens]}")
-        processar(ctx, itens, args.forcar)
+        processar(ctx, itens, args.forcar, execucao=execucao)
         return SAIU_OK
 
     if args.da_tela:
@@ -993,7 +1011,7 @@ def executar(ctx, args):
         itens = [{"id": fid, "rotulo": TIPOS.get(tipo, f"tipo {tipo}")}
                  for tipo, fid in pares]
         log(f"achei na tela: {[(i['id'], i['rotulo']) for i in itens]}")
-        processar(ctx, itens, args.forcar)
+        processar(ctx, itens, args.forcar, execucao=execucao)
         return SAIU_OK
 
     # PADRAO: lista pela tela de Download de Remessa (conta + periodo)
@@ -1022,7 +1040,7 @@ def executar(ctx, args):
             return 0
         return processar(ctx, [{"id": a["id"],
                                 "rotulo": f"{a['conta']} {a['data']}".strip()}
-                               for a in alvo], args.forcar)
+                               for a in alvo], args.forcar, execucao=execucao)
 
     if not args.vigiar:
         um_ciclo()
@@ -1055,12 +1073,42 @@ def main():
                                    or args.bb_api_origem):
         return subir_pendentes(args.limite)
 
+    # A execucao no banco: em DRY pode faltar (degrada e avisa); PRA VALER e obrigatoria —
+    # gerar ou cancelar remessa mexe na cobranca do sacado, entao sem registro nao se age.
+    _dry = (cfg.DRY_RUN or args.simular) and not args.pra_valer
+    try:
+        execucao = execucao_job.abrir_execucao(
+            "remessa_cobranca",
+            "cancelar_remessa_recusada_cnab_400" if args.cancelar
+            else "gerar_remessa_cobranca_cnab_400",
+            flag_ensaio=_dry, obrigatoria=not _dry,
+            apelido_credencial=os.environ.get("REMESSA_SENHA"),
+            detalhe={"conta": args.conta, "todas_contas": bool(args.todas_contas),
+                     "cancelar": bool(args.cancelar), "ids": args.ids or None,
+                     "bb_api_convenio": args.bb_api_convenio})
+    except execucao_job.ExecucaoIndisponivel as e:
+        log(f"ERRO: {e}")
+        return SAIU_SEM_SESSAO
+
+    codigo = SAIU_SEM_NAVEGADOR
+    try:
+        codigo = _com_sessao(args, execucao)
+    finally:
+        execucao_job.fechar_execucao(
+            execucao, "sucesso" if codigo == SAIU_OK else "falha",
+            codigo_saida=codigo, log=log)
+    return codigo
+
+
+def _com_sessao(args, execucao):
+    """O corpo que precisa do Chrome logado. Separado do main() so para o
+    fecha-execucao ficar num finally unico, sem aninhar mais um try."""
     with sync_playwright() as p:
         try:
             with _sessao.sessao(p, usar_cdp=args.cdp,
                                 espera_manual=args.espera_manual, log=log) as ctx:
                 log("sessao do Smart OK (logada).")
-                return executar(ctx, args)
+                return executar(ctx, args, execucao=execucao)
         except _sessao.SemSessao as e:
             log(f"ERRO: {e}")
             return SAIU_SEM_SESSAO
