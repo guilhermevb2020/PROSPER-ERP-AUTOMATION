@@ -3,9 +3,9 @@
 
 WRAPPER FINO sobre o uploader COMPARTILHADO
 (`src.common.clients.nextcloud_webdav.NextcloudWebDAV`) — mesmo cliente que
-`robo_remessa/_nextcloud.py` ja usa para o CNAB 400.
+`remessa_cobranca/_nextcloud.py` ja usa para o CNAB 400.
 
-Sem arvore de data/banco aqui, ao contrario do robo_remessa: la existem varios
+Sem arvore de data/banco aqui, ao contrario do remessa_cobranca: la existem varios
 cedentes e varios bancos misturados no mesmo acervo, entao a data e o banco
 decidem a pasta. Pagamento e um pagador so, uma pasta so — o job
 `enviar_pagamento` (process-automation) le tudo que estiver em

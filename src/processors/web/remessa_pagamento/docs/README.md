@@ -6,7 +6,7 @@ só para ter sessão; o trabalho é por HTTP, em **duas requisições**.
 Tela: **Financeiro › Sistemas de pagamento › Pagamento BMP Money Plus › Gerar
 Remessa** (`financeiro/pagtobmp/`).
 
-> ⛔ **Não confundir com o `robo_remessa`.** Aquele é a remessa de **cobrança**
+> ⛔ **Não confundir com o `remessa_cobranca`.** Aquele é a remessa de **cobrança**
 > (`financeiro/remessaocorrencia.php`, CNAB-400). Este é pagamento
 > (`financeiro/pagtobmp/`, CNAB-240). Cobrança pede dinheiro; pagamento manda.
 
@@ -114,7 +114,7 @@ As vírgulas no fim de cada lista (`"143,"`) são fiéis ao `+=` do JS.
 | Log ao vivo | `/app/logs/robo_pagamento_<data>.log` |
 
 > ⚠️ **O caminho de saída tem espaços.** Em shell, sempre `"$PASTA"`. Há
-> precedente: o destino do `robo_remessa` é `remessas a enviar`.
+> precedente: o destino do `remessa_cobranca` é `remessas a enviar`.
 >
 > ⚠️ **A pasta não está em share nenhum** — nem Nextcloud, nem Samba. De um
 > Windows ninguém a enxerga. O `.REM` sobe pro Nextcloud (`_nextcloud.py`,

@@ -3,7 +3,7 @@
 pagamento_config.py - configuracao do robo de REMESSA DE PAGAMENTO no container.
 
 Tela do Smart: Financeiro > Sistemas de pagamento > Pagamento BMP Money Plus >
-Gerar Remessa. NAO confundir com a remessa de COBRANCA, que e do `robo_remessa`
+Gerar Remessa. NAO confundir com a remessa de COBRANCA, que e do `remessa_cobranca`
 e vive em outra arvore (`financeiro/remessaocorrencia.php`).
 
 Slot deste robo (ver docs/COMO_SUBIR_UM_ROBO.md §1):
@@ -183,12 +183,12 @@ STATUS = _s("STATUS_PAG", STATUS_PENDENTE).strip()
 #
 # ⚠️ O NOME TEM ESPACOS, e isso e de proposito (foi o caminho pedido). Toda
 # referencia em shell precisa de aspas: `"$PASTA"`, nunca $PASTA solto. Ha
-# precedente no projeto — o destino do robo_remessa e
+# precedente no projeto — o destino do remessa_cobranca e
 # `process-automation/tmp/remessas a enviar`, tambem com espacos.
 #
 # ⚠️ Pasta LOCAL, "por enquanto": nao esta em share Samba nem no Nextcloud — de
 # um Windows ninguem a enxerga, so quem tem acesso ao servidor. Foi exatamente
-# essa a limitacao que fez o robo_remessa passar a publicar no Nextcloud, e o
+# essa a limitacao que fez o remessa_cobranca passar a publicar no Nextcloud, e o
 # uploader (`src/common/clients/nextcloud_webdav.py`) ja e compartilhado quando
 # isso virar requisito.
 PASTA_SAIDA = _s("PASTA_SAIDA_PAG", "/app/temp/remessas de pagamento")

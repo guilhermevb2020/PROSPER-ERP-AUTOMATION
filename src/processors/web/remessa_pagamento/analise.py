@@ -16,7 +16,7 @@ Duas coisas, e a segunda e a que define o robo inteiro:
 2) `analisar()` + `classificar()` — a tela POSTA FORMULARIO ou conversa por
    AJAX? As duas telas de CNAB ja mapeadas neste repo sao uma de cada tipo:
 
-       remessa de cobranca  -> <form> com action    -> robo_remessa
+       remessa de cobranca  -> <form> com action    -> remessa_cobranca
        processar retorno    -> ajax + parametro Acao -> retorno_cobranca
 
    e os dois robos ficaram bem diferentes por causa disso. So o HTML diz qual e
@@ -179,7 +179,7 @@ def classificar(info):
     if com_campos:
         nomes = ", ".join(f["nome"] for f in com_campos[:3])
         return MOLDE_FORM, (f"{len(com_campos)} form(s) com campos ({nomes}) — "
-                            "posta formulario, como o robo_remessa")
+                            "posta formulario, como o remessa_cobranca")
     return MOLDE_INDEFINIDO, ("nem `Acao` nem form com campos: a tela pode viver "
                               "num <frame>/<iframe>, e a URL certa e a do frame")
 
@@ -330,7 +330,7 @@ def inspecionar_arquivo(dados):
 
     POR QUE ISTO E PURO E TEM TESTE
     -------------------------------
-    E a trava que separa "arquivo" de "pagina de erro". O `robo_remessa` aprendeu
+    E a trava que separa "arquivo" de "pagina de erro". O `remessa_cobranca` aprendeu
     isso na cobranca: quando a sessao cai no meio, o Smart devolve HTML com
     status 200, e sem esta checagem o robo grava a pagina de erro com nome de
     `.REM`. Fica um arquivo que parece existir, entra na pasta que o Financeiro

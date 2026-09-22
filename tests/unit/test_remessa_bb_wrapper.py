@@ -10,7 +10,7 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
-WRAPPER = ROOT / "src/processors/web/robo_remessa/run_bb.sh"
+WRAPPER = ROOT / "src/processors/web/remessa_cobranca/run_bb.sh"
 
 
 @pytest.fixture
@@ -21,7 +21,7 @@ def ambiente(tmp_path):
     shutil.copyfile(ROOT / "src/common/smart_financeiro_lock.sh", comum / "smart_financeiro_lock.sh")
     config = raiz / "config"
     config.mkdir()
-    (config / "robo_remessa.env").write_text("DRY_RUN_REM=false\nHEADLESS_REM=false\n")
+    (config / "remessa_cobranca.env").write_text("DRY_RUN_REM=false\nHEADLESS_REM=false\n")
     (config / "retorno_cobranca.env").write_text("DRY_RUN_RET=false\nHEADLESS_RET=false\n")
     binario = tmp_path / "bin"
     binario.mkdir()
@@ -54,7 +54,7 @@ def test_escopo_exato_trava_e_modo_explicito(ambiente, shell, args, modo):
                                capture_output=True, text=True, timeout=5, check=True)
     dados = json.loads(resultado.stdout.splitlines()[-1])
     raiz = ambiente["RAIZ_BB_REMESSA"]
-    assert dados == {"argv": [f"{raiz}/src/processors/web/robo_remessa/robo_remessa.py",
+    assert dados == {"argv": [f"{raiz}/src/processors/web/remessa_cobranca/gerar_remessa_cobranca.py",
                               "--gerar", "--conta", "395", "--carteira", "17",
                               "--bb-api-convenio", "3770013", "--bb-api-ambiente", "producao",
                               "--bb-api-origem", f"{raiz}/data/retornos_a_processar/bb_api/origens", modo],
@@ -77,7 +77,7 @@ def test_status_do_processador_chega_ao_agendador(ambiente):
     assert resultado.returncode == 6
 
 
-@pytest.mark.parametrize("caminho", ["robo_remessa/run_agendado.sh", "retorno_cobranca/run_agendado.sh",
+@pytest.mark.parametrize("caminho", ["remessa_cobranca/run_agendado.sh", "retorno_cobranca/run_agendado.sh",
                                     "retorno_cobranca/run_deposito.sh"])
 def test_wrapper_money_compartilha_trava_antes_do_chrome(caminho):
     wrapper = ROOT / "src/processors/web" / caminho

@@ -21,7 +21,7 @@ from pathlib import Path
 
 import pytest
 
-ROBO = Path(__file__).resolve().parents[2] / "src/processors/web/robo_remessa"
+ROBO = Path(__file__).resolve().parents[2] / "src/processors/web/remessa_cobranca"
 sys.path.insert(0, str(ROBO))
 
 import cancelar

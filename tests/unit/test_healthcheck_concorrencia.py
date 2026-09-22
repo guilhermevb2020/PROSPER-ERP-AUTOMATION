@@ -7,7 +7,7 @@ from src.processors.web.boletos import healthcheck as h
 
 
 @pytest.mark.parametrize('padrao', [
-    'enviar_lote', 'emitir_lote', 'baixar_dia', '/robo_remessa/', '/retorno_cobranca/',
+    'enviar_lote', 'emitir_lote', 'baixar_dia', '/remessa_cobranca/', '/retorno_cobranca/',
 ])
 @pytest.mark.parametrize('chrome_ok', [True, False])
 def test_robo_ativo_impede_login_e_reinicio_de_chrome(monkeypatch, padrao, chrome_ok):

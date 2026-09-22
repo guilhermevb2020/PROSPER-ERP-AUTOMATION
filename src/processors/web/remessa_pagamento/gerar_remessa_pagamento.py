@@ -156,7 +156,7 @@ def rodada(ctx, args, dry):
                 "quando": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             })
 
-        # Sobe pro Nextcloud na hora — mesmo padrao do robo_remessa (CNAB 400):
+        # Sobe pro Nextcloud na hora — mesmo padrao do remessa_cobranca (CNAB 400):
         # quem chama ja tem o arquivo local, entao falha de rede aqui NUNCA
         # perde o arquivo (ele fica no controle e pode subir depois, a mao).
         if r["caminho"]:

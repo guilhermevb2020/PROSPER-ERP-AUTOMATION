@@ -8,13 +8,13 @@ POR QUE ESTES TESTES EXISTEM
 O robo de pagamento ainda nao existe: o que existe e a descoberta da tela, e o
 `analise.py` e quem decide, lendo o HTML, **que robo sera escrito**. Se ele
 classificar errado, o robo inteiro nasce no molde errado — e os dois moldes
-(`robo_remessa`, que posta formulario, e `retorno_cobranca`, que conversa por
+(`remessa_cobranca`, que posta formulario, e `retorno_cobranca`, que conversa por
 `Acao`) nao se parecem em nada.
 
 O QUE ELES TRAVAM
 -----------------
 1. Campo que so existe DENTRO do `<script>` NAO entra na lista de campos. E a
-   armadilha medida no `robo_remessa/gerar.py`: a tela de cobranca tem um
+   armadilha medida no `remessa_cobranca/gerar.py`: a tela de cobranca tem um
    `<input name="Mens0${...}">` num template literal, que nao e elemento nenhum
    no DOM real e virava campo fantasma no POST.
 2. O `Acao` do JS, ao contrario, TEM de ser achado — e o unico sinal de que a
@@ -188,7 +188,7 @@ def test_filtro_por_termo_acha_a_arvore_de_pagamento():
 def test_tela_com_form_vira_molde_form():
     molde, motivo = classificar(analisar(TELA_FORM, BASE))
     assert molde == MOLDE_FORM
-    assert "robo_remessa" in motivo
+    assert "remessa_cobranca" in motivo
 
 
 def test_tela_com_acao_vira_molde_ajax():
@@ -341,7 +341,7 @@ def test_layout_e_deduzido_e_nao_suposto(dados, esperado):
 
 
 def test_html_nunca_passa_por_arquivo():
-    """A licao do robo_remessa: sessao caida devolve HTML com status 200.
+    """A licao do remessa_cobranca: sessao caida devolve HTML com status 200.
 
     Sem esta trava, a pagina de erro e gravada com nome de `.REM`, entra na
     pasta que o Financeiro olha e so quebra no banco.

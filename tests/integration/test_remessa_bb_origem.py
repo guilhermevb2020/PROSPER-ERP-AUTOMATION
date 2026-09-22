@@ -17,20 +17,20 @@ import pytest
 @pytest.fixture
 def origem(monkeypatch, tmp_path):
     monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[2]
-                                   / "src/processors/web/robo_remessa"))
+                                   / "src/processors/web/remessa_cobranca"))
     with patch.dict(sys.modules):
         for nome in ("_nextcloud", "_sessao", "gerar", "login", "remessa_config",
-                     "robo_remessa", "bb_geracao"):
+                     "gerar_remessa_cobranca", "bb_geracao"):
             sys.modules.pop(nome, None)
         if importlib.util.find_spec("playwright") is None:
-            # O host de testes não tem o Playwright; robo_remessa só o usa em main().
+            # O host de testes não tem o Playwright; remessa_cobranca só o usa em main().
             api = types.ModuleType("playwright.sync_api")
             api.sync_playwright = Mock()
             pacote = types.ModuleType("playwright")
             pacote.sync_api = api
             sys.modules["playwright"] = pacote
             sys.modules["playwright.sync_api"] = api
-        robo = importlib.import_module("robo_remessa")
+        robo = importlib.import_module("gerar_remessa_cobranca")
         bb = importlib.import_module("bb_geracao")
         form = '''<form name="ConfirmarDadosConta">
         <input name="NumSequencial" value="36"><input name="existeEntrada" value="1">

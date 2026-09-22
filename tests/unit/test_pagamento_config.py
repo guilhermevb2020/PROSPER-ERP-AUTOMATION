@@ -191,7 +191,7 @@ def test_a_pasta_de_saida_tem_espacos_e_isso_e_deliberado(cfg):
     """Caminho pedido pelo dono em 21/08/2026, com espacos mesmo.
 
     Este teste existe para quem for mexer em shell: `$PASTA` solto quebra, tem
-    de ser `"$PASTA"`. Mesma situacao do destino do robo_remessa
+    de ser `"$PASTA"`. Mesma situacao do destino do remessa_cobranca
     (`remessas a enviar`).
     """
     assert " " in cfg().PASTA_SAIDA

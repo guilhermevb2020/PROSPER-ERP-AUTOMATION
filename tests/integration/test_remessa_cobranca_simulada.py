@@ -24,12 +24,12 @@ CNAB_OUTRO = ('01REMESSA'.ljust(400) + '\r\n' + '1'.ljust(399) + 'X' + '\r\n' + 
 
 @pytest.fixture
 def robo(monkeypatch, tmp_path):
-    pasta = Path(__file__).resolve().parents[2] / 'src/processors/web/robo_remessa'
+    pasta = Path(__file__).resolve().parents[2] / 'src/processors/web/remessa_cobranca'
     monkeypatch.syspath_prepend(str(pasta))
     with patch.dict(sys.modules):
-        for nome in ('_nextcloud', '_sessao', 'exclusoes', 'falhas', 'gerar', 'login', 'remessa_config', 'robo_remessa'):
+        for nome in ('_nextcloud', '_sessao', 'exclusoes', 'falhas', 'gerar', 'login', 'remessa_config', 'gerar_remessa_cobranca'):
             sys.modules.pop(nome, None)
-        r = importlib.import_module('robo_remessa')
+        r = importlib.import_module('gerar_remessa_cobranca')
         monkeypatch.setattr(r.cfg, 'PASTA_REMESSAS', str(tmp_path / 'remessas'))
         monkeypatch.setattr(r.cfg, 'ARQ_CONTROLE', str(tmp_path / 'controle.csv'))
         monkeypatch.setattr(r.cfg, 'ENVIAR_NEXTCLOUD', True)
@@ -157,7 +157,7 @@ def _args(r, *extra):
 
 
 def test_simular_forca_dry_run_mesmo_com_dry_run_desligado_no_ambiente(robo, monkeypatch):
-    """No container o robo_remessa.env poe DRY_RUN_REM=false: `--gerar` sem flag gera de
+    """No container o remessa_cobranca.env poe DRY_RUN_REM=false: `--gerar` sem flag gera de
     verdade. `--simular` e a saida para olhar a fila sem consumir sequencial."""
     r, ctx = robo
     monkeypatch.setattr(r.cfg, 'DRY_RUN', False)
