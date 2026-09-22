@@ -48,12 +48,47 @@ os.environ["CLASSE_RISCO_APLICAR"] = "1"
 os.environ["CONTA_PADRAO_APLICAR"] = "1"
 
 import _analisar_credito_v3 as v3   # noqa: E402
+from src.common.clients import execucao_job   # noqa: E402
+
+# Os modos de conferencia da V3 (`--classe`, `--conta`) leem UMA operacao e nao salvam.
+# Nao sao execucao de job: nao abrem linha em job_execucao.
+_MODOS_DE_CONFERENCIA = ("--classe", "--conta")
 
 
 def main():
     print("[V4] = V3 + ajuste de CLASSE DE RISCO ATIVO no SALVAR "
           "(maioria E->B, P->T; pula C/CE).", flush=True)
-    v3.main()
+    if any(a.split("=")[0] in _MODOS_DE_CONFERENCIA for a in sys.argv[1:]):
+        return v3.main()
+
+    # A execucao cobre o PROCESSO inteiro, nao cada reinicio interno: o robo e um laco
+    # de ~11h que relanca o Chrome quantas vezes precisar e so encerra no fim do
+    # expediente. Enquanto ele trabalha a linha fica `ativa` — e e isso que a
+    # vw_job_execucao_ativa mostra. Morreu sem fechar (timeout do hub, container
+    # recriado), a vw_job_execucao_abandonada acusa depois de 2h.
+    #
+    # `obrigatoria=False` de proposito: o credito nao move dinheiro, e derrubar 11h de
+    # trabalho porque o banco piscou as 7h seria trocar um risco pequeno (perder o
+    # registro de UMA rodada) por um grande (o dia inteiro sem analise). Quem exige
+    # registro sao os quatro jobs de arquivo, onde o rastro e a unica prova do que
+    # foi enviado ao banco.
+    execucao = execucao_job.abrir_execucao(
+        "credito", "analisar_credito_operacao",
+        flag_ensaio=False, obrigatoria=False,
+        apelido_credencial=os.environ.get("SMART_SENHA"),
+        detalhe={"classe_risco_aplicar": True, "conta_padrao_aplicar": True})
+    codigo = 0
+    try:
+        v3.main()
+    except SystemExit as e:                                    # sys.exit() da V1
+        codigo = int(e.code or 0)
+        raise
+    except BaseException:                                      # noqa: BLE001
+        codigo = 1
+        raise
+    finally:
+        execucao_job.fechar_execucao(
+            execucao, "sucesso" if codigo == 0 else "falha", codigo_saida=codigo)
 
 
 if __name__ == "__main__":

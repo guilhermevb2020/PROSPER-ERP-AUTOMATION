@@ -28,6 +28,7 @@ from src.processors.web.doc2you import download as D
 from src.processors.web.doc2you import dias_uteis
 from src.processors.web.doc2you import _login as L
 from src.processors.web.doc2you import _nextcloud as NC
+from src.common.clients import execucao_job
 
 PERFIL = os.getenv("DOC2YOU_PERFIL", "/app/data/doc2you/perfil_chrome")
 BRIDGE = os.getenv("DOC2YOU_URL", "https://wvw.smartsecurities.com.br/smart/doc2you.php")
@@ -479,7 +480,7 @@ async def _testar_xml(data: str) -> None:
             await ctx.close()
 
 
-def main():
+def montar_parser():
     ap = argparse.ArgumentParser()
     ap.add_argument("--data", default=None, help="YYYY-MM-DD ou DD/MM/YYYY (padrão: 2 dias úteis atrás)")
     ap.add_argument("--estrutura", default=ESTRUTURA, choices=["operacao", "tipo", "data"])
@@ -499,8 +500,10 @@ def main():
     ap.add_argument("--xml-dia", default=None,
                     help="DEBUG: lista e baixa os XMLs das notas de op finalizada nesse dia "
                          "(YYYY-MM-DD), depois sai.")
-    args = ap.parse_args()
+    return ap
 
+
+def _rodar(args):
     if not NC.disponivel():
         raise SystemExit("sem credencial Nextcloud (config/nextcloud.env).")
 
@@ -562,6 +565,39 @@ def main():
     print(f"\n[doc2you] FIM {res['data']} (estrutura={res['estrutura']}): "
           f"listados={res['listados']} enviados={res['enviados']} erros={res['erros']} "
           f"retry(enviados+/erros={res.get('erros_retry', 0)})", flush=True)
+
+
+def main():
+    """Abre a execucao no banco em volta do trabalho e fecha com o codigo de saida.
+
+    `obrigatoria=False`: o doc2you nao faz operacao financeira e ja grava o proprio
+    `doc2you_execucao`. Se o banco piscar, perder o registro unificado de uma passada
+    custa menos do que deixar de baixar os documentos do dia.
+    Os modos de DEBUG (`--complementares-op`, `--nf-op`, `--xml-dia`) leem uma operacao
+    e saem: nao sao execucao de job e nao abrem linha."""
+    args = montar_parser().parse_args()
+    if args.complementares_op or args.nf_op or args.xml_dia:
+        return _rodar(args)
+
+    execucao = execucao_job.abrir_execucao(
+        "doc2you",
+        "baixar_documentos_doc2you_antecipado" if args.antecipado
+        else "baixar_documentos_doc2you",
+        flag_ensaio=False, obrigatoria=False,
+        detalhe={"data": args.data, "estrutura": args.estrutura,
+                 "limite": args.limite or None, "antecipado": bool(args.antecipado)})
+    codigo = 0
+    try:
+        _rodar(args)
+    except SystemExit as e:
+        codigo = int(e.code or 0)
+        raise
+    except BaseException:                                      # noqa: BLE001
+        codigo = 1
+        raise
+    finally:
+        execucao_job.fechar_execucao(
+            execucao, "sucesso" if codigo == 0 else "falha", codigo_saida=codigo)
 
 
 if __name__ == "__main__":

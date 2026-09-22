@@ -33,6 +33,7 @@ from src.processors.web.boletos import _config as cfg
 from src.processors.web.boletos import _db
 from src.processors.web.boletos import _emissao_core
 from src.processors.web.boletos._sessao import esta_logado
+from src.common.clients import execucao_job
 
 
 HDR = {"content-type": "application/x-www-form-urlencoded"}
@@ -279,7 +280,7 @@ def _descobrir_e_preview(ctx, contas, periodo):
     return dados, tot_n, tot_v
 
 
-def main():
+def _rodar():
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     periodo = DATA if DATA == DATA_FINAL else f"{DATA} a {DATA_FINAL}"
     if cfg.SCAN:
@@ -441,6 +442,35 @@ def main():
                     prop.close()
                 except Exception:
                     pass
+
+
+def main():
+    """Abre a execucao no banco em volta do trabalho e fecha com o codigo de saida.
+
+    `obrigatoria=False` de proposito: a emissao e o envio JA gravam o proprio rastro
+    (`boleto_emissao_log`, `boleto_envio_log`), entao a regra "sem registro nao ha acao
+    irreversivel" ja e cumprida por outra tabela. Travar a emissao das 8h porque o banco
+    piscou trocaria um risco pequeno (perder o registro unificado de uma rodada) por um
+    grande (o lote do dia nao sair). Quem EXIGE registro sao os quatro jobs de arquivo,
+    onde o rastro e a unica prova do que foi entregue ao banco.
+
+    O `run_id` vem do proprio hub (HUB_RUN_ID), entao a execucao casa com a task que a
+    disparou — e as duas tasks de emissao (manha e tarde) se distinguem pelo task_nome."""
+    execucao = execucao_job.abrir_execucao(
+        "boletos", "enviar_lote_boletos", flag_ensaio=False, obrigatoria=False,
+        detalhe={"periodo": f"{DATA} a {DATA_FINAL}", "modalidade": MODALIDADE, "so_tipo": SO_TIPO or None})
+    codigo = 0
+    try:
+        _rodar()
+    except SystemExit as e:
+        codigo = int(e.code or 0)
+        raise
+    except BaseException:                                      # noqa: BLE001
+        codigo = 1
+        raise
+    finally:
+        execucao_job.fechar_execucao(
+            execucao, "sucesso" if codigo == 0 else "falha", codigo_saida=codigo)
 
 
 if __name__ == "__main__":
