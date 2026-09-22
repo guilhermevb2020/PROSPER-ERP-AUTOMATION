@@ -134,6 +134,11 @@ ARQ_CONTROLE = _s("ARQ_CONTROLE", "/app/data/robo_remessa/controle_remessas.csv"
 # src/processors/db/controle/carregar_remessas_historicas.py): o cancelamento olha 45 dias
 # para tras e o banco so conhece o que foi registrado desde 22/09/2026.
 CONTROLE_FONTE = _s("CONTROLE_FONTE_REM", _s("CONTROLE_FONTE", "csv")).strip().lower()
+# Fase 4 de docs/PLANO_CONTROLE_NO_BANCO.md: o CSV de controle continua sendo ESCRITO
+# enquanto isto for True (padrao). ESCREVER_CSV_REM=False congela o CSV — o job passa a gravar
+# so no banco; o arquivo fica como historico (e continua LIDO onde a memoria e
+# banco ∪ historico). Nao desligue antes de CONTROLE_FONTE=banco e paridade limpa.
+ESCREVER_CSV = _b("ESCREVER_CSV_REM", os.environ.get("ESCREVER_CSV", "True"))
 # Lista de EXCLUSAO da geracao, escrita pelo process-automation
 # (`apontar_exclusoes_remessa_400`, dia util 17:30) no bind compartilhado
 # `data/retornos_a_processar`: titulos abertos de sacado cujo endereco sai SEM

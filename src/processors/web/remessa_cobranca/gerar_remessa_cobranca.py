@@ -192,6 +192,9 @@ def ler_controle(execucao=None):
 
 
 def gravar_controle(registro):
+    if not getattr(cfg, "ESCREVER_CSV", True):
+        log(f"  controle: CSV congelado (ESCREVER_CSV_REM=False) — registro so no banco")
+        return
     novo = not os.path.exists(cfg.ARQ_CONTROLE)
     os.makedirs(os.path.dirname(cfg.ARQ_CONTROLE) or ".", exist_ok=True)
     with open(cfg.ARQ_CONTROLE, "a", encoding="utf-8", newline="") as f:

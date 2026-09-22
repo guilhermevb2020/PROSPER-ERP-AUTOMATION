@@ -229,3 +229,24 @@ def test_conexao_que_cai_no_meio_e_reconectada(execucao):
     assert any("reconectada" in a for a in execucao.avisos)
     (fk,), = _ler("select fk_job_execucao from erp_automation.arquivo where id = %s", (arq,))
     assert fk == execucao.id
+
+
+def test_abandonada_respeita_o_limite_da_automacao(monkeypatch):
+    """erp_007: credito (ciclo de ~11 h) so e abandonado depois de 13 h; os demais, 2 h."""
+    def inserir(automacao, job, horas):
+        with psycopg2.connect(ADMIN) as c, c.cursor() as cur:
+            cur.execute("insert into erp_automation.job_execucao (automacao, job, gatilho, ambiente, flag_ensaio, "
+                        "iniciado_em) values (%s, %s, 'cron', 'sandbox', true, now() - make_interval(hours => %s)) "
+                        "returning id", (automacao, job, horas))
+            return cur.fetchone()[0]
+    ids = {"credito_3h": inserir("credito", "analisar_credito_operacao", 3),
+           "credito_14h": inserir("credito", "analisar_credito_operacao", 14),
+           "retorno_3h": inserir("retorno_cobranca", "processar_retorno_bb", 3),
+           "retorno_1h": inserir("retorno_cobranca", "processar_retorno_bb", 1)}
+    abandonadas = {i for (i,) in _ler("select id from erp_automation.vw_job_execucao_abandonada where id = any(%s)",
+                                       (list(ids.values()),))}
+    assert abandonadas == {ids["credito_14h"], ids["retorno_3h"]}
+    from src.processors.db.controle import comparar_controle_csv_banco as cmp
+    with psycopg2.connect(RUNTIME) as conn:
+        listadas = {a[0] for a in cmp.listar_abandonadas(conn)}
+    assert {ids["credito_14h"], ids["retorno_3h"]} <= listadas

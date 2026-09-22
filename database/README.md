@@ -186,6 +186,14 @@ a segunda cairia no único — em modo real o job recusa agir sem registro. **Ap
 produção em 22/09/2026 às 10:50**, antes da imagem do hub que passa `HUB_RUN_ID`/
 `HUB_TASK_NOME` (pedido em 22/09/2026). Prova: `tests/integration/test_erp_006_run_id.py`.
 
+## erp_007 — abandonada por automação
+
+`database/erp_007_abandonada_por_automacao.sql`: `vw_job_execucao_abandonada` passa a usar
+limite por automação (crédito 13 h — o ciclo diário é de ~11 h e aparecia como abandonado
+todo dia —, doc2you e boletos 1 h, demais 2 h). Só a view muda. Prova:
+`tests/integration/test_erp_005_controle.py::test_abandonada_respeita_o_limite_da_automacao`.
+Aplicar como as anteriores (modelo `erp-automation-ddl`).
+
 ### Quando o ledger diz que o conteúdo mudou
 
 Migration aplicada é imutável e a guarda barra — é isso que se quer. Só existe uma saída,

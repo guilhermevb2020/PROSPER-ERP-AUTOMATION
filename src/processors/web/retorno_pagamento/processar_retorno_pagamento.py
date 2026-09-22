@@ -107,6 +107,9 @@ def hashes_ja_tratados(execucao=None) -> set:
 
 def gravar_controle(registro: dict) -> None:
     """Anexa uma linha. Cabeçalho antigo é arquivado em vez de desalinhar."""
+    if not getattr(cfg, "ESCREVER_CSV", True):
+        log(f"  controle: CSV congelado (ESCREVER_CSV_RETPAG=False) — registro so no banco")
+        return
     os.makedirs(os.path.dirname(cfg.ARQ_CONTROLE) or ".", exist_ok=True)
     existe = os.path.exists(cfg.ARQ_CONTROLE)
     if existe:

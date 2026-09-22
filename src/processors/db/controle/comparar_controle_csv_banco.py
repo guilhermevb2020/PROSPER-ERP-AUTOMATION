@@ -165,6 +165,25 @@ def no_banco_em_qualquer_dia(conn, tipos: tuple, md5s: list) -> set:
         return {l[0] for l in cur.fetchall() if l and l[0]}
 
 
+SQL_ABANDONADAS = """
+    SELECT id, automacao, job, gatilho, to_char(iniciado_em AT TIME ZONE %(tz)s, 'DD/MM HH24:MI')
+      FROM erp_automation.vw_job_execucao_abandonada
+     WHERE NOT (automacao = 'credito' AND iniciado_em > now() - interval '13 hours')
+     ORDER BY iniciado_em
+"""
+# O filtro do credito repete a regra da erp_007 aqui, para a paridade nao acusar o ciclo
+# diario de ~11 h enquanto a view antiga (2 h para tudo) ainda estiver em producao.
+
+
+def listar_abandonadas(conn, tz: str = TZ_PADRAO) -> list:
+    """Execucoes `ativa` alem do limite da automacao (erp_007): morreram sem fechar, ou o
+    fechamento falhou (desde a reconexao do cliente, isso deixa a linha ativa de
+    proposito). Lista para o relatorio; qualquer uma e divergencia."""
+    with conn.cursor() as cur:
+        cur.execute(SQL_ABANDONADAS, {"tz": tz})
+        return [tuple(l) for l in cur.fetchall()]
+
+
 def comparar(familia: str, lado_csv: LadoCsv, banco: dict, banco_qualquer_dia: set = frozenset()) -> Resultado:
     r = Resultado(familia=familia, csv=lado_csv, banco=banco)
     for h, n in sorted(lado_csv.por_hash.items()):
@@ -181,7 +200,7 @@ def comparar(familia: str, lado_csv: LadoCsv, banco: dict, banco_qualquer_dia: s
 # --------------------------------------------------------------------------- #
 # relatorio
 # --------------------------------------------------------------------------- #
-def relatorio(dia: str, resultados: list) -> str:
+def relatorio(dia: str, resultados: list, abandonadas: list = ()) -> str:
     out = [f"PARIDADE CSV x BANCO — {dia}"]
     for r in resultados:
         situacao = "OK" if r.paridade else "DIVERGE"
@@ -202,6 +221,10 @@ def relatorio(dia: str, resultados: list) -> str:
     divergentes = [r.familia for r in resultados if not r.paridade]
     out.append(f"TOTAL: {total} arquivo(s) no CSV; "
                + ("todas as familias em paridade" if not divergentes else f"DIVERGENCIA em {', '.join(divergentes)}"))
+    if abandonadas:
+        out.append(f"EXECUCOES ABANDONADAS: {len(abandonadas)} (ativa alem do limite da automacao)")
+        for ident, automacao, job, gatilho, quando_ in abandonadas[:20]:
+            out.append(f"      #{ident} {automacao}/{job} · {gatilho} · desde {quando_}")
     return "\n".join(out)
 
 
@@ -216,8 +239,8 @@ def resumo_json(dia: str, resultados: list) -> dict:
         for r in resultados}}
 
 
-def codigo_de_saida(resultados: list) -> int:
-    return SAIU_OK if all(r.paridade for r in resultados) else SAIU_DIVERGENTE
+def codigo_de_saida(resultados: list, abandonadas: list = ()) -> int:
+    return SAIU_OK if all(r.paridade for r in resultados) and not abandonadas else SAIU_DIVERGENTE
 
 
 # --------------------------------------------------------------------------- #
@@ -235,7 +258,7 @@ def montar_parser() -> argparse.ArgumentParser:
     return ap
 
 
-def executar(dia: str, tz: str, conn, log=print) -> tuple[int, list]:
+def executar(dia: str, tz: str, conn, log=print) -> tuple[int, list, list]:
     resultados = []
     for fam in FAMILIAS:
         lado = ler_csv(fam.caminho_csv, fam.coluna_hash, fam.coluna_quando, dia)
@@ -243,8 +266,9 @@ def executar(dia: str, tz: str, conn, log=print) -> tuple[int, list]:
         faltam_no_dia = [h for h in lado.por_hash if h not in banco]
         resultados.append(comparar(fam.nome, lado, banco,
                                    no_banco_em_qualquer_dia(conn, fam.tipos, faltam_no_dia)))
-    log(relatorio(dia, resultados))
-    return codigo_de_saida(resultados), resultados
+    abandonadas = listar_abandonadas(conn, tz)
+    log(relatorio(dia, resultados, abandonadas))
+    return codigo_de_saida(resultados, abandonadas), resultados, abandonadas
 
 
 def main(argv=None) -> int:
@@ -253,7 +277,7 @@ def main(argv=None) -> int:
     execucao = execucao_job.abrir_execucao("controle", JOB, flag_ensaio=False, obrigatoria=False,
                                            detalhe={"dia": dia})
     codigo = SAIU_ERRO
-    resultados = []
+    resultados, abandonadas = [], []
     try:
         try:
             conn = execucao_job.conexao_leitura(JOB)
@@ -261,17 +285,19 @@ def main(argv=None) -> int:
             print(f"ERRO: sem banco para comparar ({type(e).__name__}: {str(e)[:160]})")
             return SAIU_ERRO
         try:
-            codigo, resultados = executar(dia, args.tz, conn)
+            codigo, resultados, abandonadas = executar(dia, args.tz, conn)
         finally:
             conn.close()
         if args.json:
             print(json.dumps(resumo_json(dia, resultados), ensure_ascii=False, indent=1))
         return codigo
     finally:
+        detalhe = resumo_json(dia, resultados) if resultados else {"dia": dia}
+        detalhe["abandonadas"] = [f"#{a[0]} {a[1]}/{a[2]}" for a in abandonadas]
         execucao_job.fechar_execucao(
             execucao, "sucesso" if codigo == SAIU_OK else "falha", codigo_saida=codigo,
             qtd_itens=sum(len(r.csv.por_hash) for r in resultados) if resultados else None,
-            detalhe=resumo_json(dia, resultados) if resultados else {"dia": dia})
+            detalhe=detalhe)
 
 
 if __name__ == "__main__":

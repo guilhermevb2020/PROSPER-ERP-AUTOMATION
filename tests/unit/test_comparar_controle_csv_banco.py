@@ -111,6 +111,7 @@ def test_main_registra_a_execucao_e_devolve_o_exit(tmp_path, monkeypatch):
     monkeypatch.setattr(cmp, "ler_banco", lambda conn, tipos, dia, tz=None: next(
         banco[f.nome] for f in cmp.FAMILIAS if f.tipos == tipos))
     monkeypatch.setattr(cmp, "no_banco_em_qualquer_dia", lambda conn, tipos, md5s: set())
+    monkeypatch.setattr(cmp, "listar_abandonadas", lambda conn, tz=None: [])
 
     class _Conn:
         def close(self): chamadas.append("close")
@@ -141,3 +142,29 @@ def test_sem_banco_sai_com_erro_e_fecha_a_execucao(monkeypatch):
     monkeypatch.setattr(cmp.execucao_job, "conexao_leitura", _falha)
     assert cmp.main(["--dia", DIA]) == cmp.SAIU_ERRO
     assert chamadas == [("falha", cmp.SAIU_ERRO)]
+
+
+def test_execucao_abandonada_e_divergencia_e_aparece_no_relatorio():
+    lado = cmp.LadoCsv(por_hash={"a1": "A.REM"}, todos={"a1"})
+    r = cmp.comparar("remessa", lado, {"a1": "A.REM"})
+    assert r.paridade
+    abandonadas = [(164, "remessa_cobranca", "gerar_remessa_cobranca_cnab_400", "cron", "22/09 11:30")]
+    assert cmp.codigo_de_saida([r], abandonadas) == cmp.SAIU_DIVERGENTE
+    texto = cmp.relatorio(DIA, [r], abandonadas)
+    assert "EXECUCOES ABANDONADAS: 1" in texto and "#164 remessa_cobranca/gerar_remessa_cobranca_cnab_400" in texto
+    assert cmp.codigo_de_saida([r], []) == cmp.SAIU_OK
+
+
+def test_listar_abandonadas_le_a_view():
+    class _Cur:
+        def __init__(self): self.sql = None
+        def __enter__(self): return self
+        def __exit__(self, *a): return False
+        def execute(self, sql, params): self.sql = sql
+        def fetchall(self): return [(164, "remessa_cobranca", "gerar_remessa_cobranca_cnab_400", "cron", "22/09 11:30")]
+    class _Conn:
+        cur = _Cur()
+        def cursor(self): return self.cur
+    conn = _Conn()
+    assert cmp.listar_abandonadas(conn) == [(164, "remessa_cobranca", "gerar_remessa_cobranca_cnab_400", "cron", "22/09 11:30")]
+    assert "vw_job_execucao_abandonada" in conn.cur.sql

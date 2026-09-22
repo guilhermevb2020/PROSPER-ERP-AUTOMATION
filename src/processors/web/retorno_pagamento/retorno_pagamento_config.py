@@ -129,6 +129,11 @@ ARQ_CONTROLE = _s("ARQ_CONTROLE_RETPAG", "/app/data/robo_retorno_pagamento/contr
 # retorno_pagamento_cnab_240 registrados) e, se o banco faltar, volta ao CSV avisando.
 # O CSV continua sendo ESCRITO nos dois modos ate o corte (Fase 4).
 CONTROLE_FONTE = _s("CONTROLE_FONTE_RETPAG", _s("CONTROLE_FONTE", "csv")).strip().lower()
+# Fase 4 de docs/PLANO_CONTROLE_NO_BANCO.md: o CSV de controle continua sendo ESCRITO
+# enquanto isto for True (padrao). ESCREVER_CSV_RETPAG=False congela o CSV — o job passa a gravar
+# so no banco; o arquivo fica como historico (e continua LIDO onde a memoria e
+# banco ∪ historico). Nao desligue antes de CONTROLE_FONTE=banco e paridade limpa.
+ESCREVER_CSV = _b("ESCREVER_CSV_RETPAG", os.environ.get("ESCREVER_CSV", "True"))
 DEBUG_DIR = _s("DEBUG_DIR_RETPAG", "/app/data/robo_retorno_pagamento/debug")
 PAUSA_ENTRE_ARQUIVOS = float(_s("PAUSA_ENTRE_ARQUIVOS_RETPAG", "1.0"))
 

@@ -92,3 +92,16 @@ def test_a_rodada_passa_a_execucao_para_o_controle(robo, monkeypatch):
     args = SimpleNamespace(arquivo=None, limite=None, listar=False)
     assert robo.rodada(object(), args, True, execucao="EX") == robo.SAIU_OK
     assert vistos == [{"aaaa"}]
+
+
+def test_escrever_csv_desligado_nao_grava_e_diz(robo, monkeypatch):
+    """Fase 4: ESCREVER_CSV_RETPAG=False congela o CSV — gravar_controle vira no-op com aviso."""
+    assert robo.cfg.ESCREVER_CSV is True
+    antes = open(robo.cfg.ARQ_CONTROLE, encoding="utf-8").read()
+    monkeypatch.setattr(robo.cfg, "ESCREVER_CSV", False)
+    robo.gravar_controle({"arquivo": "X.RET", "hash": "ffff", "status_http": 200, "quando": "2026-09-22 12:00:00"})
+    assert open(robo.cfg.ARQ_CONTROLE, encoding="utf-8").read() == antes
+    assert any("CSV congelado" in l for l in robo._linhas)
+    monkeypatch.setattr(robo.cfg, "ESCREVER_CSV", True)
+    robo.gravar_controle({"arquivo": "X.RET", "hash": "ffff", "status_http": 200, "quando": "2026-09-22 12:00:00"})
+    assert "ffff" in open(robo.cfg.ARQ_CONTROLE, encoding="utf-8").read()

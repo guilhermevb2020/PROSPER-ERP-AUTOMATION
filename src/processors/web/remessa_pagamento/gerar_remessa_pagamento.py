@@ -115,6 +115,9 @@ def gravar_controle(registro):
     (O retorno_cobranca pegou esse bug uma vez: CSV criado por versao com menos
     colunas + linhas novas com mais campos = arquivo inteiro fora de posicao.)
     """
+    if not getattr(cfg, "ESCREVER_CSV", True):
+        log(f"  controle: CSV congelado (ESCREVER_CSV_PAG=False) — registro so no banco")
+        return
     os.makedirs(os.path.dirname(cfg.ARQ_CONTROLE) or ".", exist_ok=True)
     existe = os.path.exists(cfg.ARQ_CONTROLE)
     if existe:

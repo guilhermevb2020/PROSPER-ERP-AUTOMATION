@@ -89,6 +89,9 @@ def gravar_controle(registro):
     cabecalho diz 8 campos e a linha traz 12. Por isso, quando o cabecalho do
     disco nao bate com o CABECALHO atual, arquiva o antigo e comeca um novo.
     """
+    if not getattr(cfg, "ESCREVER_CSV", True):
+        log(f"  controle: CSV congelado (ESCREVER_CSV_RET=False) — registro so no banco")
+        return
     os.makedirs(os.path.dirname(cfg.ARQ_CONTROLE) or ".", exist_ok=True)
     existe = os.path.exists(cfg.ARQ_CONTROLE)
     if existe:

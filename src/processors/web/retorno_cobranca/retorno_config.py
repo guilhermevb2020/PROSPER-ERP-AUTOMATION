@@ -113,6 +113,11 @@ ARQ_CONTROLE = _s("ARQ_CONTROLE_RET", "/app/data/robo_retorno/controle_processad
 # le a lista de md5 do banco na descoberta) e, sem banco, volta ao CSV avisando. O CSV e
 # escrito nos dois modos ate o corte (Fase 4).
 CONTROLE_FONTE = _s("CONTROLE_FONTE_RET", _s("CONTROLE_FONTE", "csv")).strip().lower()
+# Fase 4 de docs/PLANO_CONTROLE_NO_BANCO.md: o CSV de controle continua sendo ESCRITO
+# enquanto isto for True (padrao). ESCREVER_CSV_RET=False congela o CSV — o job passa a gravar
+# so no banco; o arquivo fica como historico (e continua LIDO onde a memoria e
+# banco ∪ historico). Nao desligue antes de CONTROLE_FONTE=banco e paridade limpa.
+ESCREVER_CSV = _b("ESCREVER_CSV_RET", os.environ.get("ESCREVER_CSV", "True"))
 DEBUG_DIR = _s("DEBUG_DIR_RET", "/app/data/robo_retorno/debug")
 PAUSA_ENTRE_ARQUIVOS = float(_s("PAUSA_ENTRE_ARQUIVOS_RET", "1.0"))
 

@@ -199,6 +199,11 @@ ARQ_CONTROLE = _s("ARQ_CONTROLE_PAG", "/app/data/robo_pagamento/controle_pagamen
 # `csv` (padrao) le o controle acima; `banco` le erp_automation.vw_controle_pagamento e,
 # sem banco, volta ao CSV avisando. O CSV e escrito nos dois modos ate o corte (Fase 4).
 CONTROLE_FONTE = _s("CONTROLE_FONTE_PAG", _s("CONTROLE_FONTE", "csv")).strip().lower()
+# Fase 4 de docs/PLANO_CONTROLE_NO_BANCO.md: o CSV de controle continua sendo ESCRITO
+# enquanto isto for True (padrao). ESCREVER_CSV_PAG=False congela o CSV — o job passa a gravar
+# so no banco; o arquivo fica como historico (e continua LIDO onde a memoria e
+# banco ∪ historico). Nao desligue antes de CONTROLE_FONTE=banco e paridade limpa.
+ESCREVER_CSV = _b("ESCREVER_CSV_PAG", os.environ.get("ESCREVER_CSV", "True"))
 DEBUG_DIR = _s("DEBUG_DIR_PAG", "/app/data/robo_pagamento/debug")
 
 
