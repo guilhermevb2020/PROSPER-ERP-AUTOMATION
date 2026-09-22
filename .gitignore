@@ -106,3 +106,8 @@ logs/
 # Caches de ferramenta
 .pytest_cache/
 .ruff_cache/
+
+# trilhas locais do finalizador (o banco e a fonte; estes ficam no bind de src/)
+src/processors/web/finalizar_operacao/finalizadas.csv
+src/processors/web/finalizar_operacao/avisos_enviados.csv
+src/processors/web/finalizar_operacao/whatsapp_enviados.txt

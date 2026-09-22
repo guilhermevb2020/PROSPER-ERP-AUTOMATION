@@ -27,10 +27,12 @@ Uso (rodar da RAIZ; o robo sobe a PROPRIA sessao do Smart - `--cdp` anexa numa j
 import argparse
 import csv
 import os
+import re
 import sys
 import time
 import traceback
 from datetime import datetime
+from html import unescape
 
 _AQUI = os.path.dirname(os.path.abspath(__file__))
 _RAIZ = os.path.dirname(_AQUI)
@@ -69,6 +71,53 @@ def _dados_da_operacao(ctx, op):
     return tipos, cedente, valor
 
 
+# Etapa ATUAL da operacao: a opcao marcada no <select id=etapaOperacao> da tela de
+# edicao (novatelaoperacao.php), a mesma que o _dados_da_operacao ja baixa por HTTP.
+# Medido em 22/09/2026 (op 65879): o select vem no HTML com 9 opcoes e a marcada e a
+# etapa ("Aguardando Ass.", value 15). Pelo DOM NAO serve depois da grade: o form mora
+# no frame 'stage', e o Resumir e a grade de pagamento abrem nesse MESMO frame.
+_RE_SELECT_ETAPA = re.compile(
+    r"<select\b[^>]*\bid\s*=\s*[\"']etapaOperacao[\"'][^>]*>(.*?)</select>", re.S | re.I)
+_RE_OPCAO_MARCADA = re.compile(r"<option\b[^>]*\bselected\b[^>]*>([^<]*)", re.I)
+
+
+def _etapa_do_html(html):
+    """Rotulo da opcao marcada no select de etapa. None se o select nao estiver no
+    HTML ou se nao houver exatamente UMA opcao marcada (ai nao da para afirmar)."""
+    m = _RE_SELECT_ETAPA.search(html or "")
+    if not m:
+        return None
+    marcadas = _RE_OPCAO_MARCADA.findall(m.group(1))
+    if len(marcadas) != 1:
+        return None
+    return unescape(marcadas[0]).strip() or None
+
+
+def _etapa_da_operacao(ctx, op):
+    """Etapa da operacao lida no Smart, por HTTP, na hora. None = nao deu para ler
+    (e quem chama trata None como "nao esta na etapa": a porta fecha)."""
+    try:
+        import classe_risco_tool as crt
+        from smart_session import Smart
+        st, html = Smart.attach(ctx).get(crt.URL_EDIT.format(op=op), timeout=60_000)
+    except Exception:
+        return None
+    if st != 200:
+        return None
+    return _etapa_do_html(html)
+
+
+def _norm_etapa(texto):
+    import unicodedata
+    t = unicodedata.normalize("NFKD", str(texto or ""))
+    return "".join(c for c in t if c.isalnum()).lower()
+
+
+def _mesma_etapa(lida, esperada):
+    """'Aguardando Ass.' == 'AGUARDANDO ASS' == ' aguardando  ass. '; None nunca casa."""
+    return lida is not None and _norm_etapa(lida) != "" and _norm_etapa(lida) == _norm_etapa(esperada)
+
+
 def _fmt_valor(valor):
     if valor is None:
         return None
@@ -95,6 +144,17 @@ def processar(ctx, op, executar=False, mandar_email=False, execucao=None):
     laudo["tipos"], laudo["cedente"] = sorted(set(t for t in tipos if t)), cedente
     laudo["valor"] = valor
     print(f"  cedente: {cedente or '(nao identificado)'} | titulos: {laudo['tipos'] or '(nao lidos)'}")
+
+    # ---- TITULOS: sem os tipos, nao ha como saber o que exigir ------------- #
+    # documentos_exigidos([]) pede so Aditivo + Nota promissoria: Duplicata e Letra
+    # de cambio dependem do tipo dos titulos. Titulo nao lido deixaria passar uma
+    # operacao com duplicatas SEM assinatura - com o clique ligado (22/09/2026),
+    # conferir menos vira finalizar indevidamente. Nao lido = nao confere nem clica.
+    if not laudo["tipos"]:
+        laudo["erro"] = ("nao li os tipos dos titulos na tela da operacao; sem eles nao "
+                         "sei se Duplicata/Letra de cambio sao exigidas")
+        print(f"  [docs] ERRO: {laudo['erro']}")
+        return laudo
 
     # ---- CHECAGEM 1: documentos assinados -------------------------------- #
     try:
@@ -138,6 +198,27 @@ def processar(ctx, op, executar=False, mandar_email=False, execucao=None):
             laudo["acao"] = "avisado" if ok else "avisar"
         else:
             print("     (e-mail NAO enviado - rode com --email para avisar de verdade)")
+        return laudo
+
+    # ---- ETAPA: so finaliza quem esta MESMO na etapa de entrada ----------- #
+    # A fila vem da consulta do Smart, que le a tabela 1,5 s depois de Pesquisar.
+    # Quando o Smart demora, ela le a tabela que ja estava na tela: as ~10
+    # operacoes mais recentes, das duas securitizadoras e de qualquer etapa
+    # (medido 3x em 22/09/2026: 11:00, 14:30 e 15:00). Com o clique ligado, isso
+    # punha ao alcance do Finalizar uma operacao que o operador tirou da etapa de
+    # proposito. A etapa e lida no Smart ANTES de abrir a grade; se nao for a de
+    # entrada, ou nao der para ler, nao finaliza.
+    etapa = _etapa_da_operacao(ctx, op)
+    laudo["etapa"] = etapa
+    print(f"  [etapa] {etapa if etapa is not None else 'NAO consegui ler a etapa da operacao no Smart'}")
+    if not _mesma_etapa(etapa, cfg.ROTULO_ETAPA_ENTRADA):
+        motivo = (f"Etapa: a operacao esta em '{etapa}', nao em '{cfg.ROTULO_ETAPA_ENTRADA}'"
+                  if etapa is not None else
+                  "Etapa: nao consegui ler a etapa da operacao no Smart")
+        laudo["pendencias"].append(f"{motivo} - o robo so finaliza na etapa de entrada")
+        laudo["acao"] = "fora da etapa (nao finaliza)"
+        laudo["pagamento_conferido"] = False
+        print(f"\n  >> NAO FINALIZA - {motivo}")
         return laudo
 
     # ---- CHECAGEM 2: forma de pagamento ---------------------------------- #
@@ -188,6 +269,16 @@ def processar(ctx, op, executar=False, mandar_email=False, execucao=None):
             print("     [DRY] NAO clicou em Finalizar. Use --executar para valer.")
             return laudo
 
+        # LIMITE DE HORA, antes de registrar a intencao de clique: depois de
+        # R7_HORA_LIMITE_FINALIZAR (18:30) a operacao passa, mas fica para o primeiro
+        # ciclo de amanha - a remessa de pagamento exige vencimento = hoje. A mesma
+        # trava vive dentro do finalizar_da_grade(), para os outros caminhos.
+        dentro, motivo_janela = cfg.dentro_da_janela_de_finalizacao()
+        if not dentro:
+            laudo["acao"] = "finalizaria (fora da janela de horario)"
+            print(f"     [janela] NAO clicou em Finalizar: {motivo_janela}")
+            return laudo
+
         # FINALIZA na MESMA pagina (sem re-navegar) e liga o aceite de dialogos
         def _ligar_aceite(_dialogos):
             modo["aceitar"] = True
@@ -205,6 +296,9 @@ def processar(ctx, op, executar=False, mandar_email=False, execucao=None):
             # R7_DRY_RUN=1 barrou o clique dentro do finalizar_da_grade: nao e falha,
             # e o mesmo veredito do caminho `not executar` acima.
             laudo["acao"] = "finalizaria (DRY)"
+        elif r_fin["situacao"] == "fora_da_janela":
+            # o relogio cruzou o limite entre a checagem acima e o clique: nao e falha
+            laudo["acao"] = "finalizaria (fora da janela de horario)"
         elif r_fin["situacao"] == "finalizada_por_outro":
             # nao e falha: o operador chegou primeiro. Nao avisamos por WhatsApp
             # porque nao fomos nos que finalizamos.
@@ -292,6 +386,7 @@ def _registrar_avaliacao(execucao, laudo):
         detalhe={"acao": laudo.get("acao"), "erro": laudo.get("erro"),
                  "tipos_titulos": laudo.get("tipos"),
                  "pagamento_conferido": laudo.get("pagamento_conferido"),
+                 "etapa": laudo.get("etapa"),
                  "observacoes": laudo.get("observacoes"),
                  "exigidos": detalhes.get("exigidos")},
         linhas_pagamento=detalhes.get("linhas_pagamento") or [])

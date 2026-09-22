@@ -21,6 +21,7 @@ Sobrescrever via env (override por run):
 """
 import os
 import sys
+from datetime import datetime, time as dt_time
 
 _AQUI = os.path.dirname(os.path.abspath(__file__))
 _RAIZ = os.path.dirname(_AQUI)
@@ -222,6 +223,39 @@ WHATSAPP_ARQUIVO_SAIDA = _s("R7_WHATSAPP_ARQUIVO", os.path.join(_AQUI, "whatsapp
 # DRY_RUN: confere e avisa, mas NUNCA clica em Finalizar. Deixe LIGADO ate
 # validar num lote real.
 DRY_RUN = _b("R7_DRY_RUN", "1")
+# LIMITE DE HORA para clicar em Finalizar. A remessa de pagamento sai a cada 5 min
+# ate 18:55 e exige vencimento = hoje: operacao finalizada depois disso so entra na
+# remessa de amanha, com o vencimento de ontem. Pendencia do README desde 21/09/2026,
+# fechada em 22/09/2026 ao tirar o robo do DRY. Formato HH:MM, hora local do
+# container (TZ=America/Sao_Paulo). Vazio desliga o limite; valor invalido FECHA a
+# porta: a acao e irreversivel, entao configuracao errada nunca pode abri-la.
+HORA_LIMITE_FINALIZAR = _s("R7_HORA_LIMITE_FINALIZAR", "18:30").strip()
+
+
+def _agora():
+    """Separado para os testes fixarem o relogio."""
+    return datetime.now()
+
+
+def dentro_da_janela_de_finalizacao(agora=None):
+    """-> (True/False, detalhe). Vale para QUALQUER caminho que clique em Finalizar:
+    o processar() consulta antes de registrar a intencao de clique e o
+    finalizar_da_grade() consulta de novo no ponto do clique."""
+    if not HORA_LIMITE_FINALIZAR:
+        return True, "sem limite de hora (R7_HORA_LIMITE_FINALIZAR vazio)"
+    try:
+        hh, mm = HORA_LIMITE_FINALIZAR.split(":")
+        limite = dt_time(int(hh), int(mm))
+    except (ValueError, TypeError):
+        return False, (f"R7_HORA_LIMITE_FINALIZAR invalido ({HORA_LIMITE_FINALIZAR!r}, "
+                       "esperado HH:MM): porta fechada por seguranca")
+    agora = agora or _agora()
+    if agora.time() > limite:
+        return False, (f"{agora.strftime('%H:%M')} passa do limite {HORA_LIMITE_FINALIZAR}; "
+                       "a remessa de pagamento exige vencimento = hoje e a ultima sai 18:55")
+    return True, f"{agora.strftime('%H:%M')} dentro do limite {HORA_LIMITE_FINALIZAR}"
+
+
 # Intervalo entre ciclos (segundos) quando roda em modo --loop.
 INTERVALO_CICLO_S = int(_s("R7_INTERVALO_CICLO_S", "600"))
 

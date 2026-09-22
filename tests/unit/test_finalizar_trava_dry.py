@@ -14,6 +14,7 @@ from __future__ import annotations
 import importlib
 import os
 import sys
+from datetime import datetime
 from pathlib import Path
 
 import pytest
@@ -31,7 +32,10 @@ def fin(monkeypatch):
         sys.path.insert(0, str(PACOTE))
     for nome in ("finalizar", "r7_config"):
         sys.modules.pop(nome, None)
-    return importlib.import_module("finalizar")
+    fin = importlib.import_module("finalizar")
+    # relogio fixo dentro da janela (a trava de horario tem teste proprio)
+    monkeypatch.setattr(fin.cfg, "_agora", lambda: datetime(2026, 9, 22, 10, 0))
+    return fin
 
 
 class _Botao:

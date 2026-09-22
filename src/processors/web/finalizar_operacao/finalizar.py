@@ -100,6 +100,12 @@ def finalizar(pg, op, dry=None, log=print):
         return {"ok": False, "situacao": "dry", "dialogos": [],
                 "detalhe": f"DRY-RUN: clicaria em Finalizar da op {op} (botao habilitado)"}
 
+    dentro, motivo = cfg.dentro_da_janela_de_finalizacao()   # mesma trava do finalizar_da_grade
+    if not dentro:
+        return {"ok": False, "situacao": "fora_da_janela", "dialogos": [],
+                "detalhe": f"fora da janela de horario ({motivo}); nada foi clicado "
+                           f"na op {op}"}
+
     # A PARTIR DAQUI A ACAO E REAL. Os alerts do Smart (criticas, privilegio,
     # fechamento contabil, saldo) precisam ser ACEITOS p/ o fluxo seguir, e o
     # texto deles e o motivo da eventual recusa - por isso sao capturados.
@@ -216,6 +222,15 @@ def finalizar_da_grade(pg, op, aceitar_dialogos=None, log=print):
         return {"ok": False, "situacao": "dry", "dialogos": [],
                 "detalhe": f"DRY-RUN (R7_DRY_RUN=1): clicaria em Finalizar da op {op} "
                            "(botao habilitado); nada foi clicado"}
+
+    # Trava de HORARIO, no mesmo ponto: depois de R7_HORA_LIMITE_FINALIZAR (18:30)
+    # ninguem clica - a remessa de pagamento exige vencimento = hoje e a ultima sai
+    # 18:55; finalizar depois disso empurra o pagamento para amanha com data errada.
+    dentro, motivo = cfg.dentro_da_janela_de_finalizacao()
+    if not dentro:
+        return {"ok": False, "situacao": "fora_da_janela", "dialogos": [],
+                "detalhe": f"fora da janela de horario ({motivo}); nada foi clicado "
+                           f"na op {op}"}
 
     if aceitar_dialogos:
         aceitar_dialogos(dialogos)      # a partir daqui os alerts sao ACEITOS

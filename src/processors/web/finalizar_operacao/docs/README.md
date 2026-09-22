@@ -3,12 +3,24 @@
 Confere cada operação na etapa **"Aguardando Ass."** e, se passar em duas
 verificações, finaliza no Smart. Se não passar, **não finaliza** e avisa.
 
-> ⚠️ **Estado (21/09/2026): EM DRY, agendado.** Task
-> `finalizar_operacao_aguardando_assinatura` habilitada no hub (`*/15 8-18 * * 1-5`),
-> comando sem `--executar` e `R7_DRY_RUN=1` no `.env`: confere, registra e **não
-> clica**. Primeira rodada em produção: 21/09 19:30 (login via CapSolver OK, fila
-> vazia àquela hora). A finalização real continua com **zero execuções** neste
-> servidor — ver "O que NÃO foi validado".
+> ⚠️ **Estado (22/09/2026): EM PRODUÇÃO, por decisão do usuário.** Desde 14:37 a task
+> `finalizar_operacao_aguardando_assinatura` (`*/15 8-18 * * 1-5`) roda com `--executar`
+> e o `.env` tem `R7_DRY_RUN=0`: as duas trancas estão abertas e o robô **clica** em
+> Finalizar quando as checagens passam, a etapa lida no Smart é a de entrada e o
+> relógio não passou de `R7_HORA_LIMITE_FINALIZAR` (18:30). Voltar ao DRY é fechar
+> **uma** tranca: tirar `--executar` da task **ou** `R7_DRY_RUN=1`.
+>
+> **Primeiras finalizações reais, 22/09:** 65879 às 15:46 e 65876 às 15:47, as duas
+> `Concluída` no Smart. Os dois PIX (R$ 12.659,99 e R$ 27.424,40) voltaram
+> `Liquidado` no retorno `CP2209000505.RET`, importado às 15:58. A remessa deles não foi
+> a do robô: o hub ficou em manutenção das 15:48 às 15:53 (deploy do
+> `process-automation`) e a remessa foi gerada fora dele. Antes disso, nenhum clique: as
+> rodadas das 14:45 e 15:15 só tinham operações sem assinatura, e as seis que passaram às
+> 15:00 já tinham sido finalizadas pelos operadores e pagas das 12:50 às 14:45 (vieram na
+> tabela errada da fila, ver "Armadilhas medidas"). **Enquanto os operadores finalizarem
+> à mão, eles podem chegar antes**: o robô passa a cada 15 min. Mas nem sempre chegam:
+> ainda em DRY, o robô deu `PASSARIA` para XAVANTES (65864) e COTRI (65871) desde 13:45
+> de 22/09, e um operador só as finalizou perto de 14:20 e 14:40 (pagas nessas remessas).
 
 Origem: pacote trazido de uma máquina Windows em 01/09/2026, adaptado aqui.
 
@@ -63,8 +75,8 @@ muda. O placar (`vw_operacao_placar`) compara o veredito com o espelho do Smart.
 
 Em DRY o banco pode faltar: a execução degrada, avisa uma vez e o ciclo segue. Em modo
 real é obrigatório: sem registro não há clique. Módulo: `src/common/clients/execucao_job.py`;
-migration: `database/erp_004_execucao_e_eventos.sql` — **ainda não aplicada em produção**
-(exige o Guardian no modelo de administração; provada na bancada com 17 testes).
+migration: `database/erp_004_execucao_e_eventos.sql`, aplicada em produção em 21/09/2026.
+Desde 22/09 a avaliação leva também a `etapa` lida no Smart.
 
 ---
 
@@ -123,8 +135,8 @@ Dois dias de ciclos contínuos contra o Smart e o doc2you **reais**:
 
 ## O que NÃO foi validado
 
-- **A finalização.** O clique em Finalizar tem **zero execuções** neste
-  servidor. Tudo foi DRY. O pacote de origem reporta 9 finalizações em
+- **A finalização.** Ligada em 22/09/2026 14:37; as primeiras finalizações reais
+  neste servidor foram às 15:46 e 15:47 do mesmo dia (ver "Estado"). Antes disso, tudo foi DRY. O pacote de origem reporta 9 finalizações em
   01/09/2026 na máquina de origem — é o autor dizendo, não nós vendo.
 - **O aviso por WhatsApp.** Nenhum envio saiu; falta a `EVOLUTION_API_KEY` no
   sandbox (no container ela vem do `env_file`). Testados só os caminhos de
@@ -155,14 +167,50 @@ Perde-se a evidência visual exatamente quando o login quebra.
 
 ---
 
+**A fila às vezes é a tabela errada.** A consulta (`_buscar_numeros_uma`, no
+`credito`) lê a tabela 1,5 s depois de Pesquisar. Quando o Smart demora, lê a tabela
+que já estava na tela: as ~10 operações mais recentes, **das duas securitizadoras e
+de qualquer etapa**. Medido 3x em 22/09/2026 (11:00, 14:30, 15:00): a lista "Home"
+veio com exatamente 10 operações, incluindo 65877/65876 e 65875/65874, que são da
+SmartSecurities. As 65875/65874 estavam na lista certa às 12:45, saíram às 13:00 depois
+de finalizadas (pagas na remessa das 12:50) e só voltaram nessas listas de 10. O
+custo, até a trava de etapa: em DRY, `PASSARIA` para operação já paga; em modo real,
+~45 s por operação esperando um botão que não existe, e um `finalizar_clicado` +
+`finalizada_por_outro` no banco para cada uma (a mensagem diz "durante a checagem",
+mas eram horas antes). **O risco**, com o clique ligado: operação que o operador tirou
+da etapa de propósito, com tudo pronto, ao alcance do Finalizar. Desde 22/09 15:36 a
+etapa é lida no Smart **antes de abrir a grade**: a opção marcada no `<select
+id="etapaOperacao">` do HTML da tela de edição, a mesma que o robô já baixa por HTTP.
+Fora da etapa de entrada, ou sem leitura, não finaliza (teste `test_finalizar_trava_etapa`).
+Conferido no Smart em 22/09 15:35: 65879 e 65877 em `Aguardando Ass.`; 65875 e 65846,
+já pagas, em `Concluída`, que é para onde a operação vai ao ser finalizada. A consulta
+em si continua com a espera fixa: uma operação pode ficar fora da fila por um ciclo.
+
+**Pelo DOM a etapa some depois da grade.** O formulário de edição mora no frame
+`stage`, e o Resumir (`novoresumir.php`) e a grade (`gridpagamentodinheirocheque.php`)
+abrem nesse **mesmo** frame. A primeira versão da trava lia o `#etapaOperacao` pelo DOM
+depois da grade, não achou nada e barrou a 65879, pronta, às 15:31 de 22/09. Qualquer
+leitura da tela de edição tem de ser feita antes do Resumir, ou por HTTP.
+
+**Título não lido encolhia a lista de documentos exigidos.** Duplicata e Letra de
+câmbio só são exigidas se o tipo dos títulos (`DUR`/`DSR`/`DMR`, `LCB`) for lido na tela.
+Até 22/09/2026, título não lido seguia com a lista vazia, que pede só Aditivo + Nota
+promissória: uma operação com duplicatas sem assinatura passaria. Não aconteceu em 21 e
+22/09 (nenhum "nao li os titulos" no log), mas com o clique ligado a porta tinha de
+fechar: desde 22/09 15:30, sem os tipos o veredito é `ERRO` e nada é conferido nem
+clicado (teste `test_finalizar_trava_titulos`).
+
 ## Pendências para produção
 
 - [x] `config/finalizar_operacao.env` (600) a partir do `.example.env` — 07/09/2026; em 21/09 ganhou aspas nos dois valores com espaço (o `sh` os deixava vazios)
 - [x] Task no hub, `--timeout-seconds 1500`, começou `--disabled` em 21/09 09:21 e foi habilitada em DRY às 19:32
 - [x] `R7_DRY_RUN` efetivo conferido pelo container em 21/09 — `1`
-- [ ] `placar.py` por alguns dias úteis antes de sair do DRY (nunca rodou)
-- [ ] Limite de hora para clicar (`R7_HORA_LIMITE_FINALIZAR=18:30`): a remessa de pagamento sai a cada 5 min até 18:55 e exige vencimento = hoje
-- [ ] Primeira finalização **supervisionada**, uma operação de valor baixo, acompanhada até o retorno do banco
+- [x] Limite de hora para clicar (`R7_HORA_LIMITE_FINALIZAR=18:30`) — 22/09/2026. Vale em `finalizar_da_grade()`, em `finalizar()` e antes do evento `finalizar_clicado`; vazio desliga, valor inválido fecha a porta (teste `test_finalizar_trava_horario`)
+- [x] Etapa conferida no Smart (HTML da tela de edição) antes de abrir a grade — 22/09/2026 (teste `test_finalizar_trava_etapa`)
+- [x] Títulos não lidos fecham a porta — 22/09/2026 (teste `test_finalizar_trava_titulos`)
+- [x] Produção: `R7_DRY_RUN=0` no `.env` e `--executar` na task — 22/09/2026 14:37, por decisão do usuário
+- [ ] `placar.py` por alguns dias úteis e a primeira finalização **supervisionada** — dispensados pelo usuário ao ligar a produção em 22/09; acompanhar a primeira finalização real até o retorno do banco
+- [ ] Consulta da fila: esperar a tabela de resultados mudar em vez de 1,5 s fixos (`_buscar_numeros_uma`, compartilhada com o `credito`)
 - [ ] Corrigir o timeout de 15s → espera compatível + diagnóstico "operação em uso"
 - [ ] `notificar.py` ainda aponta para um `email_config.json` de Windows
 - [ ] Renomear `r7_config.py` → `finalizar_config.py` (convenção do guia §2)

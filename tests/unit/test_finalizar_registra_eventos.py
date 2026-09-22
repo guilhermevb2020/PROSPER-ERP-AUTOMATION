@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import importlib
 import sys
+from datetime import datetime
 from pathlib import Path
 
 import pytest
@@ -30,6 +31,9 @@ def robo(monkeypatch):
         sys.modules.pop(nome, None)
     mod = importlib.import_module("finalizar_operacao")
     monkeypatch.setattr(mod.cfg, "PAGAMENTO_SO_APOS_ASSINATURAS", True)
+    # relogio fixo dentro da janela: a trava de horario (R7_HORA_LIMITE_FINALIZAR)
+    # nao pode depender da hora em que a suite roda
+    monkeypatch.setattr(mod.cfg, "_agora", lambda: datetime(2026, 9, 22, 10, 0))
     return mod
 
 
@@ -83,6 +87,7 @@ def _preparar_processar(robo, monkeypatch, resultado_clique):
     monkeypatch.setattr(robo.checagem_docs, "conferir", _docs_ok)
     monkeypatch.setattr(robo.checagem_docs, "_ROTULO", {"contrato": "Contrato"})
     monkeypatch.setattr(robo.checagem_pagamento, "conferir", _grade_ok)
+    monkeypatch.setattr(robo, "_etapa_da_operacao", lambda ctx, op: "Aguardando Ass.")
     cliques = []
 
     def _finalizar(pg, op, aceitar_dialogos=None, log=print):
