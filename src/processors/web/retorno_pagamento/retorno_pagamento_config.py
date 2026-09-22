@@ -124,6 +124,11 @@ SUB_PROCESSADOS = "_PROCESSADOS"
 # Controle e debug (local, sobrevive a recriacao do container)
 # --------------------------------------------------------------------------- #
 ARQ_CONTROLE = _s("ARQ_CONTROLE_RETPAG", "/app/data/robo_retorno_pagamento/controle.csv")
+# Fase 2 de docs/PLANO_CONTROLE_NO_BANCO.md: de onde vem a memoria "ja tratei este
+# arquivo". `csv` (padrao) le o controle acima; `banco` le erp_automation.arquivo (md5 dos
+# retorno_pagamento_cnab_240 registrados) e, se o banco faltar, volta ao CSV avisando.
+# O CSV continua sendo ESCRITO nos dois modos ate o corte (Fase 4).
+CONTROLE_FONTE = _s("CONTROLE_FONTE_RETPAG", _s("CONTROLE_FONTE", "csv")).strip().lower()
 DEBUG_DIR = _s("DEBUG_DIR_RETPAG", "/app/data/robo_retorno_pagamento/debug")
 PAUSA_ENTRE_ARQUIVOS = float(_s("PAUSA_ENTRE_ARQUIVOS_RETPAG", "1.0"))
 

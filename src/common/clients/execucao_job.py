@@ -552,6 +552,41 @@ def buscar_arquivo(ex: Execucao, tipo_arquivo: str, *, sha256: str | None = None
         "ORDER BY id DESC LIMIT 1", (tipo_arquivo, valor), devolve=True))
 
 
+def _consultar(ex: Execucao, log, descricao: str, sql: str, params: tuple):
+    """Como _executar, mas devolve TODAS as linhas (lista) — None se degradada."""
+    if ex is None or not ex.registra:
+        if ex is not None:
+            ex._avisar(log, "consulta nao feita: execucao sem banco")
+        return None
+    try:
+        with ex._conn.cursor() as cur:
+            cur.execute(sql, params)
+            return cur.fetchall()
+    except Exception as e:  # noqa: BLE001
+        if ex.estrito:
+            raise ErroDeRegistro(f"{descricao} falhou: {type(e).__name__}: {str(e)[:160]}") from e
+        ex._avisar(log, f"{descricao} falhou ({type(e).__name__}: {str(e)[:120]})")
+        return None
+
+
+def listar_md5(ex: Execucao, tipo_arquivo: str, log=print) -> set | None:
+    """Os md5 de todos os arquivos deste tipo ja registrados — a memoria de idempotencia
+    que o CSV de controle guardava (Fase 2 de docs/PLANO_CONTROLE_NO_BANCO.md). None
+    quando nao ha banco ou a consulta falha: quem chama decide o que fazer (o retorno de
+    pagamento volta ao CSV e avisa). Fato consumado: nunca levanta."""
+    if ex is None:
+        return None
+    if tipo_arquivo not in TIPOS_ARQUIVO:
+        raise ValueError(f"tipo_arquivo desconhecido: {tipo_arquivo!r}")
+    linhas = _fato_consumado(ex, log, f"lista de md5 de {tipo_arquivo}", lambda: _consultar(
+        ex, log, f"lista de md5 de {tipo_arquivo}",
+        "SELECT md5 FROM erp_automation.arquivo WHERE tipo_arquivo = %s AND md5 IS NOT NULL",
+        (tipo_arquivo,)))
+    if linhas is None:
+        return None
+    return {str(l[0]).lower() for l in linhas if l and l[0]}
+
+
 def anotar(ex: Execucao, chave: str, valor) -> None:
     """Guarda um fato que nao tem tabela propria (remessa que nao baixou, cancelamento de
     remessa anterior ao registro). Vai para detalhe_json no fechamento, como lista."""

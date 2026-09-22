@@ -156,3 +156,17 @@ def test_consulta_da_paridade_acha_o_arquivo_do_dia(execucao):
     with psycopg2.connect(RUNTIME) as conn:
         banco = cmp.ler_banco(conn, ("retorno_pagamento_cnab_240",), hoje)
     assert banco.get(md5) == "CP2209000494.RET"
+
+
+def test_listar_md5_devolve_a_memoria_de_idempotencia(execucao):
+    """Fase 2, passo 1: o retorno de pagamento pergunta ao banco o que ja tratou."""
+    hashes = set()
+    for prefixo in (b"a", b"b"):
+        dados = _unico(prefixo)
+        md5 = hashlib.md5(dados).hexdigest()
+        hashes.add(md5)
+        execucao_job.registrar_arquivo(execucao, "retorno_pagamento_cnab_240", "recebido",
+                                       nome_arquivo=f"CP2209_{prefixo.decode()}.RET", conteudo=dados,
+                                       detalhe={"md5": md5})
+    lidos = execucao_job.listar_md5(execucao, "retorno_pagamento_cnab_240")
+    assert hashes <= lidos, "os md5 recem-registrados estao na memoria lida do banco"

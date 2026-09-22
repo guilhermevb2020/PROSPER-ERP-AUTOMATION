@@ -71,7 +71,7 @@ def log(msg):
 # --------------------------------------------------------------------------- #
 # controle (idempotência)
 # --------------------------------------------------------------------------- #
-def hashes_ja_tratados() -> set:
+def hashes_do_csv() -> set:
     if not os.path.exists(cfg.ARQ_CONTROLE):
         return set()
     try:
@@ -80,6 +80,24 @@ def hashes_ja_tratados() -> set:
     except Exception as e:                                              # noqa: BLE001
         log(f"  (aviso ao ler o controle: {e})")
         return set()
+
+
+def hashes_ja_tratados(execucao=None) -> set:
+    """A memoria "ja inseri este conteudo". Fonte por cfg.CONTROLE_FONTE (Fase 2 de
+    docs/PLANO_CONTROLE_NO_BANCO.md): `csv` le o controle; `banco` le os md5 dos
+    retorno_pagamento_cnab_240 em erp_automation.arquivo — e volta ao CSV, avisando,
+    quando o banco nao responde (execucao degradada). Em modo real a execucao e
+    obrigatoria, entao "banco" ali e banco mesmo; o CSV de reserva so entra no ensaio."""
+    fonte = getattr(cfg, "CONTROLE_FONTE", "csv")
+    if fonte == "banco":
+        do_banco = execucao_job.listar_md5(execucao, "retorno_pagamento_cnab_240", log=log)
+        if do_banco is not None:
+            log(f"  controle: fonte BANCO ({len(do_banco)} hash(es) registrados)")
+            return do_banco
+        log("  controle: fonte BANCO indisponivel nesta execucao — usando o CSV de reserva")
+    elif fonte != "csv":
+        log(f"  controle: CONTROLE_FONTE={fonte!r} desconhecida — usando o CSV")
+    return hashes_do_csv()
 
 
 def gravar_controle(registro: dict) -> None:
@@ -219,7 +237,7 @@ def rodada(ctx, args, dry: bool, execucao=None) -> int:
         log("nada em _RETORNOS — nenhum retorno de pagamento a inserir")
         return SAIU_OK
 
-    feitos = hashes_ja_tratados()
+    feitos = hashes_ja_tratados(execucao)
     contagem = {"pendente": 0, "ok": 0, "repete": 0}
     for nome in pendentes:
         efeito = tratar(ctx, nome, dry, feitos, execucao=execucao)

@@ -124,6 +124,7 @@ AMBAS as etapas são salvas em `DEBUG_DIR` (evidência, não fila de rotina).
 | Entrada (Nextcloud) | `FINANCEIRO/Pagamentos-MoneyPlus/_RETORNOS` |
 | Saída (Nextcloud) | `.../_RETORNOS/_PROCESSADOS` |
 | Controle | `/app/data/robo_retorno_pagamento/controle.csv` |
+| Fonte do "já tratei" | `CONTROLE_FONTE_RETPAG` = `csv` (padrão) ou `banco` (md5 em `erp_automation.arquivo`; sem banco, volta ao CSV avisando). O CSV é escrito nos dois modos até o corte — Fase 2 de `docs/PLANO_CONTROLE_NO_BANCO.md` |
 | Debug (HTML de resposta, das duas etapas) | `/app/data/robo_retorno_pagamento/debug/` |
 
 ## Os arquivos

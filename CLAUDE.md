@@ -162,7 +162,8 @@ túnel ssh ao IP do container (ver `docs/COMO_SUBIR_UM_JOB.md`).
   da execução. As views `vw_controle_*` têm as colunas dos CSVs; `vw_job_execucao_ultima`
   responde "rodou?". A paridade CSV × banco é medida todo dia útil pela task
   `comparar_controle_csv_banco` (19:35; exit 3 = divergência). As leituras de idempotência
-  ainda são do CSV (Fase 2): quem mexer nos quatro jobs de arquivo mantém os dois lados.
+  ainda são do CSV (Fase 2) — exceto o retorno de pagamento, que já sabe ler do banco atrás
+  de `CONTROLE_FONTE_RETPAG` (padrão `csv`): quem mexer nos quatro jobs de arquivo mantém os dois lados.
 - **Execução manual em modo real diz quem e por quê:** `docker exec -e ERP_OPERADOR=nome
   -e ERP_MOTIVO="..." erp-automation sh .../run_agendado.sh`. O hub ainda não se identifica
   no exec (`HUB_RUN_ID`/`HUB_TASK_NOME` não chegam), então toda execução dele aparece como
