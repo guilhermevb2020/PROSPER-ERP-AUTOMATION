@@ -17,12 +17,14 @@ primeira como se estivesse em "Análise Home". Aconteceu 9 vezes em 22/09:
 |---|---|---|
 | 193 | 65854 | classe P→T (1 título), Salvar, moveu para "Análise de crédito" |
 | 369 e 375 | 65877 | classe P→T (13 títulos), Salvar, moveu para "Análise de crédito" duas vezes |
-| 409 | 65883 | classe E→B (5 títulos), Salvar, moveu; não se sabe se estava em "Análise Home" |
-| 447 | 65893 | classe E→B (15 títulos), Salvar, moveu; idem |
+| 409 | 65883 | classe E→B (5 títulos), Salvar, moveu para "Análise de crédito" |
+| 447 | 65893 | classe E→B (15 títulos), Salvar, moveu para "Análise de crédito" |
 | 17, 26, 107, 153 | 65850 | já concluída: Salvar e etapa bloqueados, sem dano |
 
-65854 e 65877 estavam em "Aguardando Ass." (o finalizador as via lá). Às 16:35 as seis
-estavam `Concluída` no Smart; **a classe de risco trocada ficou**.
+65854 e 65877 estavam em "Aguardando Ass." (o finalizador as via lá); 65883 e 65893 em
+"Feedback Analise ROB" (o próprio crédito as listou lá pouco antes). Às 16:35 as cinco
+estavam `Concluída` no Smart; **a classe de risco trocada ficou** e precisa ser conferida
+por quem define a classe.
 
 **Correção, em produção desde 22/09 16:31:** a busca só lê depois que o frame de resultado
 troca de documento (teto `WAIT_MAX_PESQUISA`, 20 s; sem recarga, falha e tenta de novo uma
