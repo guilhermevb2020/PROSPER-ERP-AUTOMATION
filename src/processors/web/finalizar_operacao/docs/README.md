@@ -153,9 +153,12 @@ Dois dias de ciclos contínuos contra o Smart e o doc2you **reais**:
 **Operação aberta em outra sessão trava a checagem de pagamento.** O
 `#btnPagamento` fica `disabled` — presente no DOM, visível, sem nada por cima —
 e o clique morre por timeout de 15s. Produziu 2 `ERRO` numa op que minutos
-depois passou sem problema. O job ainda reporta isso como
-`Locator.click: Timeout`, mensagem que não diz nada: **o timeout está calibrado
-para 15s numa tela que pode travar ~90s.** Corrigir isso é o próximo item.
+depois passou sem problema. Até 22/09/2026 o job reportava isso como
+`Locator.click: Timeout`, mensagem que não diz nada, com 15 s de espera numa tela que
+pode travar ~90 s (a 65854 deu esse erro a tarde inteira de 22/09). Desde então ele
+espera até `R7_ESPERA_BTN_PAGAMENTO_S` (90 s) o botão liberar e, se não liberar, o `ERRO`
+diz "botão Pagamento desabilitado: a operação deve estar aberta por outro usuário no
+Smart" (teste `test_finalizar_botao_pagamento`).
 
 **Sem banco, o `cedente` sai vazio.** `DB_HOST` vem do `.env` da raiz; no
 sandbox não existe e o default (`192.168.50.5`) não responde. Não é defeito de
@@ -214,6 +217,6 @@ clicado (teste `test_finalizar_trava_titulos`).
 - [x] Produção: `R7_DRY_RUN=0` no `.env` e `--executar` na task — 22/09/2026 14:37, por decisão do usuário
 - [ ] `placar.py` por alguns dias úteis e a primeira finalização **supervisionada** — dispensados pelo usuário ao ligar a produção em 22/09; acompanhar a primeira finalização real até o retorno do banco
 - [x] Consulta da fila: espera a recarga do frame de resultado e confere a coluna Etapa, em vez de 1,5 s fixos — 22/09/2026 (`_buscar_numeros_uma`, compartilhada com o `credito`; teste `test_busca_consulta_etapa`)
-- [ ] Corrigir o timeout de 15s → espera compatível + diagnóstico "operação em uso"
+- [x] Botão Pagamento desabilitado: espera até 90 s e diagnóstico "operação aberta por outro usuário" — 22/09/2026
 - [ ] `notificar.py` ainda aponta para um `email_config.json` de Windows
 - [ ] Renomear `r7_config.py` → `finalizar_config.py` (convenção do guia §2)

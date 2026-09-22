@@ -256,6 +256,9 @@ def dentro_da_janela_de_finalizacao(agora=None):
     return True, f"{agora.strftime('%H:%M')} dentro do limite {HORA_LIMITE_FINALIZAR}"
 
 
+# Quanto esperar o botao Pagamento sair de "desabilitado" (operacao aberta por outro
+# usuario no Smart) antes de desistir da op neste ciclo.
+ESPERA_BTN_PAGAMENTO_S = float(_s("R7_ESPERA_BTN_PAGAMENTO_S", "90"))
 # Intervalo entre ciclos (segundos) quando roda em modo --loop.
 INTERVALO_CICLO_S = int(_s("R7_INTERVALO_CICLO_S", "600"))
 

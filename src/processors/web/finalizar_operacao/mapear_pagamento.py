@@ -113,6 +113,30 @@ def _ir_para_operacao(pg, op, tentativas=3, log=print):
     return False
 
 
+# Operacao aberta em outra sessao do Smart deixa o #btnPagamento DESABILITADO: presente no
+# DOM, visivel, sem nada por cima. O clique morria em 15 s com "Locator.click: Timeout",
+# que nao diz nada (medido em 01-02/09; de novo em 22/09 na 65854, a tarde inteira, e na
+# 65877). A tela pode ficar assim ~90 s: espera ate cfg.ESPERA_BTN_PAGAMENTO_S e, se
+# continuar desabilitado, falha dizendo o motivo provavel.
+_INTERVALO_BTN_PAGAMENTO_S = 2.0
+
+
+def _esperar_botao_pagamento(botao, op, log=print):
+    espera = float(cfg.ESPERA_BTN_PAGAMENTO_S)
+    if not botao.is_disabled():
+        return
+    log(f"  [pag] op {op}: botao Pagamento desabilitado (operacao aberta por outro usuario?) "
+        f"- esperando ate {espera:.0f}s")
+    fim = time.time() + espera
+    while time.time() < fim:
+        time.sleep(_INTERVALO_BTN_PAGAMENTO_S)
+        if not botao.is_disabled():
+            log(f"  [pag] op {op}: botao Pagamento liberou")
+            return
+    raise RuntimeError(f"botao Pagamento desabilitado ha {espera:.0f}s: a operacao deve estar "
+                       "aberta por outro usuario no Smart")
+
+
 def abrir_pagamento(pg, op, log=print):
     """Navega ate a grade de pagamento. Retorna o frame (ou None)."""
     if not _ir_para_operacao(pg, op, log=log):
@@ -128,6 +152,7 @@ def abrir_pagamento(pg, op, log=print):
     if fr2 is None:
         log("  [!] #btnPagamento nao apareceu no Resumir")
         return None
+    _esperar_botao_pagamento(fr2.locator("#btnPagamento"), op, log=log)
     fr2.locator("#btnPagamento").click(timeout=15_000)
 
     # a grade pode vir no mesmo frame 'stage' ou num frame novo
