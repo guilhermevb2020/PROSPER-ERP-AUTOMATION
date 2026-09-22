@@ -120,7 +120,6 @@ def ler_lista(caminho=ARQUIVO_PADRAO, agora=None):
     prazo: entre a resposta do banco e agora, o boleto pode ter sido registrado -
     e aquele titulo passaria a ser uma duplicata esperando acontecer.
     """
-    agora = agora or datetime.now(timezone.utc)
     try:
         with open(caminho, encoding="utf-8") as fh:
             dados = json.load(fh)
@@ -128,7 +127,16 @@ def ler_lista(caminho=ARQUIVO_PADRAO, agora=None):
         return {}, "lista nao existe em %s (o apontar_cancelamentos ja rodou?)" % caminho
     except (OSError, ValueError) as e:
         return {}, "lista ilegivel (%s: %s)" % (type(e).__name__, e)
+    return validar_lista(dados, agora)
 
+
+def validar_lista(dados, agora=None):
+    """(remessas, motivo_da_recusa) de uma lista ja lida — do arquivo ou do banco (Fase 3:
+    o `payload` de financeiro.remessa_cancelamento_apontado e o mesmo JSON). A validade e a
+    mesma nas duas origens: lista vencida NAO executa."""
+    agora = agora or datetime.now(timezone.utc)
+    if not isinstance(dados, dict):
+        return {}, "lista em formato inesperado (%s)" % type(dados).__name__
     gerado = dados.get("gerado_em")
     validade = int(dados.get("validade_horas") or 0)
     if gerado and validade:

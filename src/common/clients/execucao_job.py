@@ -722,6 +722,44 @@ def listar_controle(ex: Execucao, familia: str, *, chave: str, log=print) -> dic
     return controle
 
 
+#: Contratos entre projetos (Fase 3 de docs/PLANO_CONTROLE_NO_BANCO.md): o process-automation
+#: grava cada lista inteira (`payload`, o mesmo JSON do arquivo no bind) na migration 543 dele,
+#: e o ERP le a ultima de producao. Append-only: lista nova e linha nova.
+CONTRATOS = {
+    "cancelamentos": "financeiro.remessa_cancelamento_apontado",
+    "exclusoes": "financeiro.remessa_exclusao_apontada",
+}
+
+
+def ler_contrato(ex: Execucao, contrato: str, log=print) -> dict | None:
+    """O `payload` da lista de producao mais recente do contrato — o mesmo dicionario que o
+    arquivo JSON traria. A VALIDADE nao e conferida aqui: quem le aplica a regra de sempre
+    (cancelamento 12 h, exclusao 30 h), com as mensagens de sempre. None sem banco, sem lista
+    ou se a consulta falhar (fato consumado): quem chama volta ao arquivo e avisa."""
+    if ex is None:
+        return None
+    if contrato not in CONTRATOS:
+        raise ValueError(f"contrato desconhecido: {contrato!r} (aceitos: {tuple(CONTRATOS)})")
+    tabela = CONTRATOS[contrato]
+    linhas = _fato_consumado(ex, log, f"contrato {contrato}", lambda: _consultar(
+        ex, log, f"contrato {contrato}",
+        f"SELECT id, payload FROM {tabela} WHERE ambiente = 'producao' "
+        "ORDER BY gerado_em DESC, id DESC LIMIT 1", ()))
+    if not linhas:
+        return None
+    payload = linhas[0][1]
+    if isinstance(payload, (str, bytes)):
+        try:
+            payload = json.loads(payload)
+        except ValueError:
+            ex._avisar(log, f"contrato {contrato}: payload da lista #{linhas[0][0]} ilegivel")
+            return None
+    if not isinstance(payload, dict):
+        ex._avisar(log, f"contrato {contrato}: payload da lista #{linhas[0][0]} nao e um objeto")
+        return None
+    return payload
+
+
 def anotar(ex: Execucao, chave: str, valor) -> None:
     """Guarda um fato que nao tem tabela propria (remessa que nao baixou, cancelamento de
     remessa anterior ao registro). Vai para detalhe_json no fechamento, como lista."""

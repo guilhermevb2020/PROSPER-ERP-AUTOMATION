@@ -165,6 +165,45 @@ def validar_cnab(dados: bytes):
 # --------------------------------------------------------------------------- #
 # controle (idempotencia)
 # --------------------------------------------------------------------------- #
+def lista_de_exclusoes(fonte=None, execucao=None):
+    """A lista de exclusoes do process-automation, da fonte configurada (Fase 3 de
+    docs/PLANO_CONTROLE_NO_BANCO.md). `banco` le a ultima lista de producao em
+    financeiro.remessa_exclusao_apontada — o mesmo JSON do arquivo — e aplica a MESMA
+    validade (`exclusoes.validar`); sem banco, volta ao arquivo avisando. `json` e o arquivo."""
+    fonte = (fonte or getattr(cfg, "CONTRATO_FONTE", "json")).strip().lower()
+    if fonte == "banco":
+        ex = execucao if execucao is not None else execucao_job.atual()
+        payload = execucao_job.ler_contrato(ex, "exclusoes", log=log)
+        if payload is not None:
+            log("exclusoes: fonte BANCO (financeiro.remessa_exclusao_apontada)")
+            return exclusoes.validar(payload, "financeiro.remessa_exclusao_apontada", log=log)
+        log("exclusoes: fonte BANCO indisponivel nesta execucao — usando o arquivo de reserva")
+    elif fonte != "json":
+        log(f"exclusoes: CONTRATO_FONTE={fonte!r} desconhecida — usando o arquivo")
+    return exclusoes.carregar(log=log)
+
+
+def lista_de_cancelamentos(caminho=None, fonte=None, execucao=None):
+    """(remessas, motivo_da_recusa) da lista de cancelamentos, da fonte configurada (Fase 3).
+    Caminho explicito (`--cancelamentos-json`) e escolha de quem roda: vale o arquivo dado.
+    `banco` le a ultima lista de producao em financeiro.remessa_cancelamento_apontado e aplica
+    a MESMA validade (`cancelar.validar_lista`: vencida nao executa); sem banco, volta ao
+    arquivo avisando."""
+    fonte = (fonte or getattr(cfg, "CONTRATO_FONTE", "json")).strip().lower()
+    if caminho:
+        return cancelar.ler_lista(caminho)
+    if fonte == "banco":
+        ex = execucao if execucao is not None else execucao_job.atual()
+        payload = execucao_job.ler_contrato(ex, "cancelamentos", log=log)
+        if payload is not None:
+            log("CANCELAMENTO: lista da fonte BANCO (financeiro.remessa_cancelamento_apontado)")
+            return cancelar.validar_lista(payload)
+        log("CANCELAMENTO: fonte BANCO indisponivel nesta execucao — usando o arquivo de reserva")
+    elif fonte != "json":
+        log(f"CANCELAMENTO: CONTRATO_FONTE={fonte!r} desconhecida — usando o arquivo")
+    return cancelar.ler_lista(cancelar.ARQUIVO_PADRAO)
+
+
 def ler_controle_do_csv():
     if not os.path.exists(cfg.ARQ_CONTROLE):
         return {}
@@ -546,7 +585,7 @@ def ciclo_conta(ctx, conta, rotulo, carteira, dry_run=True, forcar=False, execuc
     # O que o banco recusaria — sacado sem numero no endereco (lista do
     # process-automation) e entrada que vence hoje ou antes (MoneyPlus): desmarca
     # ANTES de validar, para "nenhum titulo selecionado" valer de verdade.
-    afetados = exclusoes.aplicar(form, exclusoes.carregar(log=log), log=log)
+    afetados = exclusoes.aplicar(form, lista_de_exclusoes(), log=log)
     saida["excluidos"] = sum(1 for a in afetados if a["regra"] == "lista")
     saida["retidos"] = [a for a in afetados if a["regra"] == "vencimento"]
     # O que esta geracao vai levar, lido da grade: se o arquivo nao chegar ao banco,
@@ -734,8 +773,7 @@ def rodada_cancelamento(ctx, args, dry, execucao=None):
     silencio, com a task marcada como sucesso, e os titulos esperaram de sexta a
     segunda. Aqui o hub precisa saber que alguem tem de olhar.
     """
-    caminho = args.cancelamentos_json or cancelar.ARQUIVO_PADRAO
-    remessas, recusa = cancelar.ler_lista(caminho)
+    remessas, recusa = lista_de_cancelamentos(args.cancelamentos_json)
     if recusa:
         log(f"CANCELAMENTO: {recusa}")
         return SAIU_OK if "nao existe" in recusa else SAIU_RODADA_INCOMPLETA

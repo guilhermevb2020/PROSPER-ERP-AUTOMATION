@@ -99,13 +99,24 @@ def carregar(caminho=None, agora=None, log=print):
     try:
         with open(caminho, encoding="utf-8") as fh:
             lista = json.load(fh)
+    except (OSError, ValueError) as e:
+        log(f"exclusoes: lista ilegivel em {caminho} ({type(e).__name__}: {e}) — geracao sem exclusao")
+        return None
+    return validar(lista, caminho, agora=agora, log=log)
+
+
+def validar(lista, origem, agora=None, log=print):
+    """A lista valida, ou None (ilegivel, velha) — de qualquer origem: o arquivo ou o banco
+    (Fase 3: o `payload` de financeiro.remessa_exclusao_apontada e o mesmo JSON). A regra de
+    validade e as mensagens sao as mesmas nas duas."""
+    try:
         gerado_em = datetime.fromisoformat(lista["gerado_em"])
         validade = timedelta(hours=int(lista.get("validade_horas", 30)))
         titulos = lista.get("titulos") or {}
         if not isinstance(titulos, dict):
             raise ValueError("titulos nao e um objeto")
-    except (OSError, ValueError, KeyError, TypeError) as e:
-        log(f"exclusoes: lista ilegivel em {caminho} ({type(e).__name__}: {e}) — geracao sem exclusao")
+    except (ValueError, KeyError, TypeError) as e:
+        log(f"exclusoes: lista ilegivel em {origem} ({type(e).__name__}: {e}) — geracao sem exclusao")
         return None
     agora = agora or datetime.now(gerado_em.tzinfo or timezone.utc)
     if gerado_em.tzinfo is None:

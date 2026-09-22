@@ -145,6 +145,11 @@ ESCREVER_CSV = _b("ESCREVER_CSV_REM", os.environ.get("ESCREVER_CSV", "True"))
 # numero do pagador no CNAB 400 — o MoneyPlus recusa o arquivo INTEIRO por um so
 # (09/09/2026: 166 titulos; 17/09: 175). O robo desmarca esses e o resto passa.
 # Lista mais velha que a validade declarada nela e ignorada, com aviso.
+#: Fase 3 de docs/PLANO_CONTROLE_NO_BANCO.md: de onde vem a lista do process-automation
+#: (`exclusoes.json` e `cancelamentos.json`). `json` le o arquivo no bind; `banco` le a ultima
+#: lista de producao em financeiro.remessa_*_apontad* (migration 543 do process-automation) —
+#: o mesmo conteudo — e volta ao arquivo, avisando, se o banco nao responder.
+CONTRATO_FONTE = _s("CONTRATO_FONTE_REM", _s("CONTRATO_FONTE", "json")).strip().lower()
 ARQ_EXCLUSOES = _s("ARQ_EXCLUSOES_REM",
                    "/app/data/retornos_a_processar/remessa_cnab_400/exclusoes.json")
 # Remessa que o Smart GEROU e que nao chegou ao banco (download falhou, arquivo

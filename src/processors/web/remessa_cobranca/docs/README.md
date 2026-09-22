@@ -280,6 +280,17 @@ constante lá.
 
 ---
 
+## As duas listas vêm do banco — Fase 3, 22/09/2026 18:31
+
+A lista de exclusão e a de cancelamentos (seções abaixo) continuam sendo escritas pelo
+process-automation, mas o ERP as lê de `financeiro.remessa_exclusao_apontada` e
+`financeiro.remessa_cancelamento_apontado` (a lista de produção mais recente; `payload` é o
+mesmo JSON do arquivo), por `execucao_job.ler_contrato`, com `CONTRATO_FONTE_REM=banco` no
+`config/remessa_cobranca.env`. A validade e as mensagens são as de sempre
+(`exclusoes.validar`, `cancelar.validar_lista`). Se o banco não responder, a rodada volta ao
+JSON do bind e diz no log. Um `--cancelamentos-json` explícito vale sobre a fonte.
+Reverter = apagar a linha. Plano: `docs/PLANO_CONTROLE_NO_BANCO.md`.
+
 ## A lista de exclusão, a retenção por vencimento e a tela guardada — 17 e 18/09/2026
 
 O MoneyPlus recusa o arquivo INTEIRO por um sacado cujo endereço sai sem número do

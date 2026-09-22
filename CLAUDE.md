@@ -159,6 +159,10 @@ túnel ssh ao IP do container (ver `docs/COMO_SUBIR_UM_JOB.md`).
   congelados no disco como histórico, e os dois retornos ainda consultam essas linhas antigas
   para não dar baixa em duplicidade num `.RET` de antes de 21/09. O `arquivo` é identificado
   pelo **conteúdo** (sha256): reprocessar o mesmo arquivo devolve a linha existente.
+- **Contratos com o process-automation pelo banco, desde 22/09/2026 às 18h31 (Fase 3).** A
+  remessa de cobrança e o cancelamento leem as listas de exclusão e de cancelamento de
+  `financeiro.remessa_exclusao_apontada`/`remessa_cancelamento_apontado`
+  (`CONTRATO_FONTE_REM=banco`); os JSON do bind ficam só como reserva se o banco não responder.
 - **O banco é a fonte do controle, desde a `erp_005` (22/09/2026).** Plano e fases em
   `docs/PLANO_CONTROLE_NO_BANCO.md`. O que só existia em JSON no disco virou evento
   (`descartado`, `cancelado`, `intencao_envio` do BB; `documentos_baixados`/`etapa_movida`
