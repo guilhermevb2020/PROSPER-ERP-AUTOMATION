@@ -1,30 +1,24 @@
 """
-banco.py - acesso ao Postgres + controle LOCAL dos downloads.
+banco.py - acesso ao Postgres + controle dos downloads.
 
 Usado pelo sub-fluxo BAIXAR NF E RESUMO (subfluxos.py) para:
   1) DESCOBRIR as operacoes na etapa "FEEDBACK ANALISE ROB" consultando
      trs.operacao_desagio (coluna id_operacao = numero da operacao do Smart;
      coluna etapa = etapa ATUAL). Substitui a raspagem da tela de consulta.
-  2) REGISTRAR, em arquivo LOCAL, quais operacoes ja tiveram NF + resumo
-     baixados (e se a etapa ja foi movida), para nao reprocessar.
+  2) REGISTRAR quais operacoes ja tiveram NF + resumo baixados (e se a etapa ja
+     foi movida), para nao reprocessar.
 
-O arquivo de controle e um CSV (delimitador ';') com uma linha por operacao:
-  id_operacao;data_download;arquivo_nfe;arquivo_resumo;nfe_ok;resumo_ok;etapa_movida
-
-OBS: nao usamos uma tabela no banco para o controle (decisao do usuario) - fica
-tudo neste arquivo local na maquina onde o robo roda.
+O controle mora no banco desde 22/09/2026 (Gerencia: "colocar tudo no banco ... e
+eliminar a escrita no csv"): cada download e cada move sao um evento em
+erp_automation.operacao_evento (`documentos_baixados`, `etapa_movida`), na execucao
+que analisar_credito.py abriu. O controle_downloads.csv parou de ser lido e escrito;
+o que ele sabia (desde 03/07/2026) entrou no banco pela carga
+src/processors/db/controle/carregar_historico_csv.py, com o instante original.
 """
 
-import csv
-import os
 from datetime import datetime
 
 import config
-
-_CABECALHO = ["id_operacao", "data_download", "arquivo_nfe",
-              "arquivo_resumo", "nfe_ok", "resumo_ok", "etapa_movida"]
-
-_VERDADEIRO = ("1", "true", "sim", "yes")
 
 
 # --------------------------------------------------------------------------- #
@@ -125,95 +119,76 @@ def quadro_societario(op) -> dict:
 
 
 # --------------------------------------------------------------------------- #
-# Controle local (CSV) dos downloads ja feitos
+# Controle dos downloads ja feitos: eventos no banco (erp_automation.operacao_evento)
 # --------------------------------------------------------------------------- #
-def carregar_controle() -> dict:
-    """Le o CSV de controle -> dict {id_operacao(str): registro}. {} se nao existir."""
-    caminho = config.ARQ_CONTROLE_DOWNLOAD
-    dados = {}
-    if not os.path.exists(caminho):
-        return dados
+_EVENTOS_CONTROLE = ("documentos_baixados", "etapa_movida")
+
+
+def carregar_controle(ops=None) -> dict:
+    """O controle lido do banco -> {id_operacao(str): registro}, so das `ops` pedidas
+    (todas, sem elas). O registro e o que o CSV tinha: data_download, arquivo_nfe,
+    arquivo_resumo, nfe_ok, resumo_ok, etapa_movida — somando todos os eventos da op
+    (um ok ja gravado nao se desfaz). {} sem execucao aberta ou sem banco: pode_mover
+    exige o resumo, entao nenhuma op e movida neste ciclo e o proximo tenta de novo."""
     try:
-        with open(caminho, newline="", encoding="utf-8-sig") as f:
-            for linha in csv.DictReader(f, delimiter=";"):
-                op = (linha.get("id_operacao") or "").strip()
-                if not op:
-                    continue
-                dados[op] = {
-                    "data_download": linha.get("data_download", ""),
-                    "arquivo_nfe": linha.get("arquivo_nfe", ""),
-                    "arquivo_resumo": linha.get("arquivo_resumo", ""),
-                    "nfe_ok": (linha.get("nfe_ok") or "").strip().lower() in _VERDADEIRO,
-                    "resumo_ok": (linha.get("resumo_ok") or "").strip().lower() in _VERDADEIRO,
-                    "etapa_movida": (linha.get("etapa_movida") or "").strip().lower() in _VERDADEIRO,
-                }
-    except Exception as e:
-        print(f"  [controle] aviso ao ler {caminho}: {e}")
+        from src.common.clients import execucao_job
+    except ImportError:
+        return {}
+    ex = execucao_job.atual()
+    if ex is None:
+        return {}
+    eventos = execucao_job.listar_eventos_operacao(
+        ex, _EVENTOS_CONTROLE, ops=None if ops is None else [str(o) for o in ops])
+    if eventos is None:
+        print("  [controle] banco sem resposta -> nenhuma op movida neste ciclo (retenta)")
+        return {}
+    return controle_dos_eventos(eventos)
+
+
+def controle_dos_eventos(eventos) -> dict:
+    """Eventos em ordem de ocorrencia -> o controle no formato do CSV antigo."""
+    dados = {}
+    for e in eventos:
+        op = str(e["id_operacao"])
+        reg = dados.setdefault(op, {"data_download": "", "arquivo_nfe": "",
+                                    "arquivo_resumo": "", "nfe_ok": False,
+                                    "resumo_ok": False, "etapa_movida": False})
+        if e["tipo_evento"] == "etapa_movida":
+            reg["etapa_movida"] = True
+            continue
+        d = e.get("detalhe") or {}
+        quando = e.get("ocorrido_em")
+        if isinstance(quando, datetime):
+            reg["data_download"] = quando.astimezone().strftime("%d/%m/%Y %H:%M:%S")
+        reg["arquivo_nfe"] = d.get("arquivo_nfe") or reg["arquivo_nfe"]
+        reg["arquivo_resumo"] = d.get("arquivo_resumo") or reg["arquivo_resumo"]
+        reg["nfe_ok"] = reg["nfe_ok"] or bool(d.get("nfe_ok"))
+        reg["resumo_ok"] = reg["resumo_ok"] or bool(d.get("resumo_ok"))
     return dados
 
 
-def _salvar_controle(dados: dict) -> None:
-    """Reescreve o CSV inteiro (arquivo pequeno: dezenas de operacoes)."""
-    caminho = config.ARQ_CONTROLE_DOWNLOAD
-    try:
-        with open(caminho, "w", newline="", encoding="utf-8-sig") as f:
-            w = csv.writer(f, delimiter=";")
-            w.writerow(_CABECALHO)
-            # ordena por numero quando possivel, senao por texto
-            for op in sorted(dados, key=lambda x: (0, int(x)) if x.isdigit() else (1, x)):
-                r = dados[op]
-                w.writerow([
-                    op, r.get("data_download", ""),
-                    r.get("arquivo_nfe", "") or "", r.get("arquivo_resumo", "") or "",
-                    "1" if r.get("nfe_ok") else "0",
-                    "1" if r.get("resumo_ok") else "0",
-                    "1" if r.get("etapa_movida") else "0",
-                ])
-    except Exception as e:
-        print(f"  [controle] ERRO ao gravar {caminho}: {e}")
-
-
 def registrar_download(op, arquivo_nfe, arquivo_resumo) -> None:
-    """Upsert no controle: marca NF/resumo baixados (ok = caminho != None).
-    Preserva etapa_movida e nao 'desmarca' um ok ja gravado."""
-    op = str(op)
-    dados = carregar_controle()
-    reg = dados.get(op, {})
-    reg.update({
-        "data_download": datetime.now().strftime("%d/%m/%Y %H:%M:%S"),
-        "arquivo_nfe": arquivo_nfe or reg.get("arquivo_nfe", ""),
-        "arquivo_resumo": arquivo_resumo or reg.get("arquivo_resumo", ""),
-        "nfe_ok": bool(arquivo_nfe) or reg.get("nfe_ok", False),
-        "resumo_ok": bool(arquivo_resumo) or reg.get("resumo_ok", False),
-        "etapa_movida": reg.get("etapa_movida", False),
-    })
-    dados[op] = reg
-    _salvar_controle(dados)
+    """Registra o que ESTE download trouxe (ok = caminho != None) como evento
+    documentos_baixados. O acumulado (um ok anterior nao se desfaz) sai da soma dos
+    eventos em carregar_controle."""
+    nfe_ok, resumo_ok = bool(arquivo_nfe), bool(arquivo_resumo)
     _registrar_no_banco(op, "documentos_baixados",
-                        resultado="OK" if (reg["nfe_ok"] and reg["resumo_ok"]) else "PARCIAL",
-                        detalhe={"arquivo_nfe": reg.get("arquivo_nfe") or "",
-                                 "arquivo_resumo": reg.get("arquivo_resumo") or "",
-                                 "nfe_ok": bool(reg.get("nfe_ok")),
-                                 "resumo_ok": bool(reg.get("resumo_ok"))})
+                        resultado="OK" if (nfe_ok and resumo_ok) else "PARCIAL",
+                        detalhe={"arquivo_nfe": arquivo_nfe or "",
+                                 "arquivo_resumo": arquivo_resumo or "",
+                                 "nfe_ok": nfe_ok, "resumo_ok": resumo_ok})
 
 
 def marcar_etapa_movida(op) -> None:
-    """Marca no controle que a etapa da op ja foi movida (-> Análise de crédito)."""
-    op = str(op)
-    dados = carregar_controle()
-    reg = dados.get(op, {})
-    reg["etapa_movida"] = True
-    dados[op] = reg
-    _salvar_controle(dados)
+    """Registra que a etapa da op foi movida (-> Análise de crédito)."""
     _registrar_no_banco(op, "etapa_movida", resultado=config.ROTULO_ANALISE_CREDITO)
 
 
 def _registrar_no_banco(op, tipo_evento, *, resultado=None, detalhe=None) -> None:
-    """erp_005 (22/09/2026): o mesmo fato do CSV local vai para operacao_evento, na
-    execucao que analisar_credito.py abriu (execucao_job.atual()). Fato consumado: falha
-    de banco avisa no log e o download segue. Fora do fluxo do job (teste, uso manual de
-    uma funcao) nao ha execucao aberta e nada e registrado. O CSV continua sendo escrito
-    ao lado ate o corte (docs/PLANO_CONTROLE_NO_BANCO.md)."""
+    """O fato vai para operacao_evento, na execucao que analisar_credito.py abriu
+    (execucao_job.atual()). Fato consumado: falha de banco avisa no log e o download
+    segue. Fora do fluxo do job (teste, uso manual de uma funcao) nao ha execucao aberta
+    e nada e registrado."""
     if not str(op).isdigit():
         return
     try:

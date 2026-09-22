@@ -308,7 +308,7 @@ def baixar_nf_e_resumo(ctx) -> None:
     if config.DRY_RUN:
         print("  [DRY_RUN] pularia mover etapa -> Análise de crédito")
         return
-    controle = banco.carregar_controle()
+    controle = banco.carregar_controle(ops)
     revisar = _carregar_move_revisar()
     # Limpa o contador das ops que JA sairam da fila (move pegou): so contam
     # tentativas das ops que CONTINUAM reaparecendo em Feedback ROB.

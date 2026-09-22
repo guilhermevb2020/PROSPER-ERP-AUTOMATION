@@ -9,10 +9,13 @@
 # A troca e so um `cp`: o `config.py` ja usa data/ assim que o arquivo aparecer la
 # (funcao `_arquivo_estado`). Nao ha janela em que o robo leia controle vazio.
 #
+# Desde 22/09/2026 o controle dos downloads e evento no banco (credito/banco.py) e o
+# controle_downloads.csv nao e mais lido nem escrito: sobraram as duas listas de
+# revisao manual.
+#
 # ⚠️ POR QUE ESTE SCRIPT SE RECUSA A RODAR COM O ROBO NO AR
-# `banco._salvar_controle()` reescreve o CSV INTEIRO a cada gravacao. Copiar no
-# meio de um run produziria uma copia velha; o run seguinte leria essa copia e
-# regravaria por cima — perdendo tudo o que o run atual escreveu depois da copia.
+# As listas sao gravadas por append durante o run. Copiar no meio de um run
+# produziria uma copia velha, sem o que o run escreveu depois da copia.
 # O robo roda das 07:45 as ~18:52 em dia util (timeout 11h10).
 #
 #   ./scripts/mover_estado_credito.sh              faz a troca
@@ -22,7 +25,7 @@ set -euo pipefail
 RAIZ="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ORIGEM="$RAIZ/src/processors/web/credito"
 DESTINO="$RAIZ/data/robo_credito"
-ARQUIVOS=(controle_downloads.csv ops_move_revisar_manual.txt ops_digitais_revisar_manual.txt)
+ARQUIVOS=(ops_move_revisar_manual.txt ops_digitais_revisar_manual.txt)
 DRY_RUN=0
 [[ "${1:-}" == "--dry-run" ]] && DRY_RUN=1
 
@@ -89,10 +92,9 @@ fi
 echo
 echo "conferindo pelo caminho que o robo realmente usa..."
 docker exec -w /app/src/processors/web/credito erp-automation python -c "
-import config, banco
-print('  caminho :', config.ARQ_CONTROLE_DOWNLOAD)
-print('  registros:', len(banco.carregar_controle()))
+import config
+print('  revisar move   :', config.ARQ_MOVE_REVISAR)
 "
 echo
-echo "Se 'registros' bate com o que havia antes, a troca terminou."
+echo "Se o caminho aponta para data/robo_credito, a troca terminou."
 echo "Os .migrado podem ser apagados depois da proxima execucao verde."

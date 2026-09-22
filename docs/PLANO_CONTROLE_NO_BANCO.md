@@ -19,8 +19,8 @@ cobrem, e em que ordem o resto entra — **sem tirar o CSV até a última fase**
 | `_PROCESSADOS/_REJEITADOS/_INCONCLUSIVOS` | retorno | estado por localização | pessoas, reprocessos | 199/13/3 | sim (evento + caminho de destino) |
 | `controle_pagamentos.csv` | remessa pagamento | arquivo, md5, títulos, ids, pix, quando | o próprio | 393 | sim |
 | `controle.csv` | retorno pagamento | arquivo, hash, HTTP, quando | o próprio | 391 | sim |
-| `controle_downloads.csv` | crédito | operação, data, NF/resumo, etapa movida | o próprio | 35 | **erp_005**: `operacao_evento` (`documentos_baixados`, `etapa_movida`) |
-| `finalizadas.csv`, `avisos_enviados.csv` | finalizador | finalizadas, avisos | o próprio | vazios (DRY) | sim (`operacao_evento`) |
+| `controle_downloads.csv` | crédito | operação, data, NF/resumo, etapa movida | o próprio | 2.771 | **só o banco desde 22/09/2026**: `operacao_evento` (`documentos_baixados`, `etapa_movida`); o CSV não é lido nem escrito, o histórico entrou pela carga |
+| `finalizadas.csv`, `avisos_enviados.csv` | finalizador | finalizadas, avisos | o próprio | 8 / — | **só o banco desde 22/09/2026**: `finalizada` e `aviso_enviado` (com `hash_aviso`/`n_avisos`, a memória do espaçamento) |
 | já no banco | doc2you, boletos | `doc2you_execucao`, `boleto_*` | — | — | sim |
 | hub | todos | output, exit, duração, tentativas | — | — | `hub_orchestration.task_execucao` (por `run_id`) |
 
@@ -52,14 +52,17 @@ cada operação com eventos; tudo imutável por dono separado e gatilho.
 | **3** | Contratos entre projetos (`cancelamentos.json`, `exclusoes.json`) viram tabelas em `financeiro.*`; process-automation escreve, ERP lê | **feita em 22/09/2026 às 18:31**: o process-automation grava cada lista inteira (`payload`, o mesmo JSON) em `financeiro.remessa_cancelamento_apontado` e `financeiro.remessa_exclusao_apontada` (migration 543 dele); o ERP lê a última de produção por `execucao_job.ler_contrato` com `CONTRATO_FONTE_REM=banco` no `config/remessa_cobranca.env` (reverter = apagar a linha). A validade (cancelamento 12 h, exclusão 30 h) é conferida como sempre, por `cancelar.validar_lista` e `exclusoes.validar`. Banco sem resposta → volta ao JSON do bind e avisa. Prova no container às 18:31, antes e depois de ligar: banco == arquivo nas duas listas (15 títulos de exclusão, 2 remessas a cancelar). Primeiras rodadas reais: cancelamento 17:10 e remessa 18:00 de 23/09 |
 | **4** | Parar de escrever os CSVs; arquivos congelados como histórico | **feita em 22/09/2026 às 18h10, a pedido da Gerência**, nos quatro jobs (`ESCREVER_CSV_RET/_RETPAG/_REM/_PAG=False` no `config/<job>.env`), sem esperar as semanas de paridade que o plano previa. Antes, no mesmo dia, as quatro famílias estavam em paridade (execução #411). A task `comparar_controle_csv_banco` virou auditoria do banco (conta o dia; exit 3 só com execução abandonada; `--com-csv` refaz a comparação). Os CSVs ficam no disco, congelados; os retornos seguem lendo o histórico deles |
 
+| **5** | **Tudo no banco** (Gerência, 22/09/2026: "colocar tudo no banco ... e eliminar a escrita no csv"): nenhum job lê nem escreve CSV de controle. Crédito e finalizador trocam o CSV pelos eventos que já gravavam; o histórico que só os CSVs sabiam entra no banco por `src/processors/db/controle/carregar_historico_csv.py` (crédito → `operacao_evento` com o instante original; retornos → `arquivo_historico`, `erp_008`) | **finalizador em 22/09/2026 às 18:46** (depois da última rodada do dia; prova no container: os 12 avisos do dia — finalização e PIX — não contam no espaçamento, sem banco não avisa). **Crédito às 18:50** (fim do dia dele): carga #444 com 5.539 eventos (2.771 `documentos_baixados`, 2.768 `etapa_movida`); paridade no container 2.771 × 2.771 operações, 0 divergências; repetir a carga (#445) inseriu 0. Retornos publicados às 18:45 prontos para ler o histórico do banco assim que a `erp_008` for aplicada e carregada — até lá leem o CSV congelado, sem mudança de comportamento |
+
 ## 4. Regras que valem desde já
 
-- **Memória de idempotência em `banco` = banco ∪ histórico do CSV, até a Fase 4** — nos dois
-  retornos (`_RET`, `_RETPAG`), onde a memória é o que impede **baixa em duplicidade** de um
-  `.RET` re-entregue: o banco só conhece o que entrou desde 21/09/2026, e o CSV entra como
-  história congelada, não como decisão. Na Fase 4 o CSV para de ser escrito, é renomeado
-  como histórico e continua lido até uma carga histórica o substituir. Remessa de pagamento
-  (controle informativo) e remessa de cobrança (carga de 45 dias feita) não precisam disso.
+- **Memória de idempotência em `banco` = `arquivo` ∪ histórico** — nos dois retornos (`_RET`,
+  `_RETPAG`), onde a memória é o que impede **baixa em duplicidade** de um `.RET`
+  re-entregue: `arquivo` só conhece o que entrou desde 21/09/2026. O histórico vem de
+  `arquivo_historico` (`erp_008`) quando a carga existe (`execucao_job.historico_carregado`),
+  e do CSV congelado enquanto não existe — decidido a cada rodada, sem chave de configuração.
+  Remessa de pagamento (controle informativo) e remessa de cobrança (carga de 45 dias feita)
+  não precisam disso.
 
 - Execução **manual em modo real** informa quem e por quê: `ERP_OPERADOR=nome ERP_MOTIVO="..."`
   no ambiente (`docker exec -e ...`). Sem isso o job roda e **avisa no log** (desde que o hub se

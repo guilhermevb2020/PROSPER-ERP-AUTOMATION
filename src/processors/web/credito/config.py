@@ -157,9 +157,14 @@ ETAPA_DB_FEEDBACK_ROB = os.getenv("ETAPA_DB_FEEDBACK_ROB", "FEEDBACK ANALISE ROB
 #
 # Sempre UM caminho so, para leitura e escrita — nunca os dois ao mesmo tempo.
 #
-# ⚠️ O diretorio e criado aqui de proposito: `_salvar_controle()` (banco.py)
-# reescreve o arquivo INTEIRO a cada gravacao e engole erro de escrita num print.
-# Se o diretorio faltasse, o robo perderia o controle do run em silencio.
+# ⚠️ O diretorio e criado aqui de proposito: as listas de revisao manual abaixo
+# sao gravadas por append e o erro de escrita vira so um print. Se o diretorio
+# faltasse, o robo perderia a lista em silencio.
+#
+# O controle dos downloads NAO mora mais aqui: desde 22/09/2026 e evento no banco
+# (erp_automation.operacao_evento, ver banco.py). O controle_downloads.csv ficou
+# congelado no lugar antigo e o que ele sabia entrou no banco pela carga
+# src/processors/db/controle/carregar_historico_csv.py.
 # --------------------------------------------------------------------------- #
 _DIR_ROBO = os.path.dirname(os.path.abspath(__file__))
 _DIR_ESTADO = os.getenv("DIR_ESTADO_ROBO_CREDITO", "/app/data/robo_credito")
@@ -177,10 +182,6 @@ def _arquivo_estado(nome: str) -> str:
     return antigo
 
 
-# Controle dos downloads ja feitos (1 linha por operacao). Evita rebaixar e
-# permite retentar so a troca de etapa sem rebaixar.
-ARQ_CONTROLE_DOWNLOAD = (
-    os.getenv("ARQ_CONTROLE_DOWNLOAD") or _arquivo_estado("controle_downloads.csv"))
 # Move robusto: maximo de ciclos consecutivos tentando mover uma op que NAO sai
 # da fila de Feedback ROB. Apos isso a op vai p/ ops_move_revisar_manual.txt e o
 # robo PARA de tentar (evita loop quando o move "verifica OK" mas a op nao sai
