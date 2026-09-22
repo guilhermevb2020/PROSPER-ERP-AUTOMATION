@@ -210,4 +210,4 @@ Qualquer uma das duas basta: refazer o `upsert-docker` da task com
 Receita geral e armadilhas medidas:
 [`docs/COMO_SUBIR_UM_JOB.md`](../../../../../docs/COMO_SUBIR_UM_JOB.md).
 
-**Fonte do "já gerei" (Fase 2 de `docs/PLANO_CONTROLE_NO_BANCO.md`):** `CONTROLE_FONTE_PAG` = `csv` (padrão) ou `banco` (`erp_automation.vw_controle_pagamento`, mesmas colunas do CSV; sem banco, volta ao CSV avisando). O CSV é escrito nos dois modos até o corte.
+**Fonte do "já gerei" (Fase 2 de `docs/PLANO_CONTROLE_NO_BANCO.md`):** `CONTROLE_FONTE_PAG` = `csv` (padrão) ou `banco` (`erp_automation.vw_controle_pagamento`, mesmas colunas do CSV; sem banco, volta ao CSV avisando). O CSV é escrito nos dois modos até o corte. **Em produção com `banco` desde 22/09/2026 às 17:41** (linha no `config/remessa_pagamento.env`; reverter = apagar a linha).

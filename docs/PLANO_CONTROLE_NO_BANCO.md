@@ -37,9 +37,12 @@ cada operação com eventos; tudo imutável por dono separado e gatilho.
 > **Ligadas em 22/09/2026 às 11h47** (linha `CONTROLE_FONTE_*=banco` no `config/<job>.env`;
 > reverter = apagar a linha): `_RET` (`retorno_cobranca.env`, vale para retorno, BB e depósito),
 > `_RETPAG` (`retorno_pagamento.env`), `_REM` (`remessa_cobranca.env`, vale para remessa, BB e
-> cancelamento). **`_PAG` continua `csv`**: `config/remessa_pagamento.env` é de `operacional2`
-> (600) e só esse usuário (ou root) acrescenta a linha — a remessa de pagamento é a de menor
-> risco (controle informativo).
+> cancelamento). **`_PAG` ligada em 22/09/2026 às 17:41**, a pedido da Gerência, depois da
+> paridade das quatro famílias OK no mesmo minuto (execução #411: pagamento 25 × 25):
+> `config/remessa_pagamento.env` é de `operacional2` (600), então a linha entrou pelo
+> container, com dono e modo preservados (cópia do anterior em `/tmp` do container). É a de
+> menor risco: o controle só é lido depois que o arquivo já foi gerado. **A Fase 2 está
+> completa nos quatro jobs de arquivo.**
 
 | fase | o que | estado |
 |---|---|---|

@@ -166,8 +166,8 @@ túnel ssh ao IP do container (ver `docs/COMO_SUBIR_UM_JOB.md`).
   da execução. As views `vw_controle_*` têm as colunas dos CSVs; `vw_job_execucao_ultima`
   responde "rodou?". A paridade CSV × banco é medida todo dia útil pela task
   `comparar_controle_csv_banco` (19:35; exit 3 = divergência). As leituras de idempotência
-  vêm do banco desde 22/09/2026 11h47 (Fase 2) em `_RET`, `_RETPAG` e `_REM` — linha
-  `CONTROLE_FONTE_*=banco` no `config/<job>.env`; `_PAG` segue `csv` (env de `operacional2`). Nos
+  vêm do banco (Fase 2) nos quatro jobs de arquivo: `_RET`, `_RETPAG` e `_REM` desde 22/09/2026
+  11h47, `_PAG` desde 17h41 — linha `CONTROLE_FONTE_*=banco` no `config/<job>.env`. Nos
   dois retornos, `banco` = banco ∪ histórico do CSV até a Fase 4 (a memória evita baixa em
   duplicidade); a carga histórica de 45 dias das remessas foi feita (execução #166). O CSV continua
   sendo escrito: quem mexer nos quatro jobs mantém os dois lados.
