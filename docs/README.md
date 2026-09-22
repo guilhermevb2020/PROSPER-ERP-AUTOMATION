@@ -20,6 +20,7 @@ Guia geral dos boletos: [BOLETOS_LOTE.md](BOLETOS_LOTE.md).
 
 ## O que foi validado, e os limites
 
+- [ESTUDO_SESSOES_SMART_2026-09-22.md](ESTUDO_SESSOES_SMART_2026-09-22.md) — sessões do Smart entre rodadas: quem loga a cada rodada (finalizador: 44 logins CapSolver/dia), o que já reaproveita, o que derruba sessão de `prosperito@`, defeitos do mantenedor e a ordem recomendada (mantenedor por identidade + CDP)
 - [VALIDACAO_ERP_2026-09-07.md](VALIDACAO_ERP_2026-09-07.md) — matriz de validação após o Guardian
 - [VALIDACAO_FERIADO_2026-09-07.md](VALIDACAO_FERIADO_2026-09-07.md) e [VALIDACAO_OITO_HORAS_2026-09-07.md](VALIDACAO_OITO_HORAS_2026-09-07.md) — as rodadas reais e o que cada uma prova
 - [AUDITORIA_CREDENCIAIS_2026-09-07.md](AUDITORIA_CREDENCIAIS_2026-09-07.md) — a limpeza de credenciais em configuração, logs e histórico
