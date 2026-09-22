@@ -29,6 +29,17 @@ def _now() -> str:
     return datetime.now().strftime("%H:%M:%S")
 
 
+def _resumo_excecao(e: BaseException, limite: int = 160) -> str:
+    """Tipo e primeira linha da mensagem, cortada. O texto INTEIRO de uma excecao do
+    Playwright traz o "call log" da requisicao — cabecalhos, cookie de sessao incluido — e
+    este modulo escreve em log legivel pelo grupo (22/09/2026: PHPSESSID em 8 linhas do
+    manter_sessao.log). Nunca imprimir `{e}` inteiro aqui; `smart_sessao` ja segue a regra."""
+    texto = (str(e) or "").strip()
+    primeira = texto.splitlines()[0] if texto else ""
+    primeira = re.split(r"cookie\s*:", primeira, maxsplit=1, flags=re.IGNORECASE)[0]
+    return f"{type(e).__name__}: {primeira[:limite]}".rstrip(": ")
+
+
 def esperar(segundos: float, motivo: str = "") -> None:
     if motivo:
         print(f"[{_now()}] wait {segundos}s | {motivo}")
@@ -64,7 +75,7 @@ def screenshot(page, nome: str) -> None:
         page.screenshot(path=os.path.join(cfg.DEBUG_DIR, nome), full_page=True)
         print(f"[{_now()}] screenshot -> {cfg.DEBUG_DIR}/{nome}")
     except Exception as e:
-        print(f"[{_now()}] screenshot falhou: {e}")
+        print(f"[{_now()}] screenshot falhou: {_resumo_excecao(e)}")
 
 
 def esta_logado(ctx) -> bool:
@@ -549,13 +560,13 @@ def login_interativo(ctx, espera_manual_s: int = 600) -> None:
                 fr.locator(cfg.SEL_LOGIN_ENTRAR).first.click(timeout=8_000)
                 print(f"[{_now()}] 'Entrar' clicado")
             except Exception as e:
-                print(f"[{_now()}] aviso ao clicar Entrar: {e}")
+                print(f"[{_now()}] aviso ao clicar Entrar: {_resumo_excecao(e)}")
             esperar(cfg.WAIT_POS_LOGIN, "apos Entrar")
             _dispensar_seguranca(page)
         except Exception as e:
-            print(f"[{_now()}] nao achei campos de login ({e}); preencha manual no VNC")
+            print(f"[{_now()}] nao achei campos de login ({_resumo_excecao(e)}); preencha manual no VNC")
     except Exception as e:
-        print(f"[{_now()}] aviso ao abrir tela de login: {e}")
+        print(f"[{_now()}] aviso ao abrir tela de login: {_resumo_excecao(e)}")
 
     print("\n" + "=" * 70)
     print("  AGUARDANDO ACAO MANUAL DO OPERADOR (VNC)")
@@ -630,7 +641,7 @@ def manter_sessao_viva(intervalo_keepalive_s: int = 120) -> None:
                     try:
                         login_interativo(ctx)
                     except RuntimeError as e:
-                        print(f"[{_now()}] LOGIN PENDENTE: {e}")
+                        print(f"[{_now()}] LOGIN PENDENTE: {_resumo_excecao(e)}")
                         print(f"[{_now()}] processo SEGUE rodando — conecte no VNC e finalize o login.")
             else:
                 print(f"[{_now()}] sessao ja valida ao subir")
@@ -654,12 +665,12 @@ def manter_sessao_viva(intervalo_keepalive_s: int = 120) -> None:
                             else:
                                 print(f"[{_now()}] keepalive ok (logado={ok})")
                         except Exception as e:
-                            print(f"[{_now()}] keepalive falhou: {e}")
+                            print(f"[{_now()}] keepalive falhou: {_resumo_excecao(e)}")
                 except KeyboardInterrupt:
                     print(f"\n[{_now()}] interrompido pelo usuario")
                     break
                 except Exception as e:
-                    print(f"[{_now()}] erro no loop: {e}")
+                    print(f"[{_now()}] erro no loop: {_resumo_excecao(e)}")
                     break
         finally:
             try:
