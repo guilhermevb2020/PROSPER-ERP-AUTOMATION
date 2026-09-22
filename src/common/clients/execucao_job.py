@@ -170,15 +170,22 @@ def sha256_texto(texto: str | None) -> str | None:
 
 
 def data_br(texto) -> date | None:
-    """'18/09/2026' -> date. Qualquer outra coisa -> None (o bruto fica no detalhe_json)."""
+    """'18/09/2026', '18-09-2026' ou '2026-09-18' -> date. Outra coisa -> None.
+
+    A grade do Smart entrega o vencimento em ISO ('2026-09-02', medido no ciclo real de
+    21/09/2026); o CSV do sandbox e a tela usam dd/mm/aaaa. Os tres formatos entram.
+    """
     if isinstance(texto, date):
         return texto
     if not texto:
         return None
-    try:
-        return datetime.strptime(str(texto).strip()[:10], "%d/%m/%Y").date()
-    except ValueError:
-        return None
+    bruto = str(texto).strip()[:10]
+    for formato in ("%d/%m/%Y", "%Y-%m-%d", "%d-%m-%Y"):
+        try:
+            return datetime.strptime(bruto, formato).date()
+        except ValueError:
+            continue
+    return None
 
 
 def decimal_br(texto) -> Decimal | None:

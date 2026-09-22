@@ -283,7 +283,9 @@ def test_decimal_br(bruto, esperado):
 
 @pytest.mark.parametrize("bruto,esperado", [
     ("18/09/2026", date(2026, 9, 18)), ("18/09/2026 10:00", date(2026, 9, 18)),
-    ("2026-09-18", None), ("", None), (None, None), (date(2026, 1, 2), date(2026, 1, 2)),
+    ("2026-09-02", date(2026, 9, 2)),      # a grade do Smart, medida no ciclo real de 21/09/2026
+    ("02-09-2026", date(2026, 9, 2)), ("18/13/2026", None),
+    ("", None), (None, None), (date(2026, 1, 2), date(2026, 1, 2)),
 ])
 def test_data_br(bruto, esperado):
     assert ej.data_br(bruto) == esperado
