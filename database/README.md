@@ -177,6 +177,15 @@ cliente tolera o banco sem ela (o INSERT da execução repete sem `operador`/`mo
 inversão não derruba job — mas deixa buraco no registro. Provada na bancada em 22/09/2026
 (`tests/integration/test_erp_005_controle.py`).
 
+## erp_006 — `run_id` deixa de ser único (pré-requisito da identificação do hub)
+
+`database/erp_006_run_id_nao_unico.sql`: troca `uq_job_execucao_run_id` por um índice
+comum. Um run do hub abre **várias** execuções de job (o wrapper do retorno chama o python
+uma vez por pasta; a retentativa reaproveita o run), e com o `HUB_RUN_ID` injetado pelo hub
+a segunda cairia no único — em modo real o job recusa agir sem registro. **Aplicar antes**
+da imagem do hub que passa `HUB_RUN_ID`/`HUB_TASK_NOME` (pedido em 22/09/2026). Prova:
+`tests/integration/test_erp_006_run_id.py`.
+
 ### Quando o ledger diz que o conteúdo mudou
 
 Migration aplicada é imutável e a guarda barra — é isso que se quer. Só existe uma saída,
