@@ -75,6 +75,15 @@ EXPIRA = ("<script>top.location.href='https://wvw.smartsecurities.com.br"
 CNAB = ("\n".join("X" * 240 for _ in range(10))).encode("latin-1")
 
 
+def _cnab_com_segmento_b_curto():
+    prefixo = bytearray(b" " * 127)
+    prefixo[7:8] = b"3"
+    prefixo[13:14] = b"B"
+    prefixo[14:17] = b"02 "
+    segmento_b = bytes(prefixo) + b"contabil@example.com" + b"0" * 14
+    return b"X" * 240 + b"\r\n" + segmento_b + b"\r\n"
+
+
 class _Resp:
     def __init__(self, corpo, status=200, headers=None):
         self.status = status
@@ -170,6 +179,36 @@ def test_gera_grava_com_o_nome_real_e_registra(robo):
     rp.gravar_controle({"arquivo": r["arquivo"], "bytes": len(CNAB), "md5": r["md5"],
                         "titulos": 2, "ids": "143,144", "pix": 1, "quando": "agora"})
     assert r["md5"] in rp.ler_controle()
+
+
+def test_gera_aceita_segmento_b_depois_do_reparo_de_padding(robo):
+    _rp, ger, tmp = robo
+    resposta = _cnab_com_segmento_b_curto()
+    ctx = Ctx(posts=[
+        _Resp(GRADE_PENDENTE),
+        _Resp(
+            resposta,
+            headers={"content-disposition": 'attachment; filename="CP0109000083.REM"'},
+        ),
+    ])
+
+    r = ger.ciclo(ctx, dry_run=False, log=lambda _m: None)
+
+    salvo = (tmp / "saida" / "CP0109000083.REM").read_bytes()
+    assert r["gerou"] is True
+    assert {len(linha) for linha in salvo.splitlines() if linha} == {240}
+    segmento_b = salvo.split(b"\r\n")[1]
+    assert segmento_b[127:226].rstrip(b" ") == b"contabil@example.com"
+
+
+def test_baixar_tambem_repara_segmento_b_curto(robo):
+    _rp, ger, _tmp = robo
+    ctx = Ctx(gets=_cnab_com_segmento_b_curto())
+
+    nome, dados = ger.baixar(ctx, "31", log=lambda _m: None)
+
+    assert nome == "remessa_31.REM"
+    assert {len(linha) for linha in dados.splitlines() if linha} == {240}
 
 
 # --------------------------------------------------------------------------- #

@@ -26,6 +26,7 @@ if _AQUI not in sys.path:
     sys.path.insert(0, _AQUI)
 
 import config                       # noqa: E402
+import conta_operacao               # noqa: E402
 import robo_analise_credito as robo  # noqa: E402
 
 
@@ -93,8 +94,12 @@ def ajustar_classe_risco(page_edit, op):
         print(f"  [classe risco op {op}] erro ao aplicar: {e}")
 
 
-def _testar_classe_risco(op):
-    """Testa SO a leitura/decisao da classe de risco numa op (read-only; nao salva)."""
+def _testar_na_op(op, ajuste, rotulo):
+    """Roda UM ajuste pre-salvar numa op, sem clicar em SALVAR (read-only).
+
+    Serve para conferir a leitura/decisao contra uma operacao real antes de ligar
+    a aplicacao de verdade. Nao salva nada: o SALVAR nao e clicado aqui.
+    """
     from playwright.sync_api import sync_playwright
     with sync_playwright() as p:
         ctx = p.chromium.launch_persistent_context(
@@ -106,11 +111,11 @@ def _testar_classe_risco(op):
             try:
                 robo.login(ctx)
             except Exception as e:
-                print(f"[classe] aviso ao logar: {e}")
+                print(f"[{rotulo}] aviso ao logar: {e}")
             page = ctx.new_page()
             page.goto(config.URL_EDITAR.format(op=op),
                       wait_until="domcontentloaded", timeout=60_000)
-            ajustar_classe_risco(page, op)   # so loga (a menos que CLASSE_RISCO_APLICAR=1)
+            ajuste(page, op)   # so loga, a menos que a flag do ajuste esteja ligada
         finally:
             try:
                 ctx.close()
@@ -118,15 +123,33 @@ def _testar_classe_risco(op):
                 pass
 
 
+def _hooks_pre_salvar(page_edit, op):
+    """Roda os ajustes pre-SALVAR em ordem; um que falhe nao impede o seguinte.
+
+    A CONTA vem por ULTIMO de proposito: e o ajuste que reabilita o
+    `#SalvarOperacaoButton` (via `onchange`), entao e o ultimo evento antes do
+    clique — nada depois dele pode re-desabilitar o botao sem aparecer no log.
+    """
+    for nome, fn in (("classe risco", ajustar_classe_risco),
+                     ("conta", conta_operacao.ajustar_conta)):
+        try:
+            fn(page_edit, op)
+        except Exception as e:                                   # noqa: BLE001
+            print(f"  [{nome} op {op}] erro ignorado: {e}")
+
+
 def _instalar_hook_classe():
-    robo.pre_salvar_hook = ajustar_classe_risco
+    robo.pre_salvar_hook = _hooks_pre_salvar
     print(f"[classe risco] ajuste no SALVAR: "
           f"{'APLICA de verdade (E->B, P->T)' if _CR_APLICAR else 'modo LOG/read-only (nao altera)'}.")
+    print(f"[conta] destravar op com Conta vazia -> '{conta_operacao.ALVO}': "
+          f"{'APLICA de verdade' if conta_operacao.APLICAR else 'modo LOG/read-only (nao altera)'}.")
 
 
 def main():
     ap = argparse.ArgumentParser(description="Robo 1 (analise de credito) + hook de classe de risco.")
     ap.add_argument("--classe", help="testa SO a leitura/decisao de classe de risco numa op (read-only)")
+    ap.add_argument("--conta", help="testa SO a leitura/decisao do campo Conta numa op (read-only)")
     args = ap.parse_args()
     try:
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")
@@ -134,7 +157,9 @@ def main():
         pass
 
     if args.classe:
-        _testar_classe_risco(args.classe)
+        _testar_na_op(args.classe, ajustar_classe_risco, "classe")
+    elif args.conta:
+        _testar_na_op(args.conta, conta_operacao.ajustar_conta, "conta")
     else:
         _instalar_hook_classe()
         robo.main()   # reusa TODO o fluxo do V1 + o hook pre-salvar (classe de risco)

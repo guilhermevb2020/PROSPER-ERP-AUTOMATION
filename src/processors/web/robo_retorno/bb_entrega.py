@@ -52,7 +52,9 @@ def _anterior(pasta, sha, conta):
                 or resposta.get("conta") != intencao.get("conta")
                 or str(resposta.get("conta")) != str(conta)
                 or resposta.get("portao") != intencao.get("portao")
-                or not bb_api.avaliar_resultado(resposta.get("resposta_processamento"), esperado)["comprovado"]):
+                or not bb_api.avaliar_resultado(
+                    resposta.get("resposta_processamento"), esperado,
+                    intencao.get("portao", {}).get("documentos_liquidacao") or ())["comprovado"]):
             raise ValueError("recibo BB afirma sucesso sem prova correspondente")
         return {**resposta, "processado": False, "ja_processado": True,
                 "passo_irreversivel_chamado": False, "estado_final": "ja_processado",

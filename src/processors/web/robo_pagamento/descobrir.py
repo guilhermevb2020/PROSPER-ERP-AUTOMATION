@@ -412,6 +412,9 @@ def main():
                     return SAIU_SMART_MUDO
                 log("sessao do Smart OK (logada).")
                 return executar(ctx, args)
+        except smart_sessao.SmartIndisponivel as e:
+            log(f"ERRO: {e}")
+            return SAIU_SMART_MUDO
         except smart_sessao.SemSessao as e:
             log(f"ERRO: {e}")
             return SAIU_SEM_SESSAO

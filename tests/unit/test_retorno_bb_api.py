@@ -158,3 +158,191 @@ def test_so_o_espaco_interno_e_tolerado_no_documento(tmp_path, monkeypatch, na_g
                                   dry_run=False, conta_bb_api=395)
     chamada.assert_not_called()
     assert resultado["estado_final"] == "recusado_portao"
+
+
+# --------------------------------------------------------------------------- #
+# Título que o Smart já tinha liquidado (BUG-679)
+# --------------------------------------------------------------------------- #
+import base64  # noqa: E402
+
+DIV = '<div class="w-full leading-5 text-sm">'
+
+
+def arquivo_n(tmp_path, documentos):
+    """Como `arquivo`, mas com N liquidações — a forma das entregas 26 e 27."""
+    header, trailer = [list(" " * 400) for _ in range(2)]
+    header[:19] = "02RETORNO01COBRANCA"
+    header[26:40] = "03867" + "00098691" + "7"
+    header[76:79] = "001"
+    header[149:156] = "3770013"
+    trailer[:7] = "9201001"
+    linhas = [header]
+    for i, documento in enumerate(documentos, 1):
+        assert len(documento) <= 10
+        documento = documento.ljust(10)
+        detalhe = list(" " * 400)
+        detalhe[0] = "7"
+        detalhe[17:31] = header[26:40]
+        detalhe[31:38] = "3770013"
+        detalhe[38:63] = f"00000003950000000000{i:05d}"
+        detalhe[63:80] = f"3770013{i:010d}"
+        detalhe[108:110] = "06"
+        detalhe[110:116] = "090926"
+        detalhe[116:126] = documento
+        detalhe[152:165] = "0000000025000"
+        detalhe[253:266] = "0000000025000"
+        linhas.append(detalhe)
+    linhas.append(trailer)
+    for i, linha in enumerate(linhas, 1):
+        linha[394:400] = f"{i:06d}"
+        assert len(linha) == 400
+    p = tmp_path / "BBAPI.RET"
+    p.write_bytes(("\r\n".join("".join(l) for l in linhas) + "\r\n").encode("latin-1"))
+    return p
+
+
+def grade_n(documentos):
+    return [g for d in documentos for g in grade(documento=d.strip())]
+
+
+def varretorno(html):
+    return base64.b64encode(html.encode("latin-1")).decode("ascii")
+
+
+def ja_liquidados(*documentos):
+    """A mensagem real da entrega 27: um `<div>` por título, com espaço de alinhamento."""
+    return varretorno("".join(f"{DIV}Título {d}   já liquidado anteriormente</div>" for d in documentos))
+
+
+def por_operacao(*documentos):
+    """A mensagem da entrega 24: OUTRO motivo, em títulos que o Smart processou."""
+    return varretorno("".join(
+        f'{DIV}Título <span class="font-bold">{d}</span> já liquidado via pagamento da '
+        f'<span class="font-bold">Op. 65432</span></div>' for d in documentos))
+
+
+def test_titulo_ja_liquidado_conta_como_entregue(tmp_path, monkeypatch):
+    """14/09/2026, entrega 27: 44 liquidações, `liquidacao=36` + `refinan=8`, os 8 nomeados.
+
+    A soma fecha e nenhuma baixa faltou — os 44 estavam quitados no ERP. Sem isto a
+    entrega fica pendente para sempre, sem job que a feche (BUG-679).
+    """
+    documentos = ["TESTE-001", "TESTE-002"]
+    chamada = preparar(monkeypatch, grade_n(documentos),
+                       {"message": "OK", "liquidacao": 1, "refinan": 1, "msgLiquidados": True,
+                        "DifSistema": 0, "varRetorno2": ja_liquidados("TESTE-002")})
+    resultado = retorno.processar(None, arquivo_n(tmp_path, documentos), dry_run=False, conta_bb_api=395)
+    assert chamada.call_count == 1
+    assert resultado["processado"] and resultado["estado_final"] == "processado_smart"
+
+
+def test_entrega_inteira_ja_liquidada_fecha_sem_contador_de_liquidacao(tmp_path, monkeypatch):
+    """11/09/2026, entrega 22: um título só, `liquidacao` ausente e `refinan=1`."""
+    chamada = preparar(monkeypatch, grade(),
+                       {"message": "OK", "refinan": 1, "msgLiquidados": True,
+                        "DifSistema": 0, "varRetorno2": ja_liquidados("TESTE-001")})
+    resultado = retorno.processar(None, arquivo(tmp_path), dry_run=False, conta_bb_api=395)
+    assert chamada.call_count == 1
+    assert resultado["processado"] and resultado["estado_final"] == "processado_smart"
+
+
+@pytest.mark.parametrize("resposta", [
+    {"refinan": 1},                                                             # sem a mensagem
+    {"refinan": 1, "msgLiquidados": True},                                       # mensagem ausente
+    {"refinan": 1, "msgLiquidados": "1", "varRetorno2": ja_liquidados("TESTE-001")},   # flag não booleana
+    {"refinan": 2, "msgLiquidados": True, "varRetorno2": ja_liquidados("TESTE-001")},  # nomeia menos
+    {"refinan": 1, "msgLiquidados": True, "varRetorno2": ja_liquidados("T-1", "T-2")},  # nomeia mais
+    {"refinan": 1, "msgLiquidados": True, "varRetorno2": ja_liquidados("DE-OUTRO")},   # não é nosso
+    {"refinan": 1, "msgLiquidados": True, "varRetorno2": por_operacao("TESTE-001")},   # outro motivo
+    {"refinan": "x", "msgLiquidados": True, "varRetorno2": ja_liquidados("TESTE-001")},  # ilegível
+])
+def test_ja_liquidado_sem_prova_titulo_a_titulo_fica_inconclusivo(tmp_path, monkeypatch, resposta):
+    """⛔ O contador sozinho não fecha entrega: o Smart tem de NOMEAR cada título."""
+    chamada = preparar(monkeypatch, grade(), {"message": "OK", "DifSistema": 0, **resposta})
+    resultado = retorno.processar(None, arquivo(tmp_path), dry_run=False, conta_bb_api=395)
+    assert chamada.call_count == 1
+    assert not resultado["processado"] and resultado["estado_final"] == "inconclusivo"
+
+
+def test_refinan_nao_pode_exceder_as_liquidacoes_enviadas(tmp_path, monkeypatch):
+    """Entrega de BAIXA não absorve `refinan`: ali ele é divergência."""
+    chamada = preparar(monkeypatch, grade("10"),
+                       {"message": "OK", "baixa": 1, "refinan": 1, "msgLiquidados": True,
+                        "DifSistema": 0, "varRetorno2": ja_liquidados("TESTE-001")})
+    resultado = retorno.processar(None, arquivo(tmp_path, "10"), dry_run=False, conta_bb_api=395)
+    assert chamada.call_count == 1
+    assert not resultado["processado"] and resultado["estado_final"] == "inconclusivo"
+
+
+def encerrados(*, por_op=(), anteriormente=()):
+    """A mensagem real da entrega 43: os dois motivos no MESMO `varRetorno2`."""
+    return varretorno(
+        "".join(f'{DIV}Título <span class="font-bold">{d}</span> já liquidado via pagamento da '
+                f'<span class="font-bold">Op. 65519</span></div>' for d in por_op)
+        + "".join(f"{DIV}Título {d}   já liquidado anteriormente</div>" for d in anteriormente))
+
+
+def test_titulo_quitado_no_pagamento_de_operacao_conta_como_entregue(tmp_path, monkeypatch):
+    """18/09/2026, entrega 43: 3 liquidações, `refinan=2` + `tituloPagtoOperacao=1`, sem
+    `liquidacao`, os três nomeados. O contrato não conhecia o contador: inconclusivo e exit 6."""
+    documentos = ["TESTE-001", "TESTE-002", "TESTE-003"]
+    chamada = preparar(monkeypatch, grade_n(documentos),
+                       {"message": "OK", "refinan": 2, "tituloPagtoOperacao": 1, "msgLiquidados": True,
+                        "DifSistema": 0,
+                        "varRetorno2": encerrados(por_op=["TESTE-001"], anteriormente=["TESTE-002", "TESTE-003"])})
+    resultado = retorno.processar(None, arquivo_n(tmp_path, documentos), dry_run=False, conta_bb_api=395)
+    assert chamada.call_count == 1
+    assert resultado["processado"] and resultado["estado_final"] == "processado_smart"
+
+
+def test_so_o_contador_de_operacao_tambem_fecha(tmp_path, monkeypatch):
+    chamada = preparar(monkeypatch, grade(),
+                       {"message": "OK", "tituloPagtoOperacao": 1, "DifSistema": 0,
+                        "varRetorno2": encerrados(por_op=["TESTE-001"])})
+    resultado = retorno.processar(None, arquivo(tmp_path), dry_run=False, conta_bb_api=395)
+    assert chamada.call_count == 1
+    assert resultado["processado"] and resultado["estado_final"] == "processado_smart"
+
+
+@pytest.mark.parametrize("resposta", [
+    {"liquidacao": 1, "tituloPagtoOperacao": 1},                                                 # contador sem nome
+    {"liquidacao": 1, "tituloPagtoOperacao": 1, "varRetorno2": ja_liquidados("TESTE-001")},       # frase do OUTRO
+    {"liquidacao": 1, "tituloPagtoOperacao": 1, "varRetorno2": encerrados(por_op=["DE-OUTRO"])},  # não é nosso
+    {"tituloPagtoOperacao": 2, "varRetorno2": encerrados(por_op=["TESTE-001"])},                  # nomeia menos
+    {"liquidacao": 1, "tituloPagtoOperacao": 1,
+     "varRetorno2": encerrados(por_op=["TESTE-001", "TESTE-002"])},                               # nomeia mais
+    {"liquidacao": 1, "tituloPagtoOperacao": "x", "varRetorno2": encerrados(por_op=["TESTE-001"])},  # ilegível
+    # ilegível escondido atrás de um `refinan` bem provado
+    {"liquidacao": 1, "tituloPagtoOperacao": "x", "refinan": 1, "msgLiquidados": True,
+     "varRetorno2": ja_liquidados("TESTE-001")},
+    # o MESMO título citado pelos dois contadores: a soma fecharia (2 de 2) sem provar o TESTE-002
+    {"tituloPagtoOperacao": 1, "refinan": 1, "msgLiquidados": True,
+     "varRetorno2": encerrados(por_op=["TESTE-001"], anteriormente=["TESTE-001"])},
+])
+def test_pagamento_de_operacao_sem_prova_titulo_a_titulo_fica_inconclusivo(tmp_path, monkeypatch, resposta):
+    """⛔ Mesma régua do `refinan`: o contador sozinho não fecha entrega."""
+    documentos = ["TESTE-001", "TESTE-002"]
+    chamada = preparar(monkeypatch, grade_n(documentos), {"message": "OK", "DifSistema": 0, **resposta})
+    resultado = retorno.processar(None, arquivo_n(tmp_path, documentos), dry_run=False, conta_bb_api=395)
+    assert chamada.call_count == 1
+    assert not resultado["processado"] and resultado["estado_final"] == "inconclusivo"
+
+
+def test_contador_de_operacao_fora_de_liquidacao_continua_divergencia(tmp_path, monkeypatch):
+    """Em BAIXA o contador não absorve nada: ali o Smart processa e a frase é só aviso."""
+    chamada = preparar(monkeypatch, grade("10"),
+                       {"message": "OK", "baixa": 1, "tituloPagtoOperacao": 1, "DifSistema": 0,
+                        "varRetorno2": encerrados(por_op=["TESTE-001"])})
+    resultado = retorno.processar(None, arquivo(tmp_path, "10"), dry_run=False, conta_bb_api=395)
+    assert chamada.call_count == 1
+    assert not resultado["processado"] and resultado["estado_final"] == "inconclusivo"
+
+
+def test_mensagem_de_liquidado_por_operacao_nao_atrapalha_entrega_normal(tmp_path, monkeypatch):
+    """14/09/2026, entrega 24: `varRetorno2` preenchido, sem `refinan`, tudo processado."""
+    chamada = preparar(monkeypatch, grade("10"),
+                       {"message": "OK", "baixa": 1, "DifSistema": 0,
+                        "varRetorno2": por_operacao("TESTE-001")})
+    resultado = retorno.processar(None, arquivo(tmp_path, "10"), dry_run=False, conta_bb_api=395)
+    assert chamada.call_count == 1
+    assert resultado["processado"] and resultado["estado_final"] == "processado_smart"

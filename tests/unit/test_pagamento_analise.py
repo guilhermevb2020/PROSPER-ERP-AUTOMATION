@@ -49,6 +49,7 @@ from analise import (  # noqa: E402  (o sys.path tem de vir antes)
     classificar,
     coletar_links,
     frames,
+    reparar_padding_info12_cnab240,
     sem_js,
 )
 
@@ -373,6 +374,63 @@ def test_linhas_de_tamanhos_diferentes_nao_passam():
 def test_linha_em_branco_no_fim_nao_atrapalha():
     from analise import inspecionar_arquivo
     assert inspecionar_arquivo(_cnab(2, 240) + b"\n\n")["ok"] is True
+
+
+def _segmento_b_curto(g100, chave, sufixo=b"0" * 14):
+    prefixo = bytearray(b" " * 127)
+    prefixo[7:8] = b"3"
+    prefixo[13:14] = b"B"
+    prefixo[14:17] = g100.encode("ascii").ljust(3)
+    return bytes(prefixo) + chave + sufixo
+
+
+@pytest.mark.parametrize("g100,chave", [
+    ("01", b"11971805955"),
+    ("02", b" contabil@example.com"),
+    ("03", b"12345678901"),
+    ("04", b"82d8e173-09e1-4ec8-92ff-725290316d66"),
+])
+def test_repara_so_padding_da_informacao_12(g100, chave):
+    curta = _segmento_b_curto(g100, chave)
+    dados = b"X" * 240 + b"\r\n" + curta + b"\r\n"
+
+    reparado, quantidade = reparar_padding_info12_cnab240(dados)
+
+    linhas = reparado.split(b"\r\n")
+    assert quantidade == 1
+    assert len(linhas[1]) == 240
+    assert linhas[1][127:226].rstrip(b" ") == chave.strip(b" ")
+    assert linhas[1][-14:] == b"0" * 14
+    assert reparado.endswith(b"\r\n"), "a quebra de linha original deve ser preservada"
+
+
+@pytest.mark.parametrize("mutacao", ["segmento_a", "g100_05", "chave_invalida"])
+def test_padding_curto_fora_do_padrao_nao_e_reparado(mutacao):
+    linha = bytearray(_segmento_b_curto("02", b"contabil@example.com"))
+    if mutacao == "segmento_a":
+        linha[13:14] = b"A"
+    elif mutacao == "g100_05":
+        linha[14:17] = b"05 "
+    else:
+        linha[127:-14] = b"sem-arroba"
+    original = bytes(linha) + b"\n"
+
+    reparado, quantidade = reparar_padding_info12_cnab240(original)
+
+    assert quantidade == 0
+    assert reparado == original
+
+
+def test_linha_cnab240_completa_nao_e_alterada_pelo_reparo():
+    completa = (
+        _segmento_b_curto("02", b"contabil@example.com")[:127]
+        + b"contabil@example.com".ljust(99, b" ")
+        + b"0" * 14
+        + b"\r\n"
+    )
+    reparado, quantidade = reparar_padding_info12_cnab240(completa)
+    assert quantidade == 0
+    assert reparado == completa
 
 
 # --------------------------------------------------------------------------- #

@@ -51,6 +51,20 @@ Não há segunda tela, não há download separado.
 O `GET financeiro/mandarsispag.php?file=<id>` existe e funciona, mas o robô só o
 usa para **recuperar** de um POST que foi e não devolveu o arquivo.
 
+### Reparo local do padding do segmento B (01/09/2026)
+
+O Smart devolveu quatro segmentos B menores que 240 posições (152, 168, 177 e
+180). A comparação byte a byte mostrou que, nos quatro, as posições 1–127, a
+chave Pix e os 14 caracteres finais estavam completos; faltavam somente os
+espaços de preenchimento da Informação 12 (posições 128–226, 99 caracteres no
+manual DBS).
+
+`analise.reparar_padding_info12_cnab240()` recompõe esse espaço antes da
+inspeção tanto na resposta direta quanto no download de recuperação. A trava é
+estrita: somente registro detalhe B, `G100` 01–04, chave válida para o tipo e
+sufixo numérico completo. Qualquer outra malformação permanece intacta e segue
+para o diagnóstico/exit `6`.
+
 ---
 
 ## ⛔ Os dois perigos desta tela

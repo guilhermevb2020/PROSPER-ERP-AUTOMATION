@@ -476,7 +476,9 @@ def processar(ctx, caminho, dry_run=True, pular_se_processado=False,
             else resumo_processamento(resultado)
         )
         if conta_bb_api is not None:
-            confirmacao = bb_api.avaliar_resultado(resultado, saida["portao"]["contadores_esperados"])
+            confirmacao = bb_api.avaliar_resultado(
+                resultado, saida["portao"]["contadores_esperados"],
+                saida["portao"].get("documentos_liquidacao") or ())
             saida["confirmacao_smart"] = confirmacao
             saida["processado"] = confirmacao["comprovado"]
             saida["inconclusivo"] = not confirmacao["comprovado"]

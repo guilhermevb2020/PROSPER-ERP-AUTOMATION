@@ -160,11 +160,15 @@ def gerar_remessa(ctx, grade, dry_run=True, log=print):
         cfg.URL_GERAR, data=corpo,
         headers={"content-type": "application/x-www-form-urlencoded"},
         timeout=180_000)
-    dados = r.body()
+    dados_recebidos = r.body()
     disp = r.headers.get("content-disposition", "")
-    log(f"  resposta: status={r.status} bytes={len(dados)} "
+    log(f"  resposta: status={r.status} bytes={len(dados_recebidos)} "
         f"tipo={r.headers.get('content-type', '?')} disp={disp or '(nenhum)'}")
 
+    dados, reparados = analise.reparar_padding_info12_cnab240(dados_recebidos)
+    if reparados:
+        log(f"  reparo local CNAB-240: {reparados} segmento(s) B recebeu(ram) "
+            "o padding ausente da Informacao 12")
     arq = analise.inspecionar_arquivo(dados)
     if arq["ok"]:
         nome = analise.nome_do_arquivo(disp)
@@ -177,7 +181,7 @@ def gerar_remessa(ctx, grade, dry_run=True, log=print):
     # ⚠️ O POST FOI. A remessa provavelmente EXISTE no Smart — os titulos ja
     # sairam da fila de pendentes. Isto NAO pode virar "falhou" em silencio:
     # vira remessa orfa, e a proxima rodada dira "nada pendente".
-    texto = dados.decode("iso-8859-1", errors="replace")
+    texto = dados_recebidos.decode("iso-8859-1", errors="replace")
     if smart_sessao.parece_deslogado(texto):
         return {"ok": False, "enviado": True, "corpo": corpo, "dados": None,
                 "nome": None,
@@ -185,7 +189,7 @@ def gerar_remessa(ctx, grade, dry_run=True, log=print):
     # Diagnostico: ninguem tinha olhado o CONTEUDO desta resposta malformada
     # ainda, so o resumo (linhas de tamanho errado). So leitura, nao muda
     # nenhum comportamento do robo -- guarda o bruto para inspecionar depois.
-    _salvar_resposta_malformada(dados, log=log)
+    _salvar_resposta_malformada(dados_recebidos, log=log)
     return {"ok": False, "enviado": True, "corpo": corpo, "dados": None,
             "nome": None, "html": texto[:1500],
             "motivo": f"o POST foi (status={r.status}) mas a resposta nao e "
@@ -234,7 +238,9 @@ def baixar(ctx, ident, log=print):
     if r.status != 200:
         log(f"  id={ident}: status {r.status}")
         return None, None
-    dados = r.body()
+    dados, reparados = analise.reparar_padding_info12_cnab240(r.body())
+    if reparados:
+        log(f"  id={ident}: reparo local CNAB-240 em {reparados} segmento(s) B")
     arq = analise.inspecionar_arquivo(dados)
     if not arq["ok"]:
         log(f"  id={ident}: DESCARTADO — {arq['motivo']}")

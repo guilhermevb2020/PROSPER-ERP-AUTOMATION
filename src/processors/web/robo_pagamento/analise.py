@@ -254,6 +254,77 @@ def montar_filtro(form, valores=None, permitir=("pesquisar",)):
 # --------------------------------------------------------------------------- #
 # o arquivo gerado
 # --------------------------------------------------------------------------- #
+def _chave_pix_compativel(g100: bytes, chave: bytes) -> bool:
+    """A chave cabe no dominio G100 declarado pelo segmento B."""
+    if g100 == b"01":
+        return re.fullmatch(rb"\+?\d{10,14}", chave) is not None
+    if g100 == b"02":
+        return re.fullmatch(rb"[^@\s]+@[^@\s]+", chave) is not None
+    if g100 == b"03":
+        return re.fullmatch(rb"(?:\d{11}|\d{14})", chave) is not None
+    if g100 == b"04":
+        return re.fullmatch(
+            rb"[0-9a-fA-F]{8}(?:-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}",
+            chave,
+        ) is not None
+    return False
+
+
+def reparar_padding_info12_cnab240(dados: bytes) -> tuple[bytes, int]:
+    """Recompoe somente o padding omitido da Informacao 12 do segmento B.
+
+    O Smart produziu quatro segmentos B curtos em 01/09/2026 (152, 168, 177
+    e 180 bytes). Nos quatro, as posicoes 1-127 estavam completas, a chave Pix
+    estava inteira e os 14 caracteres finais tambem; faltavam apenas os espacos
+    entre a chave e esse sufixo. Pelo manual DBS, a Informacao 12 ocupa as
+    posicoes 128-226, ou 99 caracteres.
+
+    O reparo e fail-closed: so aceita registro detalhe B, G100 de chave
+    (01-04), chave valida para o tipo e sufixo numerico completo. Qualquer
+    outra linha fica intacta para `inspecionar_arquivo()` continuar recusando.
+    Preserva a quebra de linha original.
+
+    Returns:
+        Tupla com os bytes resultantes e a quantidade de segmentos reparados.
+    """
+    if not dados:
+        return dados, 0
+
+    resultado = []
+    reparados = 0
+    for linha in dados.splitlines(keepends=True):
+        if linha.endswith(b"\r\n"):
+            corpo, quebra = linha[:-2], b"\r\n"
+        elif linha.endswith((b"\n", b"\r")):
+            corpo, quebra = linha[:-1], linha[-1:]
+        else:
+            corpo, quebra = linha, b""
+
+        if not 142 <= len(corpo) < 240:
+            resultado.append(linha)
+            continue
+        if corpo[7:8] != b"3" or corpo[13:14] != b"B":
+            resultado.append(linha)
+            continue
+
+        g100 = corpo[14:17].strip()
+        sufixo = corpo[-14:]
+        chave = corpo[127:-14].strip(b" ")
+        if not sufixo.isdigit() or not _chave_pix_compativel(g100, chave):
+            resultado.append(linha)
+            continue
+
+        reparado = corpo[:127] + chave.ljust(99, b" ") + sufixo
+        if len(reparado) != 240:
+            resultado.append(linha)
+            continue
+
+        resultado.append(reparado + quebra)
+        reparados += 1
+
+    return b"".join(resultado), reparados
+
+
 def inspecionar_arquivo(dados):
     """O que veio no download: e CNAB mesmo, e de que layout?
 
@@ -458,4 +529,3 @@ def nome_do_arquivo(content_disposition, padrao="remessa.REM"):
 
 
 _INVALIDOS_NOME = re.compile(r'[<>:"/\\|?*\x00-\x1f]')
-
