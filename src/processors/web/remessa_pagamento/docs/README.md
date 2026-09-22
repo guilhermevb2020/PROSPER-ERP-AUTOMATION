@@ -208,4 +208,4 @@ Qualquer uma das duas basta: refazer o `upsert-docker` da task com
 `--disabled`, ou voltar `DRY_RUN_PAG=True` no `.env`.
 
 Receita geral e armadilhas medidas:
-[`docs/COMO_SUBIR_UM_ROBO.md`](../../../../../docs/COMO_SUBIR_UM_ROBO.md).
+[`docs/COMO_SUBIR_UM_JOB.md`](../../../../../docs/COMO_SUBIR_UM_JOB.md).

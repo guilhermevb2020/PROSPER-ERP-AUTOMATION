@@ -7,7 +7,7 @@ manual e reusava a sessao do robo de remessa. No servidor cada robo tem sessao
 PROPRIA: compartilhar amarraria os horarios dos dois e um perfil compartilhado
 trava no lock do Chrome.
 
-Slot deste robo (ver docs/COMO_SUBIR_UM_ROBO.md):
+Slot deste robo (ver docs/COMO_SUBIR_UM_JOB.md):
     display :95 | VNC 5904 | noVNC 6084 | CDP 9225 | perfil data/robo_retorno
 
 Credenciais: `config/retorno_cobranca.env` (montado, fora do git). NUNCA no fonte —

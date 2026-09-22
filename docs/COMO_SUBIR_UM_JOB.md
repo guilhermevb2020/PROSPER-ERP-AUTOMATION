@@ -1,4 +1,4 @@
-# Como subir um robô do ERP para o servidor
+# Como subir um job do ERP para o servidor
 
 Receita de ponta a ponta para transformar um pacote que roda no Windows com login
 manual num robô que roda **sozinho** no container `erp-automation`, agendado pelo
@@ -48,7 +48,7 @@ dois no mesmo `user-data-dir` disputam o lock — um simplesmente não sobe.
 | `retorno_cobranca` | `:95` | 5904 | 6084 | 9225 | `data/robo_retorno/perfil_chrome` |
 | `remessa_pagamento` | `:94` | 5905 | 6085 | 9226 | `data/robo_pagamento/perfil_chrome` |
 | `retorno_pagamento` | `:93` | 5906 | 6086 | 9227 | `data/robo_retorno_pagamento/perfil_chrome` |
-| **próximo livre** | **`:92`** | **5907** | **6087** | **9228** | `data/<robo>/perfil_chrome` |
+| **próximo livre** | **`:92`** | **5907** | **6087** | **9228** | `data/<job>/perfil_chrome` |
 
 > Atualizada em 26/08/2026, quando o `retorno_pagamento` ocupou o `:93` que
 > esta tabela anunciava como livre. **Quem toma um slot atualiza esta linha no
@@ -71,10 +71,10 @@ da rede do container.
 ## 2. Estrutura do pacote
 
 ```
-src/processors/web/<robo>/
+src/processors/web/<job>/
 ├── __init__.py           docstring: o que faz, qual o entrypoint agendado
-├── <robo>.py             entrypoint: main() + exit codes
-├── <robo>_config.py      TUDO por env; zero caminho de Windows
+├── <job>.py             entrypoint: main() + exit codes
+├── <job>_config.py      TUDO por env; zero caminho de Windows
 ├── run_agendado.sh       wrapper do hub (display + env + python)
 └── docs/README.md        obrigatório — inclusive o que NÃO foi testado
 ```
@@ -112,8 +112,8 @@ os.environ["DISPLAY"] = cfg.DISPLAY
 Nunca no fonte — **este repo tem remote público**.
 
 ```
-config/<robo>.env           real, modo 600, gitignored por `config/*.env`
-config/<robo>.example.env   template com campos vazios, versionado
+config/<job>.env           real, modo 600, gitignored por `config/*.env`
+config/<job>.example.env   template com campos vazios, versionado
 ```
 
 O `.gitignore` já re-inclui `!config/*.example.*`, então o exemplo entra sozinho.
@@ -190,10 +190,10 @@ cd /app || exit 1
 LOG=/app/logs/vnc; mkdir -p "$LOG"
 
 # 1) credenciais (arquivo montado, fora do git)
-[ -f /app/config/<robo>.env ] && { set -a; . /app/config/<robo>.env; set +a; }
+[ -f /app/config/<job>.env ] && { set -a; . /app/config/<job>.env; set +a; }
 
 # 2) mata Chrome órfão SÓ do seu perfil (nunca pkill genérico de chrome!)
-PERFIL="${USER_DATA_DIR_X:-/app/data/<robo>/perfil_chrome}"
+PERFIL="${USER_DATA_DIR_X:-/app/data/<job>/perfil_chrome}"
 pkill -f "user-data-dir=$PERFIL" 2>/dev/null || true
 sleep 1; rm -f "$PERFIL"/Singleton* 2>/dev/null || true
 
@@ -211,9 +211,9 @@ export PYTHONPATH=/app          # resolve `src.processors.web.boletos...`
 export PYTHONUNBUFFERED=1
 
 # 8) roda e PROPAGA O EXIT CODE do python (não o do tee)
-LOGROBO="/app/logs/<robo>_$(date +%Y-%m-%d).log"
-RC="/tmp/<robo>_rc.$$"
-{ python /app/src/processors/web/<robo>/<robo>.py "$@"; echo $? > "$RC"; } 2>&1 | tee -a "$LOGROBO"
+LOGROBO="/app/logs/<job>_$(date +%Y-%m-%d).log"
+RC="/tmp/<job>_rc.$$"
+{ python /app/src/processors/web/<job>/<job>.py "$@"; echo $? > "$RC"; } 2>&1 | tee -a "$LOGROBO"
 CODIGO=$(cat "$RC" 2>/dev/null || echo 1); rm -f "$RC"
 exit "$CODIGO"
 ```
@@ -235,7 +235,7 @@ metade e precisa de gente"*, distinto de *"não tinha nada a fazer"*.
 ```bash
 docker exec hub-orchestration python run.py tasks upsert-docker <nome_task> \
   --container erp-automation \
-  --command "sh /app/src/processors/web/<robo>/run_agendado.sh" \
+  --command "sh /app/src/processors/web/<job>/run_agendado.sh" \
   --cron "0 18 * * 1-5" \
   --timeout-seconds 2700 \
   --max-retries 1 \
@@ -259,10 +259,10 @@ docker exec hub-orchestration python run.py tasks upsert-docker <nome_task> \
 
 ```bash
 # 1) escopo mínimo, à mão, olhando
-docker exec erp-automation sh /app/src/processors/web/<robo>/run_agendado.sh --so-um-caso
+docker exec erp-automation sh /app/src/processors/web/<job>/run_agendado.sh --so-um-caso
 
 # 2) o log tem de provar que FEZ, não só que rodou
-docker exec erp-automation tail -40 /app/logs/<robo>_$(date +%F).log
+docker exec erp-automation tail -40 /app/logs/<job>_$(date +%F).log
 ```
 
 Só então habilite. E **na primeira execução agendada, leia o log** — não confie no
@@ -276,10 +276,10 @@ Enumere os arquivos, um a um. Nunca `git add -A`: a árvore do `erp-automation`
 carrega muita coisa não commitada de outras frentes.
 
 ```bash
-git add src/processors/web/<robo>/*.py src/processors/web/<robo>/run_agendado.sh \
-        src/processors/web/<robo>/docs/README.md config/<robo>.example.env
+git add src/processors/web/<job>/*.py src/processors/web/<job>/run_agendado.sh \
+        src/processors/web/<job>/docs/README.md config/<job>.example.env
 git diff --cached --name-only     # confira ANTES de commitar
-git commit -m "feat(<robo>): ..." ; echo "exit=$?"
+git commit -m "feat(<job>): ..." ; echo "exit=$?"
 ```
 
 ---
@@ -306,7 +306,7 @@ nada**. Depois de habilitar, confira o valor efetivo:
 
 ```bash
 docker exec -e PYTHONPATH=/app erp-automation python -c \
- "import sys; sys.path.insert(0,'/app/src/processors/web/<robo>'); import <robo>_config as c; print(c.DRY_RUN)"
+ "import sys; sys.path.insert(0,'/app/src/processors/web/<job>'); import <job>_config as c; print(c.DRY_RUN)"
 ```
 
 **3. `tee` engole o exit code.** Ver §6. O hub marca `success` num robô que
@@ -353,7 +353,7 @@ recria na hora, ou não declara.
 
 - [ ] Slot reservado (display, VNC, noVNC, CDP, perfil) e conferido no container
 - [ ] Config 100% por env, com **sufixo próprio** — nada de `DISPLAY` puro
-- [ ] `config/<robo>.env` (600, gitignored) + `.example.env` versionado
+- [ ] `config/<job>.env` (600, gitignored) + `.example.env` versionado
 - [ ] Login **delegado**, com `URL_SESSAO` apontando para a tela do robô
 - [ ] `--no-sandbox --disable-dev-shm-usage` no Chrome
 - [ ] `parece_deslogado()` em todo ponto que lê resposta do Smart

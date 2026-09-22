@@ -13,7 +13,7 @@ arquivo local, para medirmos a acuracia ao longo dos dias antes de subir.
    - `finalizar.finalizar_da_grade` e substituida por um stub que LEVANTA se
      alguem a chamar (cinto de seguranca contra edicao futura distraida).
    Finalizar de verdade e o robo de producao, depois da subida pelo
-   docs/COMO_SUBIR_UM_ROBO.md.
+   docs/COMO_SUBIR_UM_JOB.md.
 
 ADEQUACOES ao servidor, feitas aqui (o pacote original e de Windows + keep-alive):
    - sessao: `scripts/sandbox/_ambiente` (Chrome no host + login CapSolver) no

@@ -5,7 +5,7 @@
 #    hub comeca assim de proposito. Ligar a finalizacao e mudar o comando da
 #    task, decisao de quem opera - nao um default escondido aqui.
 #
-# Slot deste robo (reservado em docs/COMO_SUBIR_UM_ROBO.md):
+# Slot deste robo (reservado em docs/COMO_SUBIR_UM_JOB.md):
 #    DISPLAY :92 | VNC 5907 | noVNC 6087 | CDP 9228
 set -u
 cd /app || exit 1

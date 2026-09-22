@@ -146,7 +146,7 @@ DEBUG_DIR_PAG="${DEBUG_DIR_PAG:-$RAIZ/data/robo_pagamento/debug}"
 export ARQ_CONTROLE_PAG DEBUG_DIR_PAG
 
 # ⛔ A FLAG VAI AQUI, EXPLICITA, e a razao e a armadilha nº 2 do
-# docs/COMO_SUBIR_UM_ROBO.md: o robo de remessa ficou com DRY_RUN no `.env` e a
+# docs/COMO_SUBIR_UM_JOB.md: o robo de remessa ficou com DRY_RUN no `.env` e a
 # task chamando o wrapper SEM `--pra-valer`. Toda execucao saia com exit=0 e um
 # resumo bonito, sem gerar nada — falha que parece sucesso.
 #

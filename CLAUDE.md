@@ -95,7 +95,7 @@ em `/app/data/boletos/emitidos`, com manifesto; não versionar esses documentos.
 ## Como o projeto funciona hoje (21/09/2026)
 
 Jobs Playwright/Chrome que operam o Smart (ERP) e o doc2you. Cada um mora em
-`src/processors/web/<robo>/` e é disparado pelo `hub-orchestration` por
+`src/processors/web/<job>/` e é disparado pelo `hub-orchestration` por
 `docker exec` no container `erp-automation`. O código de 2025 (processadores
 `emissao_boleto_*`, `relatorio_*`, `envio_*`, stack antibot em `src/common/*`,
 API de controle em `src/api`) foi **removido em 21/09/2026**: nenhuma das 12
@@ -107,15 +107,21 @@ daquela era estão em `docs/deprecated/`.
 |---|---|---|---|
 | boletos: emissão, envio, healthcheck, mantenedor de sessão | `boletos/` | `python -m src.processors.web.boletos.{emitir_lote,enviar_lote,healthcheck}`; o `manter_sessao` sobe no `scripts/boot_vnc.sh` | `:99` / 6080 |
 | doc2you (download diário de documentos) | `doc2you/` | `sh .../doc2you/run_agendado.sh [--antecipado]` | `:98` / 6081 |
-| análise de crédito | `credito/` | `sh .../credito/run_agendado.sh` (roda a v4) | `:96` / 6082 |
+| análise de crédito | `credito/` | `sh .../credito/run_agendado.sh` (roda `analisar_credito.py`) | `:96` / 6082 |
 | remessa de cobrança CNAB-400, BB e cancelamento | `remessa_cobranca/` | `run_agendado.sh`, `run_bb.sh`, `run_cancelamento.sh` | `:97` / 6083 |
 | retorno de cobrança CNAB-400, BB e depósito | `retorno_cobranca/` | `run_agendado.sh --pular-processados`, `run_bb.sh`, `run_deposito.sh` | `:95` / 6084 |
 | remessa de pagamento CNAB-240 (BMP) | `remessa_pagamento/` | `run_agendado.sh` — a cada 5 min, 8h–18h55 | `:94` / 6085 |
 | retorno de pagamento CNAB-240 | `retorno_pagamento/` | `run_agendado.sh` | `:93` / 6086 |
 | finalizar operação (Robô 7) | `finalizar_operacao/` | `run_agendado.sh` — **DRY** até segunda ordem | `:92` / 6087 |
 
+Os jobs foram renomeados em 21/09/2026: a pasta leva o nome da automação e a entrada é
+verbo + objeto (`robo_retorno/robo_retorno.py` → `retorno_cobranca/processar_retorno_cobranca.py`).
+De-para completo, o que não mudou de propósito e as armadilhas do hub:
+`docs/RENOMEACAO_JOBS_2026-09-21.md`. A task de crédito no hub chama-se
+`analisar_credito_operacao`; `robo_analise_credito` está aposentada.
+
 Só a porta 6080 é publicada pelo container; os outros noVNC se alcançam por
-túnel ssh ao IP do container (ver `docs/COMO_SUBIR_UM_ROBO.md`).
+túnel ssh ao IP do container (ver `docs/COMO_SUBIR_UM_JOB.md`).
 
 ### Regras que valem para código novo
 
@@ -123,9 +129,9 @@ túnel ssh ao IP do container (ver `docs/COMO_SUBIR_UM_ROBO.md`).
   `whatsapp_evolution`). `src/common/core/config_loader.py` existe só porque o
   doc2you resolve credencial por ele; não é base para job novo.
 - **Cada job tem** `run_agendado.sh` (wrapper do hub: display, env, exit code
-  propagado com o truque do `$RC`), `<robo>_config.py` (tudo por env), módulo
+  propagado com o truque do `$RC`), `<job>_config.py` (tudo por env), módulo
   puro testável sem navegador, e `docs/README.md`. Receita completa e armadilhas
-  medidas: `docs/COMO_SUBIR_UM_ROBO.md`.
+  medidas: `docs/COMO_SUBIR_UM_JOB.md`.
 - **Nunca dois Chromes no mesmo display ou perfil.** Slots na tabela acima e no
   guia; quem toma um slot atualiza o guia no mesmo commit.
 - **Sessão do Smart é uma por identidade.** Sandbox e finalizador compartilham
@@ -143,11 +149,11 @@ túnel ssh ao IP do container (ver `docs/COMO_SUBIR_UM_ROBO.md`).
 
 ```bash
 # rodar um job à mão, como o hub faz
-docker exec erp-automation sh /app/src/processors/web/<robo>/run_agendado.sh
+docker exec erp-automation sh /app/src/processors/web/<job>/run_agendado.sh
 
 # ver / registrar task no hub (sempre --timeout-seconds explícito; começar --disabled)
 docker exec hub-orchestration python run.py tasks show <task>
-docker exec hub-orchestration python run.py tasks upsert-docker <task> --container erp-automation --command "sh /app/src/processors/web/<robo>/run_agendado.sh" --cron "..." --timeout-seconds N --disabled --disabled-reason "..."
+docker exec hub-orchestration python run.py tasks upsert-docker <task> --container erp-automation --command "sh /app/src/processors/web/<job>/run_agendado.sh" --cron "..." --timeout-seconds N --disabled --disabled-reason "..."
 
 # testes (no host, sem container; nenhum teste fala com o Smart)
 PYTHONPATH=$PWD .venv-sandbox/bin/pytest
@@ -174,7 +180,7 @@ credencial — mas confira o `git status` antes de commitar.
 
 ### Documentação que vale
 
-`docs/COMO_SUBIR_UM_ROBO.md` (receita e armadilhas) · `docs/CREDENCIAIS_GUARDIAN.md`
+`docs/COMO_SUBIR_UM_JOB.md` (receita e armadilhas) · `docs/CREDENCIAIS_GUARDIAN.md`
 · `docs/CONVENCOES_PORTAS.md` · `docs/BOLETOS_LOTE.md` · `docs/hub_orchestration_API.md`
 · `docs/VALIDACAO_*_2026-09-07.md` · `docs/README.md` (índice). Cada job tem o
 seu `docs/README.md`. `docs/deprecated/` é só história.

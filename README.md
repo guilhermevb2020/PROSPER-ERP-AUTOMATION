@@ -9,7 +9,7 @@ finalizam operações. Rodam com Playwright/Chrome dentro do container
 ## Como está organizado
 
 ```
-src/processors/web/<robo>/   um job por pasta: run_agendado.sh, <robo>_config.py,
+src/processors/web/<job>/   um job por pasta: run_agendado.sh, <job>_config.py,
                              módulo puro (testável sem navegador), docs/README.md
 src/common/clients/          o que é compartilhado: sessão do Smart, Nextcloud, WhatsApp
 config/                      processors.yaml e os robo_*.env (gitignored, apelidos do Guardian)
@@ -35,7 +35,7 @@ data/, logs/                 saída dos jobs: perfis de Chrome, boletos, prints,
 
 ```bash
 # como o hub faz, à mão
-docker exec erp-automation sh /app/src/processors/web/<robo>/run_agendado.sh
+docker exec erp-automation sh /app/src/processors/web/<job>/run_agendado.sh
 
 # testes, no host
 PYTHONPATH=$PWD .venv-sandbox/bin/pytest
@@ -46,7 +46,7 @@ docker exec hub-orchestration python run.py tasks show <task>
 
 O código de `src/`, `config/`, `data/` e `logs/` entra no container por bind
 mount: arquivo salvo vale na próxima execução. Recriar o container só entre
-19:05 e 07:30 (`docs/COMO_SUBIR_UM_ROBO.md`, §8).
+19:05 e 07:30 (`docs/COMO_SUBIR_UM_JOB.md`, §8).
 
 ## Credenciais
 
@@ -58,13 +58,13 @@ acessado por login efêmero. Como funciona e como operar:
 ## Ver um job trabalhando
 
 Cada job tem um display virtual e um noVNC próprios (tabela em
-`docs/COMO_SUBIR_UM_ROBO.md`). Só a porta 6080 (boletos) é publicada; para os
+`docs/COMO_SUBIR_UM_JOB.md`). Só a porta 6080 (boletos) é publicada; para os
 outros, túnel ssh ao IP do container: `ssh -L 6087:<ip-do-container>:6087 prospere@192.168.50.5`
 e `http://localhost:6087/vnc.html`.
 
 ## Documentação
 
-- `docs/COMO_SUBIR_UM_ROBO.md` — a receita para criar e publicar um job, com as armadilhas medidas
+- `docs/COMO_SUBIR_UM_JOB.md` — a receita para criar e publicar um job, com as armadilhas medidas
 - `docs/CREDENCIAIS_GUARDIAN.md` — credenciais, apelidos e o que nunca pode entrar em arquivo
 - `docs/CONVENCOES_PORTAS.md`, `docs/BOLETOS_LOTE.md`, `docs/hub_orchestration_API.md`
 - `docs/VALIDACAO_*_2026-09-07.md` — o que foi validado em produção e os limites de cada prova

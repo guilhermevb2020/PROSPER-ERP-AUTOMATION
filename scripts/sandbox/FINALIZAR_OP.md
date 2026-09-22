@@ -6,7 +6,7 @@ finalizadas**. Registra as **contas a pagar** das aprovadas. **Não finaliza nad
 > ⛔ **Este script nunca finaliza**, e isso não é só o default: não existe flag
 > que ligue a finalização, e `finalizar.finalizar_da_grade` é substituída por um
 > stub que levanta exceção se alguém a chamar. Finalizar de verdade é o robô de
-> produção, depois da subida por [`docs/COMO_SUBIR_UM_ROBO.md`](../../docs/COMO_SUBIR_UM_ROBO.md).
+> produção, depois da subida por [`docs/COMO_SUBIR_UM_JOB.md`](../../docs/COMO_SUBIR_UM_JOB.md).
 
 ---
 

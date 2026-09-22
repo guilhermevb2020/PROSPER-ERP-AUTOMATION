@@ -29,7 +29,7 @@ Uso:
     $V scripts/sandbox/finalizar_op_executar.py --confirmar
 
 ⛔ NAO rode junto com o `finalizar_op.py --loop`: os dois usam o mesmo perfil de
-   Chrome e disputam o lock (§1 do COMO_SUBIR_UM_ROBO). Pare o loop antes.
+   Chrome e disputam o lock (§1 do COMO_SUBIR_UM_JOB). Pare o loop antes.
 """
 from __future__ import annotations
 

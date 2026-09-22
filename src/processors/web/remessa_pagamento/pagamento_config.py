@@ -6,7 +6,7 @@ Tela do Smart: Financeiro > Sistemas de pagamento > Pagamento BMP Money Plus >
 Gerar Remessa. NAO confundir com a remessa de COBRANCA, que e do `remessa_cobranca`
 e vive em outra arvore (`financeiro/remessaocorrencia.php`).
 
-Slot deste robo (ver docs/COMO_SUBIR_UM_ROBO.md §1):
+Slot deste robo (ver docs/COMO_SUBIR_UM_JOB.md §1):
     display :94 | VNC 5905 | noVNC 6085 | CDP 9226 | perfil data/robo_pagamento
 
 Credenciais: `config/remessa_pagamento.env` (montado, fora do git). NUNCA no fonte —

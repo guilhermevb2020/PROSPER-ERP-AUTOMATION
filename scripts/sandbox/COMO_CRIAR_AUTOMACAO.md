@@ -95,7 +95,7 @@ O trace da execução fica em `data/sandbox/trace/` — abra com
 ## Levar do sandbox para produção (quando validar)
 
 O sandbox é para **testar no host**. Quando a automação estiver certa, ela vira
-um robô de produção seguindo [`docs/COMO_SUBIR_UM_ROBO.md`](../../docs/COMO_SUBIR_UM_ROBO.md).
+um robô de produção seguindo [`docs/COMO_SUBIR_UM_JOB.md`](../../docs/COMO_SUBIR_UM_JOB.md).
 A diferença é só a sessão:
 
 | | sandbox (host) | produção (container) |

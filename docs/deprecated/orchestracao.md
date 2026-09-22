@@ -125,7 +125,7 @@ O que é compartilhado e não escala igual:
 preciosismo: dois Chromes no mesmo display fazem o login *quicar* de volta para a
 landing, e dois no mesmo `user-data-dir` disputam o lock. A tabela de alocação
 está em
-[`COMO_SUBIR_UM_ROBO.md`](COMO_SUBIR_UM_ROBO.md#1-reserve-o-slot--display-portas-e-perfil).
+[`COMO_SUBIR_UM_JOB.md`](COMO_SUBIR_UM_JOB.md#1-reserve-o-slot--display-portas-e-perfil).
 
 **Compartilhado** — a sessão do Smart por usuário, a conta do CapSolver e o
 próprio container: `docker compose up -d` derruba todos os robôs em execução, e
@@ -134,4 +134,4 @@ nem todos voltam sozinhos.
 ## Subir um robô novo
 
 Receita de ponta a ponta, com as armadilhas medidas em subidas reais:
-[`COMO_SUBIR_UM_ROBO.md`](COMO_SUBIR_UM_ROBO.md).
+[`COMO_SUBIR_UM_JOB.md`](COMO_SUBIR_UM_JOB.md).

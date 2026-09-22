@@ -6,7 +6,7 @@ Testes das travas de configuracao do robo de pagamento.
 POR QUE ESTES TESTES EXISTEM
 ----------------------------
 Duas das tres armadilhas de "sucesso falso" documentadas em
-`docs/COMO_SUBIR_UM_ROBO.md` sao de CONFIGURACAO, nao de codigo — e as duas
+`docs/COMO_SUBIR_UM_JOB.md` sao de CONFIGURACAO, nao de codigo — e as duas
 terminam com o hub verde e nada feito:
 
   - `DRY_RUN` ligado no `.env` e o comando agendado sem a flag: o robo sai com
@@ -156,7 +156,7 @@ def test_conta_e_a_unica_do_select_da_tela(cfg):
 
 
 def test_slot_e_o_reservado_na_tabela(cfg):
-    """:94/9226/data/robo_pagamento — ver docs/COMO_SUBIR_UM_ROBO.md §1."""
+    """:94/9226/data/robo_pagamento — ver docs/COMO_SUBIR_UM_JOB.md §1."""
     c = cfg()
     assert c.DISPLAY == ":94"
     assert c.CDP_PORT == 9226

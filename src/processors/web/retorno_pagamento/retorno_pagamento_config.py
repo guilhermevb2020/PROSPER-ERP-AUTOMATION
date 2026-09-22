@@ -11,7 +11,7 @@ sessao PROPRIOS: dois robos no mesmo perfil de Chrome travam o login um do
 outro (mesmo motivo do `retorno_cobranca` ter sessao propria, so que aqui a conta
 Smart e a MESMA e so o navegador e isolado).
 
-Slot deste robo (ver docs/COMO_SUBIR_UM_ROBO.md §1):
+Slot deste robo (ver docs/COMO_SUBIR_UM_JOB.md §1):
     display :93 | VNC 5906 | noVNC 6086 | CDP 9227 | perfil data/robo_retorno_pagamento
 
 O contrato do form foi MEDIDO em 26/08/2026 via `descobrir.py` (GET simples,
