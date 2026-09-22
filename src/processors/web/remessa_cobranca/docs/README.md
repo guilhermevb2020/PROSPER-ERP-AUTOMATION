@@ -422,3 +422,5 @@ CapSolver, que este bloco listava como nunca exercitados, rodam **todo dia útil
 
 **Desempenho medido no Windows:** ~20s por conta sem títulos, ~45s por conta com
 remessa. 51 contas ≈ 18-20 min — daí o timeout de 2700s na task.
+
+**Fonte do controle (Fase 2 de `docs/PLANO_CONTROLE_NO_BANCO.md`):** `CONTROLE_FONTE_REM` = `csv` (padrão: `controle_remessas.csv` e `remessas_geradas.json`) ou `banco` (`erp_automation.vw_controle_remessa`; sem banco, volta aos arquivos avisando). ⛔ Só ligue `banco` depois da carga histórica de 45 dias: `docker exec erp-automation sh -c 'PYTHONPATH=/app python /app/src/processors/db/controle/carregar_remessas_historicas.py'` (ensaio) e depois `--pra-valer`. O CSV e o JSON continuam sendo escritos nos dois modos até o corte.

@@ -194,3 +194,23 @@ def test_listar_controle_devolve_as_colunas_do_csv(execucao):
     execucao_job.registrar_evento_arquivo(execucao, arq, "processado", resultado="OK")
     ret = execucao_job.listar_controle(execucao, "retorno", chave="hash")
     assert ret[md5]["processado"] == "True" and ret[md5]["nome_smart"] == "CP2209000778.RET"
+
+
+def test_carga_historica_de_remessa_entra_com_a_data_de_entao(execucao, tmp_path):
+    """Passo 4 da Fase 2: a remessa antiga entra com registrado_em = baixado_em e o
+    cancelamento a ve pela vw_controle_remessa com tipo e data."""
+    from src.processors.db.controle import carregar_remessas_historicas as carga
+    dados = _unico(b"r")
+    base = tmp_path / "Remessas" / "2026" / "08-Agosto" / "10" / "MoneyPlus"
+    base.mkdir(parents=True)
+    (base / "ANFEER INDUSTRIA - CB1008HIST.REM").write_bytes(dados)
+    linha = {"id": "25695", "arquivo": "CB1008HIST.REM", "tipo": "mp anfeer Envio de cobranca registrado",
+             "bytes": str(len(dados)), "md5": hashlib.md5(dados).hexdigest(), "titulos": "3",
+             "baixado_em": "2026-08-10 18:05:33"}
+    r = carga.carregar([linha], carga.indexar_arvore(str(tmp_path / "Remessas")), execucao, ensaio=False)
+    assert r.registradas == ["25695"] and r.completa
+    ctl = execucao_job.listar_controle(execucao, "remessa", chave="id")
+    assert ctl["25695"]["tipo"].startswith("mp anfeer") and ctl["25695"]["baixado_em"] == "2026-08-10 18:05:33"
+    assert ctl["25695"]["ultimo_evento"] == "enviado"
+    r2 = carga.carregar([linha], carga.indexar_arvore(str(tmp_path / "Remessas")), execucao, ensaio=False)
+    assert r2.ja_estavam == ["25695"], "idempotente pelo sha256"

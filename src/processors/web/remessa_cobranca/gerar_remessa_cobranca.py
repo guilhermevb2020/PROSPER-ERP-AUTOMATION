@@ -165,11 +165,30 @@ def validar_cnab(dados: bytes):
 # --------------------------------------------------------------------------- #
 # controle (idempotencia)
 # --------------------------------------------------------------------------- #
-def ler_controle():
+def ler_controle_do_csv():
     if not os.path.exists(cfg.ARQ_CONTROLE):
         return {}
     with open(cfg.ARQ_CONTROLE, encoding="utf-8", newline="") as f:
         return {linha["id"]: linha for linha in csv.DictReader(f) if linha.get("id")}
+
+
+def ler_controle(execucao=None):
+    """{id no Smart: linha} do que ja foi baixado. Fonte por cfg.CONTROLE_FONTE (Fase 2 de
+    docs/PLANO_CONTROLE_NO_BANCO.md): `banco` le a vw_controle_remessa (id, arquivo, tipo,
+    bytes, md5, titulos, baixado_em — as colunas do CSV) e volta ao CSV, avisando, se o
+    banco nao responder; `csv` (padrao) le o controle como sempre. Sem `execucao` usa a
+    aberta neste processo (execucao_job.atual()): os chamadores antigos nao mudam."""
+    fonte = getattr(cfg, "CONTROLE_FONTE", "csv")
+    if fonte == "banco":
+        ex = execucao if execucao is not None else execucao_job.atual()
+        do_banco = execucao_job.listar_controle(ex, "remessa", chave="id", log=log)
+        if do_banco is not None:
+            log(f"  controle: fonte BANCO ({len(do_banco)} remessa(s) registradas)")
+            return do_banco
+        log("  controle: fonte BANCO indisponivel nesta execucao — usando o CSV de reserva")
+    elif fonte != "csv":
+        log(f"  controle: CONTROLE_FONTE={fonte!r} desconhecida — usando o CSV")
+    return ler_controle_do_csv()
 
 
 def gravar_controle(registro):
@@ -616,13 +635,35 @@ def janela(args):
     return de, ate
 
 
-def _ler_controle():
+def _ler_controle_do_json():
     """O `remessas_geradas.json` do robo — traz o `tipo`, de onde sai a conta do Smart."""
     try:
         with open(cfg.ARQ_REMESSAS_GERADAS, encoding="utf-8") as fh:
             return json.load(fh) or {}
     except (OSError, ValueError):
         return {}
+
+
+def _ler_controle(execucao=None):
+    """{arquivo: [{id, tipo, baixado_em, md5, bytes, titulos}, ...]} para o cancelamento
+    (`cancelar.entrada_do_controle` escolhe pelo id — o nome se repete entre contas).
+    Fonte por cfg.CONTROLE_FONTE: `banco` agrupa a vw_controle_remessa por arquivo e volta
+    ao `remessas_geradas.json`, avisando, se o banco nao responder; `csv` (padrao) le o
+    JSON como sempre. ⛔ Em `banco`, remessa anterior a carga historica nao existe para o
+    cancelamento — por isso a chave so se liga depois da carga (ver remessa_config)."""
+    fonte = getattr(cfg, "CONTROLE_FONTE", "csv")
+    if fonte == "banco":
+        ex = execucao if execucao is not None else execucao_job.atual()
+        do_banco = execucao_job.listar_controle(ex, "remessa", chave="id", log=log)
+        if do_banco is not None:
+            por_arquivo = {}
+            for fid, linha in do_banco.items():
+                por_arquivo.setdefault(linha.get("arquivo") or "", []).append({**linha, "id": fid})
+            log(f"  controle do cancelamento: fonte BANCO ({len(do_banco)} remessa(s), "
+                f"{len(por_arquivo)} nome(s))")
+            return por_arquivo
+        log("  controle do cancelamento: fonte BANCO indisponivel — usando o remessas_geradas.json")
+    return _ler_controle_do_json()
 
 
 def _registrar_descarte(execucao, fid, item, rotulo, nome, dados, msg, reg, log):

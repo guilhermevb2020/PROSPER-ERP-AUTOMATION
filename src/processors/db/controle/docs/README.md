@@ -42,3 +42,8 @@ histórico.
 **Testes.** `tests/unit/test_comparar_controle_csv_banco.py` (lógica, sem banco) e
 `tests/integration/test_erp_005_controle.py::test_consulta_da_paridade_acha_o_arquivo_do_dia`
 (a consulta, na bancada).
+
+## Também nesta pasta
+
+- `listar_md5.py` — a memória "já processei" para o wrapper do retorno (`CONTROLE_FONTE_RET=banco`): imprime um md5 por linha; exit 1 = volte ao CSV.
+- `carregar_remessas_historicas.py` — carga histórica das remessas de cobrança (45 dias) a partir do `controle_remessas.csv` e dos `.REM` na árvore do Nextcloud montada em `/app/data/cnab_nextcloud/Remessas`; confere md5, pula o que já está (sha256), registra com a data de então. **Ensaio por padrão**; `--pra-valer` registra. Pré-requisito para `CONTROLE_FONTE_REM=banco`. Exit 3 = faltou arquivo ou md5 divergiu (lista no stdout).

@@ -434,17 +434,20 @@ def registrar_arquivo(ex: Execucao, tipo_arquivo: str, sentido: str, *, nome_arq
                       conta_id: str | None = None, conta_label: str | None = None,
                       origem_caminho: str | None = None, destino_caminho: str | None = None,
                       detalhe: dict | None = None, titulos: list | None = None,
-                      log=print) -> int | None:
+                      registrado_em: datetime | None = None, log=print) -> int | None:
     """Registra um arquivo pelo conteudo (sha256). O mesmo conteudo nao entra duas vezes:
     devolve o id ja existente. titulos: [{numero_linha, id_titulo, id_operacao, ...}].
-    Fato consumado: falha de banco vira aviso, nunca derruba o job."""
+    Fato consumado: falha de banco vira aviso, nunca derruba o job.
+    registrado_em: SO para carga historica (a data em que o fato aconteceu, tirada do
+    controle antigo); um job em curso nunca informa — o banco carimba o agora."""
     if ex is None:
         return None
     return _fato_consumado(ex, log, f"arquivo {nome_arquivo}", lambda: _registrar_arquivo(
         ex, tipo_arquivo, sentido, nome_arquivo=nome_arquivo, conteudo=conteudo,
         caminho=caminho, qtd_registros=qtd_registros, valor_total=valor_total,
         conta_id=conta_id, conta_label=conta_label, origem_caminho=origem_caminho,
-        destino_caminho=destino_caminho, detalhe=detalhe, titulos=titulos, log=log))
+        destino_caminho=destino_caminho, detalhe=detalhe, titulos=titulos,
+        registrado_em=registrado_em, log=log))
 
 
 def _registrar_arquivo(ex: Execucao, tipo_arquivo: str, sentido: str, *, nome_arquivo: str,
@@ -453,7 +456,7 @@ def _registrar_arquivo(ex: Execucao, tipo_arquivo: str, sentido: str, *, nome_ar
                        conta_id: str | None = None, conta_label: str | None = None,
                        origem_caminho: str | None = None, destino_caminho: str | None = None,
                        detalhe: dict | None = None, titulos: list | None = None,
-                       log=print) -> int | None:
+                       registrado_em: datetime | None = None, log=print) -> int | None:
     if tipo_arquivo not in TIPOS_ARQUIVO:
         raise ValueError(f"tipo_arquivo desconhecido: {tipo_arquivo!r}")
     if sentido not in ("gerado", "recebido"):
@@ -464,17 +467,20 @@ def _registrar_arquivo(ex: Execucao, tipo_arquivo: str, sentido: str, *, nome_ar
         with open(caminho, "rb") as fh:
             conteudo = fh.read()
     sha = hashlib.sha256(conteudo).hexdigest()
+    colunas = ["fk_job_execucao", "tipo_arquivo", "sentido", "nome_arquivo", "sha256", "qtd_bytes",
+               "qtd_registros", "valor_total", "conta_id", "conta_label", "origem_caminho",
+               "destino_caminho", "detalhe_json"]
+    valores = [ex.id, tipo_arquivo, sentido, nome_arquivo, sha, len(conteudo), qtd_registros,
+               decimal_br(valor_total), conta_id, conta_label, origem_caminho, destino_caminho,
+               _json(detalhe or {})]
+    if registrado_em is not None:
+        colunas.append("registrado_em"); valores.append(registrado_em)
     arquivo_id = _executar(
         ex, log, f"arquivo {nome_arquivo}",
-        "INSERT INTO erp_automation.arquivo "
-        "(fk_job_execucao, tipo_arquivo, sentido, nome_arquivo, sha256, qtd_bytes, qtd_registros, "
-        " valor_total, conta_id, conta_label, origem_caminho, destino_caminho, detalhe_json) "
-        "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) "
+        f"INSERT INTO erp_automation.arquivo ({', '.join(colunas)}) "
+        f"VALUES ({', '.join(['%s'] * len(colunas))}) "
         "ON CONFLICT (tipo_arquivo, sha256) DO NOTHING RETURNING id",
-        (ex.id, tipo_arquivo, sentido, nome_arquivo, sha, len(conteudo), qtd_registros,
-         decimal_br(valor_total), conta_id, conta_label, origem_caminho, destino_caminho,
-         _json(detalhe or {})),
-        devolve=True)
+        tuple(valores), devolve=True)
     if arquivo_id is None and ex.registra:
         # ja existia: devolve o id do que esta la (idempotente por conteudo)
         arquivo_id = _executar(
@@ -498,7 +504,8 @@ def _registrar_arquivo(ex: Execucao, tipo_arquivo: str, sentido: str, *, nome_ar
 
 def registrar_evento_arquivo(ex: Execucao, fk_arquivo: int | None, tipo_evento: str, *,
                              resultado: str | None = None, detalhe: dict | None = None,
-                             estrito: bool = False, log=print) -> int | None:
+                             estrito: bool = False, ocorrido_em: datetime | None = None,
+                             log=print) -> int | None:
     """Evento de arquivo e fato consumado por padrao: falha de banco vira aviso.
 
     estrito=True e para INTENCAO (`intencao_envio` do BB, antes do POST): na execucao
@@ -506,28 +513,32 @@ def registrar_evento_arquivo(ex: Execucao, fk_arquivo: int | None, tipo_evento: 
     acao irreversivel. Fora do modo real continua avisando."""
     if estrito:
         return _registrar_evento_arquivo(ex, fk_arquivo, tipo_evento, resultado=resultado,
-                                         detalhe=detalhe, log=log)
+                                         detalhe=detalhe, ocorrido_em=ocorrido_em, log=log)
     if ex is None:
         return None
     return _fato_consumado(
         ex, log, f"evento {tipo_evento} do arquivo #{fk_arquivo}",
         lambda: _registrar_evento_arquivo(ex, fk_arquivo, tipo_evento, resultado=resultado,
-                                          detalhe=detalhe, log=log))
+                                          detalhe=detalhe, ocorrido_em=ocorrido_em, log=log))
 
 
 def _registrar_evento_arquivo(ex: Execucao, fk_arquivo: int | None, tipo_evento: str, *,
                               resultado: str | None = None, detalhe: dict | None = None,
-                              log=print) -> int | None:
+                              ocorrido_em: datetime | None = None, log=print) -> int | None:
     if tipo_evento not in TIPOS_EVENTO_ARQUIVO:
         raise ValueError(f"tipo_evento desconhecido: {tipo_evento!r}")
     if fk_arquivo is None:
         ex._avisar(log, f"evento {tipo_evento} sem arquivo registrado")
         return None
+    colunas = ["fk_arquivo", "fk_job_execucao", "tipo_evento", "resultado", "detalhe_json"]
+    valores = [fk_arquivo, ex.id, tipo_evento, resultado, _json(detalhe or {})]
+    if ocorrido_em is not None:                     # so carga historica (ver registrar_arquivo)
+        colunas.append("ocorrido_em"); valores.append(ocorrido_em)
     return _executar(
         ex, log, f"evento {tipo_evento} do arquivo #{fk_arquivo}",
-        "INSERT INTO erp_automation.arquivo_evento (fk_arquivo, fk_job_execucao, tipo_evento, "
-        " resultado, detalhe_json) VALUES (%s, %s, %s, %s, %s) RETURNING id",
-        (fk_arquivo, ex.id, tipo_evento, resultado, _json(detalhe or {})), devolve=True)
+        f"INSERT INTO erp_automation.arquivo_evento ({', '.join(colunas)}) "
+        f"VALUES ({', '.join(['%s'] * len(colunas))}) RETURNING id",
+        tuple(valores), devolve=True)
 
 
 def buscar_arquivo(ex: Execucao, tipo_arquivo: str, *, sha256: str | None = None,

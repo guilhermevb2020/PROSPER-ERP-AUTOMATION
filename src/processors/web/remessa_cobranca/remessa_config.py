@@ -127,6 +127,13 @@ ENVIAR_NEXTCLOUD = _b("ENVIAR_NEXTCLOUD_REM", "True")
 # Controle de idempotencia (id/arquivo/md5). Fica no volume ./data, que
 # sobrevive a recriacao do container.
 ARQ_CONTROLE = _s("ARQ_CONTROLE", "/app/data/robo_remessa/controle_remessas.csv")
+# Fase 2 de docs/PLANO_CONTROLE_NO_BANCO.md: de onde vem o "ja baixei esta remessa" e, no
+# cancelamento, o tipo/data da remessa. `csv` (padrao) le o controle acima e o
+# remessas_geradas.json; `banco` le erp_automation.vw_controle_remessa e, sem banco, volta
+# aos arquivos avisando. ⛔ So ligue `banco` DEPOIS da carga historica (45 dias, ver
+# src/processors/db/controle/carregar_remessas_historicas.py): o cancelamento olha 45 dias
+# para tras e o banco so conhece o que foi registrado desde 22/09/2026.
+CONTROLE_FONTE = _s("CONTROLE_FONTE_REM", _s("CONTROLE_FONTE", "csv")).strip().lower()
 # Lista de EXCLUSAO da geracao, escrita pelo process-automation
 # (`apontar_exclusoes_remessa_400`, dia util 17:30) no bind compartilhado
 # `data/retornos_a_processar`: titulos abertos de sacado cujo endereco sai SEM
