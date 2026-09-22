@@ -92,6 +92,44 @@ quartos do total, num robô que hoje está em DRY (confere e não clica).
 - **F6 — o modal "Procedimento de segurança"** aparece em todo login do finalizador (29/29) e
   nos do financeiro (2/2), e em nenhum dos de `prosperito@`. Não é o mecanismo de derrubada
   (o financeiro convive depois dele); parece aviso por dispositivo/conta.
+- **F7 — diálogo JavaScript do Smart derruba o driver dono do Chrome.** Teste supervisionado
+  das 15:16 (DRY forçado, execução #315): um processo segurou o Chrome do finalizador aberto e
+  a rodada se anexou por CDP para logar. Logo depois do modal de segurança o Smart abriu um
+  diálogo; o driver dono do Chrome, sem ouvinte, tentou dispensá-lo e caiu com
+  `ProtocolError (Page.handleJavaScriptDialog): No dialog is showing`, levando o Chrome junto.
+  A rodada ficou presa esperando o login até ser interrompida, e fechou a execução como falha.
+  É o mesmo erro da memória de 14/08 (login dos boletos sem ouvinte de diálogo). **Qualquer
+  mantenedor com clientes anexados tem de tratar diálogo:** registrar e dispensar no próprio
+  login, e depois deixar a resposta para quem está anexado.
+- **F8 — desde a retomada das 15:30 a sessão do finalizador sobrevive entre rodadas.** O
+  Chrome do teste de 15:16 morreu de repente, depois de um login que o servidor aceitou. Às
+  15:30 a rodada do hub encontrou a tela "Usuário logado" do Smart e retomou essa sessão com
+  um clique em Entrar, sem CapSolver: 19 s em vez de 53, a única retomada do finalizador em
+  sete dias de log. A partir daí a sessão não morreu mais: a rodada das 15:45 achou a sessão
+  válida e **não logou**, a primeira vez no dia.
+- **F9 — a janela de operações não é a causa (experimento das 15:47).** Com a sessão viva,
+  sem novo login, abri a janela de consulta de operações como a rodada abre, e testei a
+  sessão depois de cada passo do fim de rodada:
+
+  | passo | sessão |
+  |---|---|
+  | logo depois de reabrir o Chrome | válida, sem login |
+  | com a janela de operações aberta | válida |
+  | janela fora da tela do Smart | válida |
+  | janela fechada | válida |
+  | Chrome fechado do jeito normal e reaberto | válida |
+
+  A hipótese de que descarregar a janela encerra a sessão não se sustenta. O que matava as
+  sessões das rodadas até 15:15, todas criadas por login novo com CapSolver, **continua sem
+  explicação**. A diferença que sobra é o caminho de criação: login novo morria no fim da
+  rodada; a sessão retomada pela tela "Usuário logado" sobreviveu a duas rodadas e ao
+  experimento. O sandbox, que usa a mesma conta, não estava ativo: o perfil dele foi usado
+  pela última vez às 10:38.
+- **Colisão do segundo teste (15:30).** A espera pela rodada do hub olhava só processos, e
+  a rodada começa uns 20 s depois do minuto: o teste achou o perfil livre às 15:30:24, e o
+  roteiro do hub derrubou o Chrome do teste em seguida, como foi desenhado para fazer. A
+  rodada de produção seguiu normal. Teste entre rodadas espera a execução do hub **abrir e
+  fechar no banco**, não só a ausência de processo.
 
 ## 5. Defeitos encontrados no caminho (no mantenedor dos boletos)
 
@@ -122,13 +160,13 @@ quartos do total, num robô que hoje está em DRY (confere e não clica).
   boletos e lê `boletos._config`), o boot em `scripts/boot_vnc.sh` e o comando da task com
   `--cdp`. Conflito conhecido: o sandbox usa a mesma identidade — já é regra não rodar os dois
   juntos; com CDP, se o sandbox derrubar a sessão, a rodada seguinte reloga no lugar.
-  ⚠️ **Por F5, o ganho não está garantido:** se é a própria rodada que encerra a sessão, um
-  Chrome mantido aberto relogaria toda rodada do mesmo jeito. Antes de construir qualquer
-  mantenedor: uma rodada supervisionada com `--cdp` num Chrome deixado aberto no `:92`, e um
-  ping um minuto depois. Sessão viva, A vale; morta, o problema é a identidade ou a rodada, e
-  A não resolve. Desde 14:36 de 22/09 outra frente está editando os arquivos do finalizador
-  (`finalizar_operacao.py`, `r7_config.py`, `finalizar.py`): o teste e qualquer mudança são
-  dela, ou combinados com ela.
+  ⚠️ **Depois de F8 e F9, A deixou de ser o primeiro passo.** A rodada normal não encerra a
+  sessão, e desde 15:30 o finalizador a reaproveita sem mudar nada. Um mantenedor só volta a
+  valer se as sessões de login novo continuarem morrendo no fim da rodada. E ele tem de
+  tratar diálogo (F7): o teste de 15:16, com a rodada anexada logando, derrubou o Chrome. O
+  finalizador está em produção desde 14:40 de 22/09, com `--executar`, e outra frente edita
+  os arquivos dele (`finalizar_operacao.py`, `r7_config.py`, `finalizar.py`): qualquer mudança
+  é dela, ou combinada com ela.
 - **B. Família de cobrança anexada ao mantenedor dos boletos** (CDP 9222) em vez de Chrome
   próprio. Remessa, retorno CNAB, BB, depósito e cancelamento são **só HTTP** (0 `new_page`,
   `goto` ou `click` fora do login) e levam conta e carteira explícitas em cada POST
@@ -145,13 +183,12 @@ quartos do total, num robô que hoje está em DRY (confere e não clica).
 
 ## 7. Recomendação e ordem
 
-1. **F5 está meio fechado:** a sessão morre no fim da rodada (medido); o porquê falta. O
-   próximo passo é o teste supervisionado com `--cdp` descrito em A, na frente que está
-   editando o finalizador, mais a pergunta ao fornecedor abaixo. F4 pede um dia de observação
-   com a saída do hub (quem logou, quem caiu, em que ordem).
-2. **A (finalizador)**, se o teste de `--cdp` mostrar a sessão viva entre rodadas: maior
-   ganho, identidade isolada, peças já existentes. Gate: uma semana de `--cdp` com zero login
-   por rodada no log e o healthcheck do `:92` relatando.
+1. **Observar o finalizador sem mexer.** Desde 15:30 ele reaproveita a sessão. Contar, por
+   rodada, se ela foi reaproveitada, retomada ou feita com CapSolver. Se o reaproveitamento
+   durar, o custo de 44 logins por dia some sem código novo. Se um login novo voltar a morrer
+   no fim da rodada, comparar o caminho de criação: login novo contra retomada.
+2. **A (finalizador)** só se o item 1 mostrar sessões de login novo morrendo de novo, e com
+   tratamento de diálogo. Gate: uma semana com zero login por rodada no log.
 3. **D1 e D2 no mantenedor** — watchdog pela idade do log (o healthcheck reinicia se o log
    parar por > 10 min) e exceção impressa só pelo tipo; limpar as 8 linhas de hoje. Entra na
    janela 19:05–07:30, porque reiniciar o mantenedor derruba a sessão dos boletos.
@@ -161,6 +198,7 @@ quartos do total, num robô que hoje está em DRY (confere e não clica).
 
 - O Smart tem **limite de sessões simultâneas por usuário** configurável? Isso explicaria por
   que `prosperito_financeiro@` convive e `prosperito@` derruba.
-- `operacional2@` tem **regra de sessão própria** (como tem janela de horário), por exemplo
-  sessão encerrada ao fechar a janela, ou um login só por vez? Isso explicaria F5 sem precisar
-  de mais experimento.
+- `operacional2@` tem **regra de sessão própria** (como tem janela de horário)? E o que o
+  modal "Procedimento de segurança" pede ou registra quando se clica em Prosseguir? A sessão
+  de login novo dessa conta morria no fim de cada rodada até 15:15; a retomada pela tela
+  "Usuário logado" não morreu.
