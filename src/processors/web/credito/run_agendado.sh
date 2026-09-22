@@ -14,9 +14,9 @@ mkdir -p "$LOG"
 
 # 1) credenciais + flags (arquivo montado, gitignored). SOBRESCREVE o SMART_EMAIL
 #    do container (que e felipe_p de outra automacao) por Raphaelas.
-if [ -f /app/config/robo_credito.env ]; then
+if [ -f /app/config/credito.env ]; then
     set -a
-    . /app/config/robo_credito.env
+    . /app/config/credito.env
     set +a
 fi
 
@@ -70,7 +70,7 @@ echo "===== inicio $(date '+%F %T %Z') =====" >> "$LOGROBO"
 # sh nao possui PIPESTATUS: preservar o retorno do Python, como no retorno_cobranca.
 RC_CREDITO=$(mktemp "${TMPDIR:-/tmp}/robo_credito_rc.XXXXXX") || exit 1
 trap 'rm -f "$RC_CREDITO"' EXIT
-{ python /app/src/processors/web/robo_credito/robo_analise_credito_v4.py "$@";
+{ python /app/src/processors/web/credito/analisar_credito.py "$@";
   echo $? > "$RC_CREDITO";
 } 2>&1 | tee -a "$LOGROBO"
 CODIGO_CREDITO=$(cat "$RC_CREDITO" 2>/dev/null)

@@ -173,7 +173,7 @@ docker exec -d -e DISPLAY=:99 erp-automation \
 ```
 
 > O padrão `remote-debugging-port=9222` casa **apenas** com o Chrome de boletos.
-> O Chrome do `robo_credito` usa `--remote-debugging-pipe`, sem porta, e não é
+> O Chrome do `credito` usa `--remote-debugging-pipe`, sem porta, e não é
 > atingido — dá para reiniciar boletos com o robô de crédito rodando.
 
 O `manter_sessao` já tenta CapSolver ao subir, então normalmente não precisa de

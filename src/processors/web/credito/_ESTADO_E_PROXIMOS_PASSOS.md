@@ -40,14 +40,14 @@ Roda em **loop contínuo** (alvo: 7:45–18:50). A cada ciclo, lendo SEMPRE do *
       Ciclo ocioso **~84s → ~15-20s** (~4-5×). Tudo tunável por env.
 - [x] **Limpeza**: 58 → 10 `.py` (só o núcleo)
 
-**Núcleo (10 arquivos):** `robo_analise_credito_v4.py` → `_v3.py` (hook classe) →
-`robo_analise_credito.py` (V1/main/loop/login/watchdog) → `subfluxos.py` (NF/resumo/
+**Núcleo (10 arquivos):** `analisar_credito.py` → `_v3.py` (hook classe) →
+`_analisar_credito_base.py` (V1/main/loop/login/watchdog) → `subfluxos.py` (NF/resumo/
 complementares/DIGITAIS) → `{banco, _nextcloud, _watchdog, op_docs, smart_session, config}`.
 
 ---
 
 ## ⏳ FALTA: integração formal (objetivo de amanhã)
-1. **Mover** o núcleo (10 .py) p/ `src/processors/web/robo_credito/` (padrão do doc2you)
+1. **Mover** o núcleo (10 .py) p/ `src/processors/web/credito/` (padrão do doc2you)
 2. **Wrapper** `run_agendado.sh` que sobe o display **:96** idempotente (Xvfb + x11vnc 5902 +
    websockify 6082; rota nginx `/rc/` já existe) — igual `src/processors/web/doc2you/run_agendado.sh`
 3. **Registrar no hub** com cron **7:45–18:50, loop real** (`USAR_BANCO_DOWNLOAD=False`,
@@ -71,7 +71,7 @@ docker exec -e DISPLAY=:96 -e DRY_RUN=False -e CLASSE_RISCO_APLICAR=1 -e SALVAR_
   -e USAR_BANCO_DOWNLOAD=False -e SKIP_DIGITAIS=False \
   -e SMART_EMAIL=Raphaelas -e SMART_SENHA="$SMART_SENHA" -e PGSSLMODE=disable -e DB_USER=prospere \
   -e USER_DATA_DIR=/tmp/rct/perfil -e PYTHONUNBUFFERED=1 \
-  -w /app/data/robo_credito_teste erp-automation python -u robo_analise_credito_v4.py
+  -w /app/data/robo_credito_teste erp-automation python -u analisar_credito.py
 # (loop infinito: MAX_REINICIOS=0. Para testar bounded: -e MAX_REINICIOS=1 -e MAX_OPERACOES=3)
 ```
 

@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """NF (DANFEs) de uma operação do Smart — versão ASYNC p/ o robô do doc2you.
 
-Espelha `robo_credito/subfluxos.baixar_nf`, HTTP puro (mais simples que os anexos —
+Espelha `credito/subfluxos.baixar_nf`, HTTP puro (mais simples que os anexos —
 não tem a indireção do iframe): o endpoint devolve o PDF direto.
 
   GET /smart/operacaoajax/web/gerardanfes.php?NumOperacao=<op>  → application/pdf

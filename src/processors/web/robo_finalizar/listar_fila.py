@@ -20,12 +20,12 @@ import sys
 
 _AQUI = os.path.dirname(os.path.abspath(__file__))
 _RAIZ = os.path.dirname(_AQUI)
-for _p in (_AQUI, os.path.join(_RAIZ, "robo1_analise_credito")):
+for _p in (_AQUI, os.path.join(_RAIZ, "credito")):
     if _p not in sys.path:
         sys.path.insert(0, _p)
 
 import r7_config as cfg              # noqa: E402
-import robo_analise_credito as robo  # noqa: E402
+import _analisar_credito_base as robo  # noqa: E402
 
 # nome REAL da tabela (a antiga trs.operacoes_desagio nao existe mais)
 TABELA = os.environ.get("R7_TABELA_ESPELHO", "trs.operacao_desagio")

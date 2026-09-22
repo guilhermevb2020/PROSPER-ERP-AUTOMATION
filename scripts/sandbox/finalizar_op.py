@@ -66,7 +66,7 @@ if str(RAIZ) not in sys.path:
     sys.path.insert(0, str(RAIZ))
 
 #: O robo, agora versionado no repo. As dependencias que ele consome do
-#: `robo_credito` sao resolvidas pelo proprio `r7_config` (ver la o porque).
+#: `credito` sao resolvidas pelo proprio `r7_config` (ver la o porque).
 PACOTE_R7 = Path(os.environ.get(
     "R7_PACOTE_DIR", str(RAIZ / "src" / "processors" / "web" / "robo_finalizar")))
 
@@ -122,7 +122,7 @@ def _preparar_pacote(log=print) -> None:
         if os.environ.get(origem):
             os.environ.setdefault(destino, os.environ[origem])
 
-    # `robo1_analise_credito/config.py` chama `load_dotenv()`, que sobe a arvore
+    # `credito/config.py` chama `load_dotenv()`, que sobe a arvore
     # e acha o `.env` da raiz - 600 do usuario `prospere`, ILEGIVEL por nos:
     # PermissionError no import. E, mesmo legivel, puxar credencial do container
     # por engano e exatamente o que o sandbox evita (ver BOLETO_ENV_FILE no
@@ -135,7 +135,7 @@ def _preparar_pacote(log=print) -> None:
     debug.mkdir(parents=True, exist_ok=True)
     os.environ.setdefault("DEBUG_DIR_R7", str(debug))
 
-    # Um diretorio so: o `r7_config` do robo poe o `robo_credito` no path.
+    # Um diretorio so: o `r7_config` do robo poe o `credito` no path.
     if str(PACOTE_R7) not in sys.path:
         sys.path.insert(0, str(PACOTE_R7))
     log(f"  robo: {PACOTE_R7}")

@@ -2,7 +2,7 @@
 """Documentos COMPLEMENTARES (aba "Outros documentos" / ANEXAR DOCUMENTOS) de uma
 operação no Smart — versão ASYNC p/ o robô do doc2you.
 
-Mesma mecânica HTTP do robô de crédito (`robo_credito/op_docs.py`), portada pro
+Mesma mecânica HTTP do robô de crédito (`credito/op_docs.py`), portada pro
 contexto async do doc2you (que já está logado no Smart). Não estão no Doc2You —
 ficam na própria operação, aba Outros documentos:
 

@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Uploader Nextcloud via WebDAV — COMPARTILHADO (doc2you, robo_credito, ...).
+"""Uploader Nextcloud via WebDAV — COMPARTILHADO (doc2you, credito, ...).
 
 Extraido do `_nextcloud.py` do doc2you (logica identica) p/ eliminar duplicacao.
 Sobe como o usuario `automacao` (acesso de escrita no groupfolder CADASTRO). O

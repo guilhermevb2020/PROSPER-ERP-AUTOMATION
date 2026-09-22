@@ -61,7 +61,7 @@ Thumbs.db
 # Temporary files
 =0.33
 config/nextcloud.env
-config/robo_credito.env
+config/credito.env
 
 # Credenciais — nenhum config/*.env entra no repo (remote e publico)
 config/*.env

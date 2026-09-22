@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Tira o estado do robo_credito de dentro de src/ e poe em data/, junto dos
+# Tira o estado do credito de dentro de src/ e poe em data/, junto dos
 # outros robos.
 #
 # Por que existe: ate 12/08/2026 o robo gravava `controle_downloads.csv` (1.335
@@ -20,25 +20,25 @@
 set -euo pipefail
 
 RAIZ="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-ORIGEM="$RAIZ/src/processors/web/robo_credito"
+ORIGEM="$RAIZ/src/processors/web/credito"
 DESTINO="$RAIZ/data/robo_credito"
 ARQUIVOS=(controle_downloads.csv ops_move_revisar_manual.txt ops_digitais_revisar_manual.txt)
 DRY_RUN=0
 [[ "${1:-}" == "--dry-run" ]] && DRY_RUN=1
 
 # --- Porta 1: o robo nao pode estar rodando -------------------------------- #
-if docker exec erp-automation pgrep -f "robo_analise_credito" >/dev/null 2>&1; then
-  echo "ABORTADO: o robo_analise_credito esta RODANDO agora." >&2
+if docker exec erp-automation pgrep -f "analisar_credito" >/dev/null 2>&1; then
+  echo "ABORTADO: o analisar_credito_operacao esta RODANDO agora." >&2
   echo "           Copiar o controle no meio do run perde o historico." >&2
   echo "           Ele termina por volta das 18:52 em dia util. Rode depois." >&2
   exit 1
 fi
-echo "ok: robo_analise_credito nao esta rodando"
+echo "ok: analisar_credito_operacao nao esta rodando"
 
 # --- Porta 2: nada em curso pelo orquestrador ------------------------------ #
 em_curso=$(docker exec -i postgres psql -U prospere -d prosperedb -qtAX -c \
   "SELECT count(*) FROM hub_orchestration.task_execucao
-   WHERE task_nome='robo_analise_credito' AND status='running'" 2>/dev/null || echo 0)
+   WHERE task_nome='analisar_credito_operacao' AND status='running'" 2>/dev/null || echo 0)
 if [[ "${em_curso//[[:space:]]/}" != "0" ]]; then
   echo "ABORTADO: o orquestrador marca uma execucao como 'running'." >&2
   exit 1
@@ -88,7 +88,7 @@ fi
 # --- Verificacao: o robo enxerga o mesmo controle no lugar novo? ----------- #
 echo
 echo "conferindo pelo caminho que o robo realmente usa..."
-docker exec -w /app/src/processors/web/robo_credito erp-automation python -c "
+docker exec -w /app/src/processors/web/credito erp-automation python -c "
 import config, banco
 print('  caminho :', config.ARQ_CONTROLE_DOWNLOAD)
 print('  registros:', len(banco.carregar_controle()))

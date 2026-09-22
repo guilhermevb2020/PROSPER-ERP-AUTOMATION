@@ -5,13 +5,13 @@ import subprocess
 
 import pytest
 
-WRAPPER = Path(__file__).resolve().parents[2] / 'src/processors/web/robo_credito/run_agendado.sh'
+WRAPPER = Path(__file__).resolve().parents[2] / 'src/processors/web/credito/run_agendado.sh'
 
 
 @pytest.mark.parametrize('codigo', [0, 1, 2, 3, 137, 143])
 def test_tee_nao_esconde_falha_do_robo(tmp_path, codigo):
     s=WRAPPER.read_text()
-    trecho=s[s.index('python /app/src/processors/web/robo_credito/robo_analise_credito_v4.py'):]
+    trecho=s[s.index('python /app/src/processors/web/credito/analisar_credito.py'):]
     # Usa o bloco inteiro quando ha preservacao explicita do codigo.
     if '# BEGIN EXECUCAO_CREDITO' in s:
         trecho=s.split('# BEGIN EXECUCAO_CREDITO\n',1)[1]

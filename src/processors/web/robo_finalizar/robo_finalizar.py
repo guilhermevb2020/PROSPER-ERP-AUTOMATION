@@ -34,7 +34,7 @@ from datetime import datetime
 
 _AQUI = os.path.dirname(os.path.abspath(__file__))
 _RAIZ = os.path.dirname(_AQUI)
-for _p in (_AQUI, os.path.join(_RAIZ, "operacoes"), os.path.join(_RAIZ, "robo1_analise_credito")):
+for _p in (_AQUI, os.path.join(_RAIZ, "operacoes"), os.path.join(_RAIZ, "credito")):
     if _p not in sys.path:
         sys.path.insert(0, _p)
 

@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-robo_analise_credito_v4.py - Robo 1 VERSAO 4.
+analisar_credito.py - Robo 1 VERSAO 4.
 
 V4 = V3 (conferencia expandida em TODA op com doc + analise de contrato) MAIS o
 AJUSTE DE CLASSE DE RISCO dos titulos ATIVO no momento do SALVAR:
@@ -13,7 +13,7 @@ Diferenca p/ a V3: aqui a troca e APLICADA DE VERDADE (a V3 so loga, read-only).
 Reusa TODA a logica da V3 ligando a flag CLASSE_RISCO_APLICAR=1.
 
 Uso (rodar da RAIZ; PARAR a V3/V2 antes - mesmo perfil .perfil_chrome):
-  python robo1_analise_credito/robo_analise_credito_v4.py
+  python credito/analisar_credito.py
 """
 import os
 import sys
@@ -47,7 +47,7 @@ os.environ["CLASSE_RISCO_APLICAR"] = "1"
 # tests/unit/test_conta_operacao.py). Desligar = apagar esta linha.
 os.environ["CONTA_PADRAO_APLICAR"] = "1"
 
-import robo_analise_credito_v3 as v3   # noqa: E402
+import _analisar_credito_v3 as v3   # noqa: E402
 
 
 def main():

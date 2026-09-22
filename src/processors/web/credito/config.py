@@ -95,7 +95,7 @@ URL_NF_PDF = "https://wvw.smartsecurities.com.br/smart/operacaoajax/web/gerardan
 URL_RESUMO_POST = "https://wvw.smartsecurities.com.br/smart/popup/popuprelatoriopreanalise.php?numOp={op}"
 
 # Pastas de saida LOCAIS (staging/fallback; no servidor aponte p/ um dir do
-# container, ex.: /tmp/robo_credito/nfe). So usadas se o upload p/ Nextcloud
+# container, ex.: /tmp/credito/nfe). So usadas se o upload p/ Nextcloud
 # estiver desligado ou falhar (fail-safe: nunca perder o PDF).
 PASTA_NFE = os.getenv("PASTA_NFE", r"C:\ProsperAI\inboxnfe")
 PASTA_RESUMO = os.getenv("PASTA_RESUMO", r"C:\ProsperAI\inbox")
@@ -144,7 +144,7 @@ ETAPA_DB_FEEDBACK_ROB = os.getenv("ETAPA_DB_FEEDBACK_ROB", "FEEDBACK ANALISE ROB
 # --------------------------------------------------------------------------- #
 # Estado LOCAL do robo — mora em data/, nao junto do codigo
 #
-# Ate 12/08/2026 estes arquivos ficavam dentro de src/processors/web/robo_credito/,
+# Ate 12/08/2026 estes arquivos ficavam dentro de src/processors/web/credito/,
 # isto e: estado de execucao dentro da arvore de fonte. Os outros robos deste repo
 # (remessa, retorno) sempre gravaram em /app/data/<robo>/.
 #

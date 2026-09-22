@@ -64,7 +64,7 @@ services:
       #
       # ⚠️ Este projeto tem DOIS caminhos de credencial, e os dois entram aqui:
       #   DB_*        -> src/common/core/database.py, doc2you/baixar_dia.py,
-      #                  robo_credito/config.py   (era `prospere`, SUPERUSUARIO)
+      #                  credito/config.py   (era `prospere`, SUPERUSUARIO)
       #   POSTGRES_*  -> src/processors/web/boletos/_db.py   (era `dev_user`)
       # Trocar so um deixaria metade do projeto sem atribuicao no log.
       #

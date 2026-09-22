@@ -24,7 +24,7 @@ data/, logs/                 saída dos jobs: perfis de Chrome, boletos, prints,
 |---|---|---|
 | `boletos/` | emite e envia boletos em lote, mantém a sessão do Smart, healthcheck a cada 15 min | `emitir_lote_boletos*`, `enviar_lote_boletos`, `boletos_healthcheck` |
 | `doc2you/` | baixa os documentos do dia (e o antecipado) e sobe ao Nextcloud | `baixar_documentos_doc2you*` |
-| `robo_credito/` | análise de crédito das operações | `robo_analise_credito` |
+| `credito/` | análise de crédito das operações | `analisar_credito_operacao` |
 | `remessa_cobranca/` | remessa de cobrança CNAB-400 e BB; cancela remessa recusada | `gerar_remessa_cobranca_cnab_400`, `gerar_remessa_bb`, `cancelar_remessa_recusada_cnab_400` |
 | `retorno_cobranca/` | processa retornos de cobrança CNAB-400 e BB; baixa depósito no ERP | `processar_retorno_cobranca_cnab_400`, `processar_retorno_bb`, `baixar_deposito_no_erp` |
 | `remessa_pagamento/` | remessa de pagamento CNAB-240 (BMP Money Plus), a cada 5 min | `gerar_remessa_pagamento_cnab_240` |

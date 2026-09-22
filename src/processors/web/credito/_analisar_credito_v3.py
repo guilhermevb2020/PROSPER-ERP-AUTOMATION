@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-robo_analise_credito_v3.py - Robo 1 (analise de credito): hook de CLASSE DE RISCO.
+_analisar_credito_v3.py - Robo 1 (analise de credito): hook de CLASSE DE RISCO.
 
 Instala o hook PRE-SALVAR que ajusta a classe de risco dos titulos ANTES do
 SALVAR (regra por MAIORIA: 'E' -> 'B'; 'P' -> 'T'; se houver QUALQUER titulo em
@@ -12,8 +12,8 @@ virou uma automacao SEPARADA que le os PDFs salvos na pasta do Nextcloud. Este
 robo nao chama mais o Claude nem varre etapas atras de documentos -> mais rapido.
 
 Uso:
-  python robo_analise_credito_v3.py             # robo completo (instala hook + loop)
-  python robo_analise_credito_v3.py --classe 61086   # testa SO a classe (read-only)
+  python _analisar_credito_v3.py             # robo completo (instala hook + loop)
+  python _analisar_credito_v3.py --classe 61086   # testa SO a classe (read-only)
 """
 import argparse
 import collections
@@ -27,7 +27,7 @@ if _AQUI not in sys.path:
 
 import config                       # noqa: E402
 import conta_operacao               # noqa: E402
-import robo_analise_credito as robo  # noqa: E402
+import _analisar_credito_base as robo  # noqa: E402
 
 
 # ------------------------------------------------------------------ #

@@ -64,7 +64,7 @@ Ambas usam o mesmo `:98` (não se sobrepõem no tempo). Wrapper: `run_agendado.s
 
 Não estão no Doc2You — ficam na operação (aba **Outros documentos** / ANEXAR DOCUMENTOS).
 Mecânica em [`_complementares.py`](../_complementares.py) (HTTP puro, portada async do
-robô de crédito `robo_credito/op_docs.py`):
+robô de crédito `credito/op_docs.py`):
 
 ```
 GET /smart/operacao/popupdocumentos.php?Op=<op>&Tipo=OUT   (iso-8859-1!) → viewDoc(idDoc)

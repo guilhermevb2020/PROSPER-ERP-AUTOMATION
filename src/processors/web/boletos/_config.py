@@ -18,7 +18,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 
 # Este repo tem remote publico; credencial nao mora no fonte. Mesmo padrao ja
-# usado por config/nextcloud.env e config/robo_credito.env. `load_dotenv` NAO
+# usado por config/nextcloud.env e config/credito.env. `load_dotenv` NAO
 # sobrescreve o que ja veio do `docker exec`, entao a env explicita continua
 # tendo precedencia sobre o arquivo.
 ENV_FILE = os.environ.get("BOLETO_ENV_FILE", "/app/config/boletos.env")

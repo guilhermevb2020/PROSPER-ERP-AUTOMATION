@@ -47,7 +47,7 @@ Flask==3.0.0
 # =============================================================================
 playwright==1.60.0
 playwright-stealth==2.0.3      # src/common/browser/stealth_integration.py (import preguicoso)
-# Banco (boletos/_db.py, robo_credito/config.py, SQLAlchemy em common/)
+# Banco (boletos/_db.py, credito/config.py, SQLAlchemy em common/)
 psycopg2-binary==2.9.10
 SQLAlchemy==2.0.36
 # Config e templates (config_loader, notificacoes)

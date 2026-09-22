@@ -44,7 +44,7 @@ dois no mesmo `user-data-dir` disputam o lock — um simplesmente não sobe.
 | `boletos` | `:99` | 5900 | 6080 | 9222 | `data/boletos/perfil_chrome` |
 | `doc2you` | `:98` | 5901 | 6081 | 9223 | `data/doc2you/perfil_chrome` |
 | `remessa_cobranca` | `:97` | 5903 | 6083 | 9224 | `data/robo_remessa/perfil_chrome` |
-| `robo_credito` | `:96` | 5902 | 6082 | *(pipe)* | `data/robo_credito/perfil_chrome` |
+| `credito` | `:96` | 5902 | 6082 | *(pipe)* | `data/robo_credito/perfil_chrome` |
 | `retorno_cobranca` | `:95` | 5904 | 6084 | 9225 | `data/robo_retorno/perfil_chrome` |
 | `remessa_pagamento` | `:94` | 5905 | 6085 | 9226 | `data/robo_pagamento/perfil_chrome` |
 | `retorno_pagamento` | `:93` | 5906 | 6086 | 9227 | `data/robo_retorno_pagamento/perfil_chrome` |

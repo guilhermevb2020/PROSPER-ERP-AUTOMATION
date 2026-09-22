@@ -3,7 +3,7 @@
 
 WRAPPER FINO sobre o uploader COMPARTILHADO
 (`src.common.clients.nextcloud_webdav.NextcloudWebDAV`) — a logica vive la (dedup
-com o robo_credito e demais jobs). Preserva a interface de modulo
+com o credito e demais jobs). Preserva a interface de modulo
 (`enviar`/`disponivel`/`garantir_pasta`/`DEST_BASE`) usada pelo `baixar_dia.py`.
 """
 import os

@@ -3,7 +3,7 @@
 r7_config.py - configuracao do Robo 7 (FINALIZAR OPERACAO).
 
 Estrategia (mesma dos R3/R4/R5):
-  - REUSA as credenciais do R1 (mesmo .env raiz via robo1_analise_credito/config.py).
+  - REUSA as credenciais do R1 (mesmo .env raiz via credito/config.py).
   - PERFIL Chrome PROPRIO (.perfil_chrome_r7) + porta CDP propria (9225), p/ rodar
     EM PARALELO ao R1 (9222)/R3 (9223)/R4 (9224) sem disputar o profile lock.
     LEMBRETE: NUNCA rodar 2 scripts no mesmo CDP ao mesmo tempo - colidem.
@@ -25,22 +25,22 @@ import sys
 _AQUI = os.path.dirname(os.path.abspath(__file__))
 _RAIZ = os.path.dirname(_AQUI)
 
-# REUSA o robo_credito do repo em vez de carregar as copias que vieram no pacote
+# REUSA o credito do repo em vez de carregar as copias que vieram no pacote
 # de origem (regra 3 do CLAUDE.md: nao duplicar o que ja existe). Conferido em
 # 02/09/2026: `smart_session.py` e byte a byte identico ao do pacote, e os
 # simbolos que este robo consome de `config.py` -- URL_LOGIN, URL_CONSULTA,
 # URL_EDITAR, VALOR_ETAPA_AGUARDANDO_ASS -- tem valores IGUAIS nas duas versoes.
 # A do repo e mais nova e mais segura (nao carrega senha default no fonte).
 #
-# `robo_analise_credito`, `banco` e `subfluxos` tambem vem dali.
+# `analisar_credito_operacao`, `banco` e `subfluxos` tambem vem dali.
 # `classe_risco_tool` e `verificar_docs` nao existiam no repo e por isso moram
 # aqui -- candidatos a `src/common/` quando um segundo robo precisar deles.
-_CREDITO = os.path.join(_RAIZ, "robo_credito")
+_CREDITO = os.path.join(_RAIZ, "credito")
 for _p in (_AQUI, _CREDITO):
     if _p not in sys.path:
         sys.path.insert(0, _p)
 
-import config as r1_config  # noqa: E402  -> EMAIL/SENHA/URLs/seletores do robo_credito
+import config as r1_config  # noqa: E402  -> EMAIL/SENHA/URLs/seletores do credito
 
 
 def _s(chave: str, padrao: str) -> str:

@@ -16,7 +16,7 @@ import os
 import time
 
 import config
-import robo_analise_credito as robo
+import _analisar_credito_base as robo
 import banco
 import _nextcloud
 

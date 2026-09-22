@@ -70,9 +70,9 @@ migration: `database/erp_004_execucao_e_eventos.sql` — **ainda não aplicada e
 
 ## Dependências — o que ele reusa
 
-Não há cópia de módulo do `robo_credito` aqui. O `r7_config.py` põe
-`../robo_credito` no `sys.path` e importa de lá `config`, `banco`, `subfluxos`,
-`robo_analise_credito` e `smart_session`.
+Não há cópia de módulo do `credito` aqui. O `r7_config.py` põe
+`../credito` no `sys.path` e importa de lá `config`, `banco`, `subfluxos`,
+`analisar_credito_operacao` e `smart_session`.
 
 Conferido em 02/09/2026 antes de reusar: `smart_session.py` era **byte a byte
 idêntico** ao do pacote de origem, e os símbolos consumidos de `config.py`
@@ -147,7 +147,7 @@ para 15s numa tela que pode travar ~90s.** Corrigir isso é o próximo item.
 
 **Sem banco, o `cedente` sai vazio.** `DB_HOST` vem do `.env` da raiz; no
 sandbox não existe e o default (`192.168.50.5`) não responde. Não é defeito de
-portabilidade — o `robo_credito` tem o mesmo default. Quem identifica o
+portabilidade — o `credito` tem o mesmo default. Quem identifica o
 recebedor nesse caso é o `favorecido`, lido da grade.
 
 **Screenshot de falha de login vai para `/app`** e falha fora do container.

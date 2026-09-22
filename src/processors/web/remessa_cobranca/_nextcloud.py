@@ -3,7 +3,7 @@
 
 WRAPPER FINO sobre o uploader COMPARTILHADO
 (`src.common.clients.nextcloud_webdav.NextcloudWebDAV`) — toda a mecanica de
-WebDAV vive la (dedup com doc2you e robo_credito). O que e PROPRIO deste modulo e
+WebDAV vive la (dedup com doc2you e credito). O que e PROPRIO deste modulo e
 a CONVENCAO DE CAMINHO, e ela nao foi inventada aqui: espelha, campo a campo, a
 que o `organizar_remessas` (process-automation) ja usa em
 `FINANCEIRO/CNAB/Retornos` desde 13/08/2026:
