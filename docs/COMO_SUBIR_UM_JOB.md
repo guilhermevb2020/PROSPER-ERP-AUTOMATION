@@ -371,8 +371,10 @@ recria na hora, ou não declara.
 
 Todo job abre uma `job_execucao` ao começar e a fecha ao sair, e grava como evento cada
 fato de negócio (operação avaliada, clique, finalização, arquivo gerado/enviado/recebido).
-É `src/common/clients/execucao_job.py`, sobre as tabelas da `database/erp_004`. O
-finalizador é o primeiro; os outros migram do CSV um a um (pagamento primeiro).
+É `src/common/clients/execucao_job.py`, sobre as tabelas da `database/erp_004`. **Desde
+22/09/2026 é o único controle: nenhum job grava nem lê CSV de controle** (`docs/PLANO_CONTROLE_NO_BANCO.md`).
+Job novo não cria planilha: a memória "já fiz?" vem do banco (`listar_md5`, `listar_controle`,
+`listar_eventos_operacao`).
 
 ```python
 from src.common.clients import execucao_job

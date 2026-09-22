@@ -90,6 +90,9 @@ complementares/DIGITAIS) → `{banco, _nextcloud, _watchdog, op_docs, smart_sess
 
 > Decisões do usuário: **sem alertas** (orquestrador já tem) e **sem migrar controles de
 > idempotência** (`controle_downloads.csv` fica local).
+>
+> ⏩ **Superado em 22/09/2026** (Gerência): o controle dos downloads mora no banco
+> (`erp_automation.operacao_evento`, ver `banco.py`); o CSV não é mais lido nem escrito.
 
 ---
 

@@ -37,7 +37,7 @@ Até o passo 5 nada é efetivado — por isso o `DRY_RUN` para exatamente ali.
 | Perfil Chrome | `/app/data/robo_retorno/perfil_chrome` |
 | **Entrada dos `.RET`** | `/app/data/retornos_a_processar` — host: `erp-automation/data/retornos_a_processar` |
 | Arquivo processado | `_PROCESSADOS/<AAAA-MM>/` dentro da entrada |
-| Controle | `/app/data/robo_retorno/controle_processados.csv` |
+| Controle | banco desde 22/09/2026: `erp_automation.arquivo` + `arquivo_historico` (o que o CSV sabia de antes de 21/09); `controle_processados.csv` ficou congelado e não é lido |
 | Credenciais | `/app/config/retorno_cobranca.env` (fora do git) |
 | Task no hub | `processar_retorno_cobranca_cnab_400` ⏪ renomeada 2× em 26/08/2026, era `processar_retornos_cnab` → `processar_retornos_cnab400` → nome atual. Cron real: `50 8-18 * * 1-5` (hora em hora, não `30 8`) |
 

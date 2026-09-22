@@ -123,8 +123,8 @@ AMBAS as etapas são salvas em `DEBUG_DIR` (evidência, não fila de rotina).
 | Credenciais | `config/remessa_pagamento.env` (MESMA conta do robô de geração — mesma tela, mesmo módulo) |
 | Entrada (Nextcloud) | `FINANCEIRO/Pagamentos-MoneyPlus/_RETORNOS` |
 | Saída (Nextcloud) | `.../_RETORNOS/_PROCESSADOS` |
-| Controle | `/app/data/robo_retorno_pagamento/controle.csv` |
-| Fonte do "já tratei" | `CONTROLE_FONTE_RETPAG` = `csv` (padrão) ou `banco` (md5 em `erp_automation.arquivo`; sem banco, volta ao CSV avisando). O CSV é escrito nos dois modos até o corte — Fase 2 de `docs/PLANO_CONTROLE_NO_BANCO.md` | Em `banco` a memória é **banco ∪ histórico do CSV** até a Fase 4 (o banco só conhece o que entrou desde 21/09/2026; um `.RET` antigo re-entregue não pode virar novidade — seria baixa em duplicidade).
+| Controle | banco desde 22/09/2026 (`erp_automation.arquivo` + `arquivo_historico`); `controle.csv` ficou congelado e não é lido |
+| Fonte do "já tratei" | `CONTROLE_FONTE_RETPAG=banco` (desde 22/09/2026): md5 de `erp_automation.arquivo` ∪ `arquivo_historico` (`erp_008`, o que o CSV sabia de antes de 21/09 — um `.RET` antigo re-entregue não pode virar novidade: seria baixa em duplicidade). Sem banco, volta ao CSV congelado avisando. `ESCREVER_CSV_RETPAG=False`: o CSV não é mais escrito. Plano: `docs/PLANO_CONTROLE_NO_BANCO.md` |
 | Debug (HTML de resposta, das duas etapas) | `/app/data/robo_retorno_pagamento/debug/` |
 
 ## Os arquivos

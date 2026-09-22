@@ -37,7 +37,7 @@ cobrança e `02` quitação/cancelamento. Nome: `CB` + `DDMM` + sequencial(7) +
 | Perfil Chrome | `/app/data/robo_remessa/perfil_chrome` | perfil compartilhado trava no lock |
 | Destino 1 — disco | `/app/data/remessas_a_enviar` | fonte de verdade da idempotência |
 | Destino 2 — Nextcloud | `FINANCEIRO/CNAB/Remessas/…` | **é onde o Financeiro enxerga** |
-| Controle | `/app/data/robo_remessa/controle_remessas.csv` | idempotência (id/arquivo/md5) |
+| Controle | banco (`vw_controle_remessa`) desde 22/09/2026 | idempotência (id/arquivo/md5); `controle_remessas.csv` ficou congelado |
 | Credenciais Smart | `/app/config/remessa_cobranca.env` | fora do git |
 | Credenciais Nextcloud | `/app/config/nextcloud.env` | usuário `automacao`, fora do git |
 | Log ao vivo | `/app/logs/robo_remessa_<data>.log` | além do stdout que o hub captura |

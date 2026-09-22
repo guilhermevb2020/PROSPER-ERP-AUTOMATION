@@ -108,7 +108,7 @@ As vírgulas no fim de cada lista (`"143,"`) são fiéis ao `+=` do JS.
 | Navegador | Google Chrome (canal `chrome`, `/opt/google/chrome`). No host não existe — daí o `SMART_CHROME_CANAL` vazio, que cai no Chromium da `.venv-sandbox` |
 | Perfil Chrome | `/app/data/robo_pagamento/perfil_chrome` |
 | **Saída dos `.REM`** | `/app/temp/remessas de pagamento` — host: `erp-automation/temp/remessas de pagamento` |
-| Controle | `/app/data/robo_pagamento/controle_pagamentos.csv` |
+| Controle | banco (`erp_automation`, `vw_controle_pagamento`) desde 22/09/2026; `controle_pagamentos.csv` ficou congelado como histórico |
 | Credenciais | `/app/config/remessa_pagamento.env` (fora do git) |
 | Conta | `404` = `mp prospere \| 274 \| 0001 \| 0986952` |
 | Log ao vivo | `/app/logs/robo_pagamento_<data>.log` |
