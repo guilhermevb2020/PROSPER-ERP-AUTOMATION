@@ -68,7 +68,13 @@ O Smart tem sessão única por identidade; novos logins podem
 interromper outro robô. Testes de regressão usam serviços simulados.
 Geração e retorno de pagamento usam uma trava financeira comum antes do Chrome
 (`src/common/smart_financeiro_lock.sh`). Não remover a trava nem apagar seu
-arquivo enquanto houver uso. A falha do aviso de segurança às 16:03 recuperou
+arquivo enquanto houver uso. **Desde 22/09/2026 a trava é por CONTA do Smart:** a
+família de pagamento (`prosperito_financeiro`) fica em `/tmp/smart_financeiro.lock`, a
+original; a família de cobrança (remessa, retorno, BB, depósito, cancelamento, conta
+`prosperito`) usa `/tmp/smart_cobranca.lock`, definida em cada wrapper antes de carregar
+a trava. Uma trava só para as duas fazia a remessa de cobrança das 18h derrubar o
+pagamento das 18h00–18h20 todo dia útil (exit 6), sem ganho: contas diferentes não
+disputam sessão. Gate: `tests/unit/test_trava_por_conta.py`. A falha do aviso de segurança às 16:03 recuperou
 na retentativa; retorno e geração concluíram novamente às 16:14 e 16:16.
 
 A rodada real das 12:25–13:15 confirmou 683 documentos enviados,

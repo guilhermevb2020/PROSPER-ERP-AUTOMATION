@@ -8,6 +8,12 @@
 # O robo sobe o proprio Chrome, loga via CapSolver, percorre as contas, baixa os
 # .REM e FECHA. Um login por run — mesmo desenho do doc2you.
 set -u
+# Trava por CONTA do Smart, nao por projeto: esta familia entra como `prosperito`; a de
+# pagamento entra como `prosperito_financeiro` e fica na trava original. Uma trava so para
+# as duas fazia a remessa de cobranca das 18h (18-29 min) derrubar o pagamento das
+# 18h00-18h20 todo dia util, sem ganho nenhum: contas diferentes nao disputam sessao.
+# Medido em 22/09/2026 sobre 10 dias. A variavel continua sobreponivel por ambiente.
+TRAVA_SMART_FINANCEIRO="${TRAVA_SMART_FINANCEIRO:-/tmp/smart_cobranca.lock}"
 . /app/src/common/smart_financeiro_lock.sh
 cd /app || exit 1
 LOG=/app/logs/vnc
