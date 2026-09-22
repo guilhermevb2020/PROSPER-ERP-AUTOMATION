@@ -40,12 +40,26 @@ def test_csv_ausente_e_marcado_nao_e_dia_vazio(tmp_path):
 
 
 def test_paridade_e_divergencia_por_lado():
-    lado = cmp.LadoCsv(por_hash={"a1": "A.REM", "b2": "B.REM"})
+    lado = cmp.LadoCsv(por_hash={"a1": "A.REM", "b2": "B.REM"}, todos={"a1", "b2"})
     r = cmp.comparar("remessa", lado, {"a1": "A.REM", "b2": "B.REM"})
     assert r.paridade and cmp.codigo_de_saida([r]) == cmp.SAIU_OK
     r = cmp.comparar("remessa", lado, {"a1": "A.REM", "c3": "C.REM"})
     assert r.so_csv == [("b2", "B.REM")] and r.so_banco == [("c3", "C.REM")]
     assert not r.paridade and cmp.codigo_de_saida([r]) == cmp.SAIU_DIVERGENTE
+
+
+def test_registro_em_outro_dia_e_informado_e_nao_e_divergencia():
+    """22/09/2026: o cancelamento registrou hoje 3 remessas baixadas em 15/09 (linha do CSV
+    de 15/09), e a carga historica registra com a data de entao. Nem um nem outro e
+    divergencia — so o que nao existe do outro lado em dia nenhum."""
+    lado = cmp.LadoCsv(por_hash={"h1": "HOJE.REM"}, todos={"h1", "v9"})
+    r = cmp.comparar("remessa", lado, {"v9": "VELHA.REM"}, banco_qualquer_dia={"h1"})
+    assert r.outro_dia_no_banco == [("h1", "HOJE.REM")]
+    assert r.outro_dia_no_csv == [("v9", "VELHA.REM")]
+    assert r.so_csv == [] and r.so_banco == [] and r.paridade
+    texto = cmp.relatorio(DIA, [r])
+    assert "OK" in texto and "no CSV em OUTRO dia  : VELHA.REM" in texto and "no banco em OUTRO dia: HOJE.REM" in texto
+    assert cmp.resumo_json(DIA, [r])["familias"]["remessa"]["outro_dia_no_csv"] == ["VELHA.REM"]
 
 
 def test_arquivo_reentregue_conta_pelo_evento_do_dia():
@@ -82,7 +96,8 @@ def test_relatorio_diz_o_que_so_existe_de_um_lado():
     assert "1 linha(s) do dia sem hash" in texto
     assert cmp.resumo_json(DIA, [r])["familias"]["remessa"] == {
         "csv": 1, "banco": 1, "sem_hash": 1, "csv_existe": True,
-        "so_csv": ["A.REM"], "so_banco": ["Z.REM"], "paridade": False}
+        "so_csv": ["A.REM"], "so_banco": ["Z.REM"],
+        "outro_dia_no_banco": [], "outro_dia_no_csv": [], "paridade": False}
 
 
 def test_main_registra_a_execucao_e_devolve_o_exit(tmp_path, monkeypatch):
@@ -95,6 +110,7 @@ def test_main_registra_a_execucao_e_devolve_o_exit(tmp_path, monkeypatch):
     chamadas = []
     monkeypatch.setattr(cmp, "ler_banco", lambda conn, tipos, dia, tz=None: next(
         banco[f.nome] for f in cmp.FAMILIAS if f.tipos == tipos))
+    monkeypatch.setattr(cmp, "no_banco_em_qualquer_dia", lambda conn, tipos, md5s: set())
 
     class _Conn:
         def close(self): chamadas.append("close")

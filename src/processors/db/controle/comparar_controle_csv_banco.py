@@ -82,6 +82,7 @@ class LadoCsv:
     sem_hash: int = 0                              # linhas do dia sem hash: contadas, nao comparadas
     linhas_dia: int = 0
     existe: bool = True
+    todos: set = field(default_factory=set)        # md5 de TODAS as linhas (qualquer dia)
 
 
 @dataclass
@@ -89,11 +90,16 @@ class Resultado:
     familia: str
     csv: LadoCsv
     banco: dict                                    # md5 -> nome
-    so_csv: list = field(default_factory=list)     # [(md5, nome)]
-    so_banco: list = field(default_factory=list)
+    so_csv: list = field(default_factory=list)     # [(md5, nome)]  so no CSV, em dia nenhum do banco
+    so_banco: list = field(default_factory=list)   # [(md5, nome)]  so no banco, em dia nenhum do CSV
+    outro_dia_no_banco: list = field(default_factory=list)   # no CSV hoje, no banco em outro dia
+    outro_dia_no_csv: list = field(default_factory=list)     # no banco hoje, no CSV em outro dia
 
     @property
     def paridade(self) -> bool:
+        """Divergencia e o que so existe de UM lado, em dia nenhum. Registro em outro dia
+        (carga historica, remessa antiga que o cancelamento registrou hoje, .RET
+        re-entregue) e informado, nao e divergencia."""
         return not self.so_csv and not self.so_banco
 
 
@@ -109,6 +115,9 @@ def ler_csv(caminho: str, coluna_hash: str, coluna_quando: str, dia: str) -> Lad
         return lado
     with open(caminho, encoding="utf-8", errors="replace", newline="") as fh:
         for linha in csv.DictReader(fh):
+            h_qualquer = (linha.get(coluna_hash) or "").strip().lower()
+            if h_qualquer:
+                lado.todos.add(h_qualquer)
             if not (linha.get(coluna_quando) or "").startswith(dia):
                 continue
             lado.linhas_dia += 1
@@ -139,10 +148,33 @@ def ler_banco(conn, tipos: tuple, dia: str, tz: str = TZ_PADRAO) -> dict:
     return {md5: nome for nome, md5 in linhas if md5}
 
 
-def comparar(familia: str, lado_csv: LadoCsv, banco: dict) -> Resultado:
+SQL_BANCO_QUALQUER_DIA = """
+    SELECT lower(a.detalhe_json ->> 'md5') AS md5
+      FROM erp_automation.arquivo a
+     WHERE a.tipo_arquivo = ANY(%(tipos)s) AND lower(a.detalhe_json ->> 'md5') = ANY(%(md5s)s)
+"""
+
+
+def no_banco_em_qualquer_dia(conn, tipos: tuple, md5s: list) -> set:
+    """Quais destes md5 o banco conhece, em qualquer dia (para nao chamar de divergencia o
+    que so mudou de dia entre as duas fontes)."""
+    if not md5s:
+        return set()
+    with conn.cursor() as cur:
+        cur.execute(SQL_BANCO_QUALQUER_DIA, {"tipos": list(tipos), "md5s": list(md5s)})
+        return {l[0] for l in cur.fetchall() if l and l[0]}
+
+
+def comparar(familia: str, lado_csv: LadoCsv, banco: dict, banco_qualquer_dia: set = frozenset()) -> Resultado:
     r = Resultado(familia=familia, csv=lado_csv, banco=banco)
-    r.so_csv = sorted((h, n) for h, n in lado_csv.por_hash.items() if h not in banco)
-    r.so_banco = sorted((h, n) for h, n in banco.items() if h not in lado_csv.por_hash)
+    for h, n in sorted(lado_csv.por_hash.items()):
+        if h in banco:
+            continue
+        (r.outro_dia_no_banco if h in banco_qualquer_dia else r.so_csv).append((h, n))
+    for h, n in sorted(banco.items()):
+        if h in lado_csv.por_hash:
+            continue
+        (r.outro_dia_no_csv if h in lado_csv.todos else r.so_banco).append((h, n))
     return r
 
 
@@ -160,6 +192,10 @@ def relatorio(dia: str, resultados: list) -> str:
             out.append(f"      so no CSV   : {n}  ({h[:12]})")
         for h, n in r.so_banco[:20]:
             out.append(f"      so no BANCO : {n}  ({h[:12]})")
+        for h, n in r.outro_dia_no_banco[:20]:
+            out.append(f"      no banco em OUTRO dia: {n}  ({h[:12]})")
+        for h, n in r.outro_dia_no_csv[:20]:
+            out.append(f"      no CSV em OUTRO dia  : {n}  ({h[:12]})")
         if len(r.so_csv) > 20 or len(r.so_banco) > 20:
             out.append("      ... (lista cortada em 20 por lado)")
     total = sum(len(r.csv.por_hash) for r in resultados)
@@ -173,7 +209,10 @@ def resumo_json(dia: str, resultados: list) -> dict:
     return {"dia": dia, "familias": {
         r.familia: {"csv": len(r.csv.por_hash), "banco": len(r.banco), "sem_hash": r.csv.sem_hash,
                     "csv_existe": r.csv.existe, "so_csv": [n for _, n in r.so_csv],
-                    "so_banco": [n for _, n in r.so_banco], "paridade": r.paridade}
+                    "so_banco": [n for _, n in r.so_banco],
+                    "outro_dia_no_banco": [n for _, n in r.outro_dia_no_banco],
+                    "outro_dia_no_csv": [n for _, n in r.outro_dia_no_csv],
+                    "paridade": r.paridade}
         for r in resultados}}
 
 
@@ -201,7 +240,9 @@ def executar(dia: str, tz: str, conn, log=print) -> tuple[int, list]:
     for fam in FAMILIAS:
         lado = ler_csv(fam.caminho_csv, fam.coluna_hash, fam.coluna_quando, dia)
         banco = ler_banco(conn, fam.tipos, dia, tz)
-        resultados.append(comparar(fam.nome, lado, banco))
+        faltam_no_dia = [h for h in lado.por_hash if h not in banco]
+        resultados.append(comparar(fam.nome, lado, banco,
+                                   no_banco_em_qualquer_dia(conn, fam.tipos, faltam_no_dia)))
     log(relatorio(dia, resultados))
     return codigo_de_saida(resultados), resultados
 
