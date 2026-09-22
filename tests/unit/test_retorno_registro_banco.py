@@ -91,3 +91,18 @@ def test_grade_vazia_nao_inventa_titulo(tmp_path, monkeypatch):
     recebido = _capturar(monkeypatch)
     robo._registrar_no_banco(object(), res, str(caminho), bb=False)
     assert recebido["titulos"] == []
+
+
+def test_arquivo_grande_sem_grade_nao_vira_titulo_fantasma(tmp_path, monkeypatch):
+    """Com 518 titulos (22/09/2026) o Smart nao renderiza a grade: devolve uma linha so,
+    "Visualizar Titulos", sem numero nem valor. Isso nao e titulo e nao entra em
+    arquivo_titulo; a contagem do arquivo continua sendo a do contador do Smart."""
+    res, caminho = resultado_do_upload(tmp_path)
+    dados = {"titulos": grade_do_smart([["Visualizar Títulos"]]), "valorTotalTitulos": "0,00"}
+    res.update(detalhes=retorno.extrair_titulos(dados), titulos=518,
+               valor_total=dados["valorTotalTitulos"])
+    assert res["detalhes"] == [{"valor_titulo": "Visualizar Títulos"}], "o extrator le o botao como linha"
+    recebido = _capturar(monkeypatch)
+    robo._registrar_no_banco(object(), res, str(caminho), bb=False)
+    assert recebido["titulos"] == []
+    assert recebido["qtd_registros"] == 518

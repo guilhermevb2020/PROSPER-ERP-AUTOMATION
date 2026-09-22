@@ -281,10 +281,15 @@ def _registrar_no_banco(execucao, res, caminho, bb: bool):
     o numero da linha; a tabela nao aceita UPDATE, entao esses ficam assim (o CSV tem tudo)."""
     if not os.path.exists(caminho):
         return None
+    # Arquivo grande (518 titulos em 22/09/2026) nao vem com grade: o Smart devolve uma
+    # linha so, "Visualizar Titulos" (o botao), sem numero nem valor. Linha sem numero de
+    # titulo nao e titulo — fica de fora; `qtd_registros` continua vindo do contador do Smart.
     titulos = []
-    for i, t in enumerate(res.get("detalhes") or [], start=1):
-        titulos.append({"numero_linha": i,
-                        "id_titulo": t.get("numero_titulo") or None,
+    for t in (res.get("detalhes") or []):
+        if not t.get("numero_titulo"):
+            continue
+        titulos.append({"numero_linha": len(titulos) + 1,
+                        "id_titulo": t["numero_titulo"],
                         "codigo_ocorrencia": t.get("acao_tomada") or None,
                         "valor_titulo": t.get("valor_titulo") or t.get("valor_titulo_arq")})
     arq_id = execucao_job.registrar_arquivo(

@@ -140,7 +140,10 @@ alimentava o cliente com dicionários já mapeados. Corrigido em 22/09/2026 (tes
 A tabela não aceita `UPDATE`, então essas 95 linhas ficam como estão: a contagem por
 arquivo está certa e o CSV de controle tem os títulos. Para o retorno, `codigo_ocorrencia`
 carrega a **ação tomada** do Smart (Liquidado, Entrada Confirmada…): a grade não traz o
-código CNAB.
+código CNAB. Arquivo grande (518 títulos) vem sem grade — o Smart devolve só a linha
+"Visualizar Títulos" — e então `arquivo_titulo` fica vazio para ele, de propósito;
+`qtd_registros` continua sendo o contador do Smart (o arquivo 67 entrou com essa
+pseudolinha antes da regra, e fica assim).
 
 O modelo `erp-automation-ddl` **existe** no `roles.yaml` do Guardian desde 21/09/2026
 (`herda: [access_admin, app_erp_automation]`, 2 h, sem permanente). Para aplicar:
