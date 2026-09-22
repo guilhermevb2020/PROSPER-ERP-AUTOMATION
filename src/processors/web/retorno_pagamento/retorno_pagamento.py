@@ -46,7 +46,7 @@ def enviar(ctx, url: str, nome_arquivo: str, dados: bytes, timeout: int = 120_00
     """POST multipart em `url`. Devolve dict cru: `ok_rede`, `status`, `html`, `erro_rede`.
 
     Nunca levanta por erro de rede: devolve `erro_rede` preenchido, e quem
-    decide (deixar na entrada para tentar de novo) é `robo_retorno_pagamento.py`.
+    decide (deixar na entrada para tentar de novo) é `processar_retorno_pagamento.py`.
     """
     multipart = montar_multipart(nome_arquivo, dados)
     try:

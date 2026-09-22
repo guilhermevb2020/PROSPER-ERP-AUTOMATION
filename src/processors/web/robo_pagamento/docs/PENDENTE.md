@@ -14,7 +14,7 @@ código — **apague este arquivo quando ele for respondido**.
    em 25/08/2026. Fluxo real testado, dinheiro se moveu (confirmado pelo
    dono).
 3. **Commit** — feito. `git log` deste projeto tem os commits de 25 e
-   26/08/2026 sobre `robo_pagamento/`, `robo_retorno_pagamento/` e
+   26/08/2026 sobre `robo_pagamento/`, `retorno_pagamento/` e
    `src/common/clients/nextcloud_webdav.py`.
 
 ## ⛔ Ainda aberto — item 4, é decisão de dono

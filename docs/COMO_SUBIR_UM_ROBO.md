@@ -47,10 +47,10 @@ dois no mesmo `user-data-dir` disputam o lock — um simplesmente não sobe.
 | `robo_credito` | `:96` | 5902 | 6082 | *(pipe)* | `data/robo_credito/perfil_chrome` |
 | `robo_retorno` | `:95` | 5904 | 6084 | 9225 | `data/robo_retorno/perfil_chrome` |
 | `robo_pagamento` | `:94` | 5905 | 6085 | 9226 | `data/robo_pagamento/perfil_chrome` |
-| `robo_retorno_pagamento` | `:93` | 5906 | 6086 | 9227 | `data/robo_retorno_pagamento/perfil_chrome` |
+| `retorno_pagamento` | `:93` | 5906 | 6086 | 9227 | `data/robo_retorno_pagamento/perfil_chrome` |
 | **próximo livre** | **`:92`** | **5907** | **6087** | **9228** | `data/<robo>/perfil_chrome` |
 
-> Atualizada em 26/08/2026, quando o `robo_retorno_pagamento` ocupou o `:93` que
+> Atualizada em 26/08/2026, quando o `retorno_pagamento` ocupou o `:93` que
 > esta tabela anunciava como livre. **Quem toma um slot atualiza esta linha no
 > mesmo commit** —
 > tabela desatualizada aqui é dois Chromes no mesmo display, que é a falha nº 1 do §1.

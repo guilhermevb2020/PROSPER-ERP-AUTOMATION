@@ -27,8 +27,8 @@ da entrada e nunca é reenviado — não importa o que o Smart tenha respondido.
 | ✅ Ciclo completo testado em DRY_RUN — Nextcloud → Smart (login OK, permissão confirmada) | 26/08 |
 | ✅ Etapa 1 (upload) rodada `--pra-valer` de verdade — HTTP 200, devolveu a prévia | 26/08 |
 | ✅ **Etapa 2 (confirmar) rodada `--pra-valer` de verdade, 5 arquivos** — HTTP 200 nas duas etapas, nos 5 | 26/08, 21:29 |
-| ✅ Task no hub (`processar_retorno_pagamento_cnab_240` — renomeada, era `robo_retorno_pagamento`; depende de `receber_retorno_pagamento_cnab_240`, cron `55 8-18 * * 1-5`, **enabled**) | 26/08 |
-| ✅ **`DRY_RUN_RETPAG=false` persistido em `config/robo_retorno_pagamento.env`** — próximas rodadas agendadas dão baixa de verdade | 26/08, 18:44 |
+| ✅ Task no hub (`processar_retorno_pagamento_cnab_240` — renomeada, era `retorno_pagamento`; depende de `receber_retorno_pagamento_cnab_240`, cron `55 8-18 * * 1-5`, **enabled**) | 26/08 |
+| ✅ **`DRY_RUN_RETPAG=false` persistido em `config/retorno_pagamento.env`** — próximas rodadas agendadas dão baixa de verdade | 26/08, 18:44 |
 
 ### Como a etapa 2 foi validada, já que a resposta HTML não distingue sucesso de erro
 
@@ -117,7 +117,7 @@ AMBAS as etapas são salvas em `DEBUG_DIR` (evidência, não fila de rotina).
 
 | Recurso | Valor |
 |---|---|
-| Onde roda | container `erp-automation`, agendado pelo hub — task `robo_retorno_pagamento`, `55 8-18 * * 1-5`, depende de `baixar_retorno_pagamento` (status success) |
+| Onde roda | container `erp-automation`, agendado pelo hub — task `retorno_pagamento`, `55 8-18 * * 1-5`, depende de `baixar_retorno_pagamento` (status success) |
 | Display / VNC / noVNC / CDP | `:93` / 5906 / 6086 / 9227 |
 | Perfil Chrome | `/app/data/robo_retorno_pagamento/perfil_chrome` |
 | Credenciais | `config/robo_pagamento.env` (MESMA conta do robô de geração — mesma tela, mesmo módulo) |
@@ -130,7 +130,7 @@ AMBAS as etapas são salvas em `DEBUG_DIR` (evidência, não fila de rotina).
 
 | Arquivo | Papel |
 |---|---|
-| `robo_retorno_pagamento.py` | entrypoint agendado: sessão, rodada (2 etapas), controle, exit codes |
+| `processar_retorno_pagamento.py` | entrypoint agendado: sessão, rodada (2 etapas), controle, exit codes |
 | `retorno_pagamento.py` | monta o multipart (etapa 1), extrai `target`, confirma (etapa 2) — não classifica resposta |
 | `retorno_pagamento_config.py` | tudo por env, sufixo `_RETPAG`, credencial reaproveitada do `robo_pagamento` |
 | `_nextcloud.py` | wrapper fino sobre `NextcloudWebDAV` (que ganhou `baixar`/`mover` para este robô) |
@@ -143,7 +143,7 @@ AMBAS as etapas são salvas em `DEBUG_DIR` (evidência, não fila de rotina).
 2. Rodou `--pra-valer` (sem `--limite`, os 5 pendentes) supervisionado, via
    `run_agendado.sh` — todos HTTP 200 nas duas etapas; conferido o HTML da
    etapa 2 salvo em `DEBUG_DIR` (o contador `liquid=N`, ver seção acima).
-3. Criado `config/robo_retorno_pagamento.env` com `DRY_RUN_RETPAG=false` —
+3. Criado `config/retorno_pagamento.env` com `DRY_RUN_RETPAG=false` —
    tirou o robô do padrão seguro. Confirmado o valor efetivo dentro do
    container antes de considerar feito.
 

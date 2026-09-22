@@ -11,12 +11,12 @@ import pytest
 
 @pytest.fixture
 def robo(monkeypatch, tmp_path):
-    pasta = Path(__file__).resolve().parents[2] / 'src/processors/web/robo_retorno_pagamento'
+    pasta = Path(__file__).resolve().parents[2] / 'src/processors/web/retorno_pagamento'
     monkeypatch.syspath_prepend(str(pasta))
     with patch.dict(sys.modules):
-        for nome in ('_nextcloud', 'retorno_pagamento', 'retorno_pagamento_config', 'robo_retorno_pagamento'):
+        for nome in ('_nextcloud', 'retorno_pagamento', 'retorno_pagamento_config', 'processar_retorno_pagamento'):
             sys.modules.pop(nome, None)
-        r = importlib.import_module('robo_retorno_pagamento')
+        r = importlib.import_module('processar_retorno_pagamento')
         monkeypatch.setattr(r.cfg, 'ARQ_CONTROLE', str(tmp_path / 'controle.csv'))
         monkeypatch.setattr(r, 'salvar_resposta', Mock(return_value='evidencia.html'))
         monkeypatch.setattr(r.nuvem, 'baixar', Mock(return_value=b'retorno sintetico'))

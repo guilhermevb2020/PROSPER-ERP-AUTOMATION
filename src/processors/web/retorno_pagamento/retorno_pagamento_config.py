@@ -31,7 +31,7 @@ import os
 try:
     from dotenv import load_dotenv
 
-    load_dotenv(os.environ.get("RETPAG_ENV_FILE", "/app/config/robo_retorno_pagamento.env"))
+    load_dotenv(os.environ.get("RETPAG_ENV_FILE", "/app/config/retorno_pagamento.env"))
 except ImportError:
     pass
 

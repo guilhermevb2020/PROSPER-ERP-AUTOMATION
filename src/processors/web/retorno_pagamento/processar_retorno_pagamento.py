@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-robo_retorno_pagamento.py - insere o retorno CNAB 240 de pagamento no Smart (dá baixa).
+processar_retorno_pagamento.py - insere o retorno CNAB 240 de pagamento no Smart (dá baixa).
 
 Robô do ERP AUTOMATION. Roda DESATENDIDO: sobe o próprio Chrome no display :93,
 loga via CapSolver, lê os `.RET` publicados em
@@ -29,12 +29,12 @@ SEGURANÇA
 
 Uso:
     # produção (o wrapper do hub chama isto)
-    sh /app/src/processors/web/robo_retorno_pagamento/run_agendado.sh
+    sh /app/src/processors/web/retorno_pagamento/run_agendado.sh
 
     # manual, dentro do container
-    python .../robo_retorno_pagamento.py --listar             # só olha a fila
-    python .../robo_retorno_pagamento.py                      # dry-run
-    python .../robo_retorno_pagamento.py --pra-valer --limite 1   # UM arquivo, de verdade
+    python .../processar_retorno_pagamento.py --listar             # só olha a fila
+    python .../processar_retorno_pagamento.py                      # dry-run
+    python .../processar_retorno_pagamento.py --pra-valer --limite 1   # UM arquivo, de verdade
 """
 import argparse
 import csv

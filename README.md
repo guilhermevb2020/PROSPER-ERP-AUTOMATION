@@ -28,7 +28,7 @@ data/, logs/                 saída dos jobs: perfis de Chrome, boletos, prints,
 | `robo_remessa/` | remessa de cobrança CNAB-400 e BB; cancela remessa recusada | `gerar_remessa_cobranca_cnab_400`, `gerar_remessa_bb`, `cancelar_remessa_recusada_cnab_400` |
 | `robo_retorno/` | processa retornos de cobrança CNAB-400 e BB; baixa depósito no ERP | `processar_retorno_cobranca_cnab_400`, `processar_retorno_bb`, `baixar_deposito_no_erp` |
 | `robo_pagamento/` | remessa de pagamento CNAB-240 (BMP Money Plus), a cada 5 min | `gerar_remessa_pagamento_cnab_240` |
-| `robo_retorno_pagamento/` | retorno de pagamento CNAB-240 | `processar_retorno_pagamento_cnab_240` |
+| `retorno_pagamento/` | retorno de pagamento CNAB-240 | `processar_retorno_pagamento_cnab_240` |
 | `robo_finalizar/` | confere documentos e grade de pagamento e finaliza a operação (em DRY) | `finalizar_operacao_aguardando_assinatura` |
 
 ## Rodar

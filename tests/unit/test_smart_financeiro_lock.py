@@ -46,7 +46,7 @@ def test_daemon_nao_herda_trava_apos_wrapper_sair(tmp_path):
         fcntl.flock(holder, fcntl.LOCK_EX | fcntl.LOCK_NB)
 
 
-@pytest.mark.parametrize('robo', ['robo_pagamento', 'robo_retorno_pagamento'])
+@pytest.mark.parametrize('robo', ['robo_pagamento', 'retorno_pagamento'])
 def test_wrapper_trava_antes_de_tocar_no_chrome(robo):
     wrapper = ROOT / 'src/processors/web' / robo / 'run_agendado.sh'
     text = wrapper.read_text()

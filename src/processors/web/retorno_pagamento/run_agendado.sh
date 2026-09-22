@@ -21,9 +21,9 @@ if [ -f /app/config/robo_pagamento.env ]; then
     . /app/config/robo_pagamento.env
     set +a
 fi
-if [ -f /app/config/robo_retorno_pagamento.env ]; then
+if [ -f /app/config/retorno_pagamento.env ]; then
     set -a
-    . /app/config/robo_retorno_pagamento.env
+    . /app/config/retorno_pagamento.env
     set +a
 fi
 
@@ -63,7 +63,7 @@ export USER_DATA_DIR_RETPAG="$PERFIL"
 mkdir -p "$PERFIL"
 # DRY_RUN_RETPAG=True e o default do config: em dry-run o robo baixa o .RET do
 # Nextcloud, monta o multipart e MOSTRA o que mandaria — nao faz o POST. Para
-# valer, ponha DRY_RUN_RETPAG=false em robo_retorno_pagamento.env — e confira
+# valer, ponha DRY_RUN_RETPAG=false em retorno_pagamento.env — e confira
 # o valor efetivo depois de editar (ver aviso de calibracao em retorno_pagamento.py).
 export DRY_RUN_RETPAG="${DRY_RUN_RETPAG:-True}"
 
@@ -73,7 +73,7 @@ export DRY_RUN_RETPAG="${DRY_RUN_RETPAG:-True}"
 LOGROBO="/app/logs/robo_retorno_pagamento_$(date +%Y-%m-%d).log"
 RC="/tmp/robo_retorno_pagamento_rc.$$"
 echo "===== inicio $(date '+%F %T %Z') =====" >> "$LOGROBO"
-{ python /app/src/processors/web/robo_retorno_pagamento/robo_retorno_pagamento.py \
+{ python /app/src/processors/web/retorno_pagamento/processar_retorno_pagamento.py \
       "$@"; echo $? > "$RC"; } 2>&1 | tee -a "$LOGROBO"
 CODIGO=$(cat "$RC" 2>/dev/null || echo 1)
 rm -f "$RC"

@@ -111,7 +111,7 @@ daquela era estão em `docs/deprecated/`.
 | remessa de cobrança CNAB-400, BB e cancelamento | `robo_remessa/` | `run_agendado.sh`, `run_bb.sh`, `run_cancelamento.sh` | `:97` / 6083 |
 | retorno de cobrança CNAB-400, BB e depósito | `robo_retorno/` | `run_agendado.sh --pular-processados`, `run_bb.sh`, `run_deposito.sh` | `:95` / 6084 |
 | remessa de pagamento CNAB-240 (BMP) | `robo_pagamento/` | `run_agendado.sh` — a cada 5 min, 8h–18h55 | `:94` / 6085 |
-| retorno de pagamento CNAB-240 | `robo_retorno_pagamento/` | `run_agendado.sh` | `:93` / 6086 |
+| retorno de pagamento CNAB-240 | `retorno_pagamento/` | `run_agendado.sh` | `:93` / 6086 |
 | finalizar operação (Robô 7) | `robo_finalizar/` | `run_agendado.sh` — **DRY** até segunda ordem | `:92` / 6087 |
 
 Só a porta 6080 é publicada pelo container; os outros noVNC se alcançam por
