@@ -14,10 +14,15 @@ DIR_MIGRATIONS="$RAIZ/database"
 DRY_RUN=0
 [[ "${1:-}" == "--dry-run" ]] && DRY_RUN=1
 
-# shared.env primeiro, .env do projeto por cima (mesma ordem do docker-compose)
-for arquivo in /home/prospere/docker/shared.env "$RAIZ/.env"; do
-  [[ -f "$arquivo" ]] && set -a && . "$arquivo" && set +a
-done
+# Credencial explicita no ambiente VENCE os arquivos: e assim que a bancada
+# (scripts/bancada_pg.sh) aponta o runner para o Postgres descartavel sem que o
+# .env do projeto o devolva para producao. Sem DB_ADMIN_USER no ambiente, le
+# shared.env primeiro e .env do projeto por cima (mesma ordem do docker-compose).
+if [[ -z "${DB_ADMIN_USER:-}" ]]; then
+  for arquivo in /home/prospere/docker/shared.env "$RAIZ/.env"; do
+    [[ -f "$arquivo" ]] && set -a && . "$arquivo" && set +a
+  done
+fi
 
 # O runner roda do HOST, onde o nome de rede "postgres" nao resolve.
 PGHOST="${DB_ADMIN_HOST:-localhost}"
@@ -27,6 +32,15 @@ PGUSER="${DB_ADMIN_USER:?defina DB_ADMIN_USER}"
 PGPASSWORD="${DB_ADMIN_PASSWORD:?defina DB_ADMIN_PASSWORD}"
 PGSSLMODE=disable
 export PGHOST PGPORT PGDATABASE PGUSER PGPASSWORD PGSSLMODE
+echo "alvo: ${PGUSER}@${PGHOST}:${PGPORT}/${PGDATABASE}"
+
+# BANCADA_PULAR: migrations que so fazem sentido em producao (movem tabelas que a
+# bancada nao tem) entram no ledger como puladas, sem rodar. NUNCA na porta de
+# producao: pular migration la e corromper o ledger.
+BANCADA_PULAR="${BANCADA_PULAR:-}"
+if [[ -n "$BANCADA_PULAR" && "$PGPORT" == "5432" ]]; then
+  echo "ERRO: BANCADA_PULAR so vale na bancada (porta != 5432)." >&2; exit 1
+fi
 
 psql_q() { psql -v ON_ERROR_STOP=1 -qtAX -c "$1"; }
 
@@ -58,6 +72,12 @@ for caminho in "$DIR_MIGRATIONS"/erp_*.sql; do
     continue
   fi
 
+  if [[ " $BANCADA_PULAR " == *" $arquivo "* ]]; then
+    echo "  pulada (bancada): $arquivo"
+    psql_q "INSERT INTO erp_automation.migration_aplicada (arquivo, sha256, aplicada_por)
+            VALUES ('$arquivo', '$hash_atual', current_user || ' (pulada: bancada)')" >/dev/null
+    continue
+  fi
   pendentes=$((pendentes + 1))
   if (( DRY_RUN )); then
     echo "  PENDENTE:    $arquivo"

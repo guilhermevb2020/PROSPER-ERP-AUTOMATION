@@ -45,6 +45,7 @@ import listar_fila                   # noqa: E402
 import notificar                     # noqa: E402
 import notificar_whatsapp            # noqa: E402
 import r7_config as cfg              # noqa: E402
+from src.common.clients import execucao_job  # noqa: E402  (PYTHONPATH=/app, como o smart_sessao)
 
 
 def _dados_da_operacao(ctx, op):
@@ -83,7 +84,7 @@ def _registrar_finalizada(op, cedente):
         w.writerow([datetime.now().strftime("%Y-%m-%d %H:%M:%S"), str(op), cedente or ""])
 
 
-def processar(ctx, op, executar=False, mandar_email=False):
+def processar(ctx, op, executar=False, mandar_email=False, execucao=None):
     """Roda as duas checagens numa op e decide. Retorna dict com o laudo."""
     op = str(op)
     laudo = {"op": op, "pendencias": [], "observacoes": [], "acao": None,
@@ -92,6 +93,7 @@ def processar(ctx, op, executar=False, mandar_email=False):
 
     tipos, cedente, valor = _dados_da_operacao(ctx, op)
     laudo["tipos"], laudo["cedente"] = sorted(set(t for t in tipos if t)), cedente
+    laudo["valor"] = valor
     print(f"  cedente: {cedente or '(nao identificado)'} | titulos: {laudo['tipos'] or '(nao lidos)'}")
 
     # ---- CHECAGEM 1: documentos assinados -------------------------------- #
@@ -190,6 +192,10 @@ def processar(ctx, op, executar=False, mandar_email=False):
         def _ligar_aceite(_dialogos):
             modo["aceitar"] = True
 
+        if execucao is not None:
+            execucao_job.registrar_evento_operacao(
+                execucao, op, "finalizar_clicado", cedente=cedente, valor_liquido=valor,
+                detalhe={"tipos_titulos": laudo["tipos"]})
         r_fin = fin.finalizar_da_grade(pg, op, aceitar_dialogos=_ligar_aceite,
                                        log=lambda m: print("  " + str(m)))
         r_fin["dialogos"] = modo["dialogos"] or r_fin.get("dialogos", [])
@@ -206,11 +212,20 @@ def processar(ctx, op, executar=False, mandar_email=False):
         else:
             laudo["acao"] = f"falha ao finalizar ({r_fin['situacao']})"
         print(f"     >> {laudo['acao']}: {r_fin['detalhe']}")
+        if execucao is not None and r_fin["situacao"] != "dry":
+            _tipo = {"finalizada": "finalizada",
+                     "finalizada_por_outro": "finalizada_por_outro"}.get(
+                r_fin["situacao"], "finalizacao_falhou")
+            execucao_job.registrar_evento_operacao(
+                execucao, op, _tipo, resultado=r_fin["situacao"], cedente=cedente,
+                valor_liquido=valor,
+                detalhe={"detalhe": r_fin["detalhe"], "dialogos": r_fin["dialogos"]})
         for d in r_fin["dialogos"]:
             print(f"        [dialogo] {d}")
         if r_fin["ok"]:
             _registrar_finalizada(op, cedente)
-            _avisar_finalizacao(op, cedente, valor, laudo.get("detalhes"), r_fin["detalhe"])
+            _avisar_finalizacao(op, cedente, valor, laudo.get("detalhes"), r_fin["detalhe"],
+                                execucao=execucao)
         return laudo
     except Exception as e:
         laudo["erro"] = f"checagem/finalizacao de pagamento falhou: {str(e)[:140]}"
@@ -229,7 +244,7 @@ def processar(ctx, op, executar=False, mandar_email=False):
             pass
 
 
-def _avisar_finalizacao(op, cedente, valor, detalhes, confirmacao):
+def _avisar_finalizacao(op, cedente, valor, detalhes, confirmacao, execucao=None):
     """Avisa por e-mail E por WhatsApp que a op foi finalizada, com o motivo.
     Best-effort: falha de aviso NAO desfaz nem mascara a finalizacao."""
     ctx = {"valor": _fmt_valor(valor), "confirmacao": confirmacao}
@@ -238,6 +253,7 @@ def _avisar_finalizacao(op, cedente, valor, detalhes, confirmacao):
         print(f"     e-mail de finalizacao: {'enviado' if ok else 'nao enviado'} ({motivo})")
     except Exception as e:
         print(f"     e-mail de finalizacao FALHOU: {str(e)[:120]}")
+    res = []
     try:
         texto = notificar.texto_whatsapp_finalizada(op, cedente, ctx, detalhes)
         n, res = notificar_whatsapp.enviar(texto)
@@ -245,9 +261,43 @@ def _avisar_finalizacao(op, cedente, valor, detalhes, confirmacao):
             print(f"     whatsapp {numero}: {'OK' if ok else 'FALHOU'} - {detalhe}")
     except Exception as e:
         print(f"     whatsapp FALHOU: {str(e)[:120]}")
+    if execucao is not None:
+        # best-effort como o aviso: registrar o aviso nunca desfaz a finalizacao
+        try:
+            execucao_job.registrar_evento_operacao(
+                execucao, op, "aviso_enviado",
+                resultado="ok" if res and all(ok for _, ok, _ in res) else "falhou",
+                cedente=cedente, valor_liquido=valor,
+                detalhe={"whatsapp": [{"numero": str(n_), "ok": bool(ok), "detalhe": str(d)[:200]}
+                                      for n_, ok, d in res]})
+        except Exception as e:  # noqa: BLE001
+            print(f"     registro do aviso FALHOU: {str(e)[:120]}")
 
 
-def ciclo(ctx, ops=None, executar=False, mandar_email=False):
+def _veredito(laudo):
+    if laudo.get("erro"):
+        return "ERRO"
+    return "BARRADA" if laudo.get("pendencias") else "FINALIZARIA"
+
+
+def _registrar_avaliacao(execucao, laudo):
+    """O laudo de processar() vira o evento 'avaliada' - o placar mora no banco."""
+    if execucao is None:
+        return
+    detalhes = laudo.get("detalhes") or {}
+    execucao_job.registrar_evento_operacao(
+        execucao, laudo["op"], "avaliada", resultado=_veredito(laudo),
+        cedente=laudo.get("cedente"), valor_liquido=laudo.get("valor"),
+        pendencias=laudo.get("pendencias") or [],
+        detalhe={"acao": laudo.get("acao"), "erro": laudo.get("erro"),
+                 "tipos_titulos": laudo.get("tipos"),
+                 "pagamento_conferido": laudo.get("pagamento_conferido"),
+                 "observacoes": laudo.get("observacoes"),
+                 "exigidos": detalhes.get("exigidos")},
+        linhas_pagamento=detalhes.get("linhas_pagamento") or [])
+
+
+def ciclo(ctx, ops=None, executar=False, mandar_email=False, execucao=None):
     if ops is None:
         print(f"=== fila: etapa '{cfg.ROTULO_ETAPA_ENTRADA}' ===")
         ops = listar_fila.listar(ctx)
@@ -262,7 +312,9 @@ def ciclo(ctx, ops=None, executar=False, mandar_email=False):
     laudos = []
     for op in ops:
         try:
-            laudos.append(processar(ctx, op, executar, mandar_email))
+            laudo = processar(ctx, op, executar, mandar_email, execucao=execucao)
+            laudos.append(laudo)
+            _registrar_avaliacao(execucao, laudo)
         except Exception as e:
             # uma op problematica nao pode derrubar o ciclo
             print(f"\n  [op {op}] ERRO INESPERADO (ignorado, segue): {e}")
@@ -320,6 +372,19 @@ def main():
 
     ops = [o.strip() for o in args.ops.split(",") if o.strip()] or None
 
+    # A execucao no banco: em ensaio, sem banco segue degradada (avisa e nao registra);
+    # em modo real e OBRIGATORIA - sem registro nao ha clique.
+    try:
+        execucao = execucao_job.abrir_execucao(
+            "finalizar_operacao", "finalizar_operacao_aguardando_assinatura",
+            flag_ensaio=not executar, obrigatoria=executar,
+            apelido_credencial=os.environ.get("SMART_SENHA"),
+            detalhe={"ops": ops, "loop": bool(args.loop), "email": bool(args.email)})
+    except execucao_job.ExecucaoIndisponivel as e:
+        print(f"[ERRO] {e}")
+        return 2
+    codigo, total = 2, 0
+
     # Sessao pelo modulo comum (o mesmo do robo_pagamento): sobe o Chrome no
     # display/perfil/porta PROPRIOS e loga via CapSolver com a credencial DESTE
     # robo (cfg.EMAIL/SENHA). Ate 21/09/2026 o main so anexava num Chrome ja
@@ -327,21 +392,27 @@ def main():
     # producao morreu com "CDP 9228 nao responde" antes de logar.
     from playwright.sync_api import sync_playwright
     from src.common.clients import smart_sessao
-    with sync_playwright() as p:
-        try:
-            with smart_sessao.sessao(p, cfg, usar_cdp=args.cdp, log=print) as ctx:
-                while True:
-                    laudos = ciclo(ctx, ops, executar, args.email)
-                    _resumo(laudos, executar)
-                    if not args.loop:
-                        break
-                    print(f"\n  ... proximo ciclo em {cfg.INTERVALO_CICLO_S}s\n")
-                    time.sleep(cfg.INTERVALO_CICLO_S)
-        except (smart_sessao.SemNavegador, smart_sessao.SemSessao,
-                smart_sessao.SmartIndisponivel) as e:
-            print(f"[ERRO] sessao do Smart: {e}")
-            return 2
-    return 0
+    try:
+        with sync_playwright() as p:
+            try:
+                with smart_sessao.sessao(p, cfg, usar_cdp=args.cdp, log=print) as ctx:
+                    while True:
+                        laudos = ciclo(ctx, ops, executar, args.email, execucao=execucao)
+                        total += len(laudos)
+                        _resumo(laudos, executar)
+                        if not args.loop:
+                            break
+                        print(f"\n  ... proximo ciclo em {cfg.INTERVALO_CICLO_S}s\n")
+                        time.sleep(cfg.INTERVALO_CICLO_S)
+                codigo = 0
+            except (smart_sessao.SemNavegador, smart_sessao.SemSessao,
+                    smart_sessao.SmartIndisponivel) as e:
+                print(f"[ERRO] sessao do Smart: {e}")
+                codigo = 2
+    finally:
+        execucao_job.fechar_execucao(execucao, "sucesso" if codigo == 0 else "falha",
+                                     codigo_saida=codigo, qtd_itens=total)
+    return codigo
 
 
 if __name__ == "__main__":

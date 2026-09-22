@@ -6,14 +6,14 @@ vale mais como instrução.
 
 ## Operar
 
-- [COMO_SUBIR_UM_ROBO.md](COMO_SUBIR_UM_ROBO.md) — a receita para criar e publicar um robô: slots de display, wrapper do hub, exit code, task, teste supervisionado, e as armadilhas medidas
+- [COMO_SUBIR_UM_ROBO.md](COMO_SUBIR_UM_ROBO.md) — a receita para criar e publicar um job: slots de display, wrapper do hub, exit code, task, teste supervisionado, e as armadilhas medidas
 - [CREDENCIAIS_GUARDIAN.md](CREDENCIAIS_GUARDIAN.md) — como o container recebe credenciais (apelidos, login efêmero, SMTP pelo broker) e como operar o Guardian
 - [CONVENCOES_PORTAS.md](CONVENCOES_PORTAS.md) — portas e displays
 - [hub_orchestration_API.md](hub_orchestration_API.md) — a API do hub para disparar e consultar tasks
 
-## Robôs
+## Jobs
 
-Cada robô documenta a si mesmo em `src/processors/web/<robo>/docs/README.md`.
+Cada job documenta a si mesmo em `src/processors/web/<robo>/docs/README.md`.
 Guia geral dos boletos: [BOLETOS_LOTE.md](BOLETOS_LOTE.md).
 
 ## O que foi validado, e os limites
@@ -24,4 +24,4 @@ Guia geral dos boletos: [BOLETOS_LOTE.md](BOLETOS_LOTE.md).
 
 ## Em andamento
 
-- [NOTIFICACOES.md](NOTIFICACOES.md) — notificações dos robôs (em revisão)
+- [NOTIFICACOES.md](NOTIFICACOES.md) — notificações dos jobs (em revisão)

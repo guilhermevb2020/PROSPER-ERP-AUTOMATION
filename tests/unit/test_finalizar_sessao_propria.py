@@ -65,8 +65,12 @@ def _preparar(pacote, monkeypatch, sessao):
     monkeypatch.setattr(smart_sessao, "sessao", sessao)
     chamadas = []
     monkeypatch.setattr(pacote, "ciclo",
-                        lambda ctx, ops, executar, email: chamadas.append((ctx, ops, executar)) or [])
+                        lambda ctx, ops, executar, email, execucao=None: chamadas.append((ctx, ops, executar)) or [])
     monkeypatch.setattr(pacote, "_resumo", lambda laudos, executar: None)
+    # o registro de execucao e duble: o main() nao pode tentar banco de verdade num teste
+    ex = pacote.execucao_job.Execucao(id=None, automacao="finalizar_operacao", job="j", flag_ensaio=True)
+    monkeypatch.setattr(pacote.execucao_job, "abrir_execucao", lambda *a, **k: ex)
+    monkeypatch.setattr(pacote.execucao_job, "fechar_execucao", lambda *a, **k: False)
     return chamadas
 
 

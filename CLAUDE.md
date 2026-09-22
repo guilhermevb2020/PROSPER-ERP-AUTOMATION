@@ -94,7 +94,7 @@ em `/app/data/boletos/emitidos`, com manifesto; não versionar esses documentos.
 
 ## Como o projeto funciona hoje (21/09/2026)
 
-Robôs Playwright/Chrome que operam o Smart (ERP) e o doc2you. Cada um mora em
+Jobs Playwright/Chrome que operam o Smart (ERP) e o doc2you. Cada um mora em
 `src/processors/web/<robo>/` e é disparado pelo `hub-orchestration` por
 `docker exec` no container `erp-automation`. O código de 2025 (processadores
 `emissao_boleto_*`, `relatorio_*`, `envio_*`, stack antibot em `src/common/*`,
@@ -103,7 +103,7 @@ entradas que o hub executa importava nada daquilo. Histórico no git (commit da
 remoção) e em `backups/organizacao-20260921/legado-2025.tar.gz`. Os docs
 daquela era estão em `docs/deprecated/`.
 
-| robô | pasta | como o hub chama | display / noVNC |
+| job | pasta | como o hub chama | display / noVNC |
 |---|---|---|---|
 | boletos: emissão, envio, healthcheck, mantenedor de sessão | `boletos/` | `python -m src.processors.web.boletos.{emitir_lote,enviar_lote,healthcheck}`; o `manter_sessao` sobe no `scripts/boot_vnc.sh` | `:99` / 6080 |
 | doc2you (download diário de documentos) | `doc2you/` | `sh .../doc2you/run_agendado.sh [--antecipado]` | `:98` / 6081 |
@@ -121,8 +121,8 @@ túnel ssh ao IP do container (ver `docs/COMO_SUBIR_UM_ROBO.md`).
 
 - **Módulo comum vai em `src/common/clients/`** (`smart_sessao`, `nextcloud_webdav`,
   `whatsapp_evolution`). `src/common/core/config_loader.py` existe só porque o
-  doc2you resolve credencial por ele; não é base para robô novo.
-- **Cada robô tem** `run_agendado.sh` (wrapper do hub: display, env, exit code
+  doc2you resolve credencial por ele; não é base para job novo.
+- **Cada job tem** `run_agendado.sh` (wrapper do hub: display, env, exit code
   propagado com o truque do `$RC`), `<robo>_config.py` (tudo por env), módulo
   puro testável sem navegador, e `docs/README.md`. Receita completa e armadilhas
   medidas: `docs/COMO_SUBIR_UM_ROBO.md`.
@@ -132,13 +132,17 @@ túnel ssh ao IP do container (ver `docs/COMO_SUBIR_UM_ROBO.md`).
   `GSMARTPWD3`: nunca rodar os dois ao mesmo tempo.
 - **Dry-run é do ambiente, no ponto da ação.** `DRY_RUN_*` no `config/robo_*.env`
   barra a ação irreversível dentro da função que a executa, não só no `main()`.
+- **Toda execução de job se registra no banco** por `src/common/clients/execucao_job.py`
+  (`database/erp_004`): abre `job_execucao`, grava `operacao_evento`/`arquivo*`, fecha uma
+  vez. Em DRY o banco pode faltar (degrada e avisa); em modo real é obrigatório — sem
+  registro não há ação irreversível. Tabela de evento nunca muda: corrigir é outro evento.
 - **`config/*.env` são carregados com `sh`**: valor com espaço exige aspas, senão
   a variável fica vazia sem erro.
 
 ### Comandos
 
 ```bash
-# rodar um robô à mão, como o hub faz
+# rodar um job à mão, como o hub faz
 docker exec erp-automation sh /app/src/processors/web/<robo>/run_agendado.sh
 
 # ver / registrar task no hub (sempre --timeout-seconds explícito; começar --disabled)
@@ -147,6 +151,9 @@ docker exec hub-orchestration python run.py tasks upsert-docker <task> --contain
 
 # testes (no host, sem container; nenhum teste fala com o Smart)
 PYTHONPATH=$PWD .venv-sandbox/bin/pytest
+
+# provar migration e integracao num Postgres descartavel (mesma imagem de producao)
+scripts/bancada_pg.sh subir && eval "$(scripts/bancada_pg.sh env)" && PYTHONPATH=$PWD .venv-sandbox/bin/pytest tests/integration && scripts/bancada_pg.sh derrubar
 
 # sandbox contra o Smart real (identidade própria; ver scripts/sandbox/README.md)
 PYTHONPATH=$PWD .venv-sandbox/bin/python scripts/sandbox/<script>.py
@@ -157,7 +164,7 @@ PYTHONPATH=$PWD .venv-sandbox/bin/python scripts/sandbox/<script>.py
 Bind de `/app/src`, `/app/config`, `/app/data`, `/app/logs`: código salvo vale
 na próxima execução, sem rebuild. Recriar (`docker compose up -d`) só na janela
 19:05–07:30, porque mata o mantenedor de sessão e os displays (o `boot_vnc.sh`
-os devolve; o robô de crédito não volta até a task das 07:45). `TZ=America/Sao_Paulo`
+os devolve; o job de crédito não volta até a task das 07:45). `TZ=America/Sao_Paulo`
 está no compose desde 21/09/2026 e vale a partir da recriação; antes disso o
 container rodava em UTC e todo `datetime.now()` saía 3 h adiantado.
 
@@ -169,7 +176,7 @@ credencial — mas confira o `git status` antes de commitar.
 
 `docs/COMO_SUBIR_UM_ROBO.md` (receita e armadilhas) · `docs/CREDENCIAIS_GUARDIAN.md`
 · `docs/CONVENCOES_PORTAS.md` · `docs/BOLETOS_LOTE.md` · `docs/hub_orchestration_API.md`
-· `docs/VALIDACAO_*_2026-09-07.md` · `docs/README.md` (índice). Cada robô tem o
+· `docs/VALIDACAO_*_2026-09-07.md` · `docs/README.md` (índice). Cada job tem o
 seu `docs/README.md`. `docs/deprecated/` é só história.
 
 ## Banco — estado atual

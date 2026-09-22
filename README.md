@@ -1,6 +1,6 @@
 # erp-automation
 
-Robôs que operam o Smart Securities (o ERP da Prospere) e o doc2you: emitem e
+Jobs que operam o Smart Securities (o ERP da Prospere) e o doc2you: emitem e
 enviam boletos, baixam documentos, analisam crédito, geram e processam remessas
 e retornos bancários (CNAB-400 de cobrança, CNAB-240 de pagamento, BB) e
 finalizam operações. Rodam com Playwright/Chrome dentro do container
@@ -9,18 +9,18 @@ finalizam operações. Rodam com Playwright/Chrome dentro do container
 ## Como está organizado
 
 ```
-src/processors/web/<robo>/   um robô por pasta: run_agendado.sh, <robo>_config.py,
+src/processors/web/<robo>/   um job por pasta: run_agendado.sh, <robo>_config.py,
                              módulo puro (testável sem navegador), docs/README.md
 src/common/clients/          o que é compartilhado: sessão do Smart, Nextcloud, WhatsApp
 config/                      processors.yaml e os robo_*.env (gitignored, apelidos do Guardian)
 database/                    migrations do schema erp_automation, com o ledger de aplicação
-scripts/sandbox/             rodar os robôs no host, contra o Smart real, com identidade própria
+scripts/sandbox/             rodar os jobs no host, contra o Smart real, com identidade própria
 tests/unit, tests/integration  suíte automatizada (pytest); nenhum teste fala com o Smart
 docs/                        guias vivos; docs/deprecated/ é história (2025)
-data/, logs/                 saída dos robôs: perfis de Chrome, boletos, prints, CSVs; fora do git
+data/, logs/                 saída dos jobs: perfis de Chrome, boletos, prints, CSVs; fora do git
 ```
 
-| robô | o que faz | task no hub |
+| job | o que faz | task no hub |
 |---|---|---|
 | `boletos/` | emite e envia boletos em lote, mantém a sessão do Smart, healthcheck a cada 15 min | `emitir_lote_boletos*`, `enviar_lote_boletos`, `boletos_healthcheck` |
 | `doc2you/` | baixa os documentos do dia (e o antecipado) e sobe ao Nextcloud | `baixar_documentos_doc2you*` |
@@ -55,16 +55,16 @@ recebe apelidos que o proxy do Access Guardian troca na saída, e o banco é
 acessado por login efêmero. Como funciona e como operar:
 `docs/CREDENCIAIS_GUARDIAN.md`.
 
-## Ver um robô trabalhando
+## Ver um job trabalhando
 
-Cada robô tem um display virtual e um noVNC próprios (tabela em
+Cada job tem um display virtual e um noVNC próprios (tabela em
 `docs/COMO_SUBIR_UM_ROBO.md`). Só a porta 6080 (boletos) é publicada; para os
 outros, túnel ssh ao IP do container: `ssh -L 6087:<ip-do-container>:6087 prospere@192.168.50.5`
 e `http://localhost:6087/vnc.html`.
 
 ## Documentação
 
-- `docs/COMO_SUBIR_UM_ROBO.md` — a receita para criar e publicar um robô, com as armadilhas medidas
+- `docs/COMO_SUBIR_UM_ROBO.md` — a receita para criar e publicar um job, com as armadilhas medidas
 - `docs/CREDENCIAIS_GUARDIAN.md` — credenciais, apelidos e o que nunca pode entrar em arquivo
 - `docs/CONVENCOES_PORTAS.md`, `docs/BOLETOS_LOTE.md`, `docs/hub_orchestration_API.md`
 - `docs/VALIDACAO_*_2026-09-07.md` — o que foi validado em produção e os limites de cada prova

@@ -1,4 +1,4 @@
-# Robô de finalizar operação
+# Job de finalizar operação
 
 Confere cada operação na etapa **"Aguardando Ass."** e, se passar em duas
 verificações, finaliza no Smart. Se não passar, **não finaliza** e avisa.
@@ -51,6 +51,23 @@ cobrar dele nessa fase só gera ruído.
 
 ---
 
+## O que fica registrado no banco (desde 21/09/2026)
+
+Cada rodada abre uma `erp_automation.job_execucao` (automação `finalizar_operacao`) e a
+fecha ao sair, com exit code e quantidade de operações. Por operação, um evento
+`avaliada` com o veredito (`FINALIZARIA` / `BARRADA` / `ERRO`), as pendências e a foto da
+grade de pagamento (`operacao_pagamento_linha`, leitura restrita); em modo real,
+`finalizar_clicado` **antes** do clique e `finalizada` / `finalizacao_falhou` /
+`finalizada_por_outro` depois; e `aviso_enviado` quando o WhatsApp sai. Evento nunca
+muda. O placar (`vw_operacao_placar`) compara o veredito com o espelho do Smart.
+
+Em DRY o banco pode faltar: a execução degrada, avisa uma vez e o ciclo segue. Em modo
+real é obrigatório: sem registro não há clique. Módulo: `src/common/clients/execucao_job.py`;
+migration: `database/erp_004_execucao_e_eventos.sql` — **ainda não aplicada em produção**
+(exige o Guardian no modelo de administração; provada na bancada com 17 testes).
+
+---
+
 ## Dependências — o que ele reusa
 
 Não há cópia de módulo do `robo_credito` aqui. O `r7_config.py` põe
@@ -63,7 +80,7 @@ idêntico** ao do pacote de origem, e os símbolos consumidos de `config.py`
 **valores iguais** nas duas versões.
 
 `classe_risco_tool.py` e `verificar_docs.py` moram aqui porque não existiam no
-repo — candidatos a `src/common/` quando um segundo robô precisar deles.
+repo — candidatos a `src/common/` quando um segundo job precisar deles.
 
 ---
 
@@ -81,7 +98,7 @@ sh /app/src/processors/web/robo_finalizar/run_agendado.sh --executar
 **dentro de `finalizar_da_grade()`**: nenhum caminho clica com `R7_DRY_RUN=1`, nem o
 `scripts/sandbox/finalizar_op_executar.py --confirmar` (teste `test_finalizar_trava_dry`).
 
-Desde 21/09/2026 o robô **sobe a própria sessão** do Smart pelo
+Desde 21/09/2026 o job **sobe a própria sessão** do Smart pelo
 `src/common/clients/smart_sessao` (o mesmo do `robo_pagamento`): abre o Chrome no
 display `:92`, loga via CapSolver com a credencial do finalizador e fecha ao terminar.
 `--cdp` anexa num Chrome já aberto (desenvolvimento pelo VNC). Antes ele exigia um
@@ -113,7 +130,7 @@ Dois dias de ciclos contínuos contra o Smart e o doc2you **reais**:
   sandbox (no container ela vem do `env_file`). Testados só os caminhos de
   erro (401 sem chave / com chave inválida), que falham fechado.
 - **Acurácia medida.** O `placar.py` nunca rodou. "A operação sumiu da fila
-  depois que o robô aprovou" **não é prova** — operações barradas também somem,
+  depois que o job aprovou" **não é prova** — operações barradas também somem,
   e uma delas saiu e voltou assinada 12 min depois.
 - **Volume alto.** As filas observadas tiveram no máximo 7 operações.
 
@@ -124,7 +141,7 @@ Dois dias de ciclos contínuos contra o Smart e o doc2you **reais**:
 **Operação aberta em outra sessão trava a checagem de pagamento.** O
 `#btnPagamento` fica `disabled` — presente no DOM, visível, sem nada por cima —
 e o clique morre por timeout de 15s. Produziu 2 `ERRO` numa op que minutos
-depois passou sem problema. O robô ainda reporta isso como
+depois passou sem problema. O job ainda reporta isso como
 `Locator.click: Timeout`, mensagem que não diz nada: **o timeout está calibrado
 para 15s numa tela que pode travar ~90s.** Corrigir isso é o próximo item.
 

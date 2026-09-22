@@ -363,3 +363,29 @@ recria na hora, ou não declara.
 - [ ] Run supervisionado, com o **log** provando que fez — não só o exit code
 - [ ] `docs/README.md` com o que foi validado **e o que não foi**
 - [ ] Commit com os arquivos enumerados, `git diff --cached --name-only` antes
+
+
+---
+
+## 10. Registre a execução no banco (desde 21/09/2026)
+
+Todo job abre uma `job_execucao` ao começar e a fecha ao sair, e grava como evento cada
+fato de negócio (operação avaliada, clique, finalização, arquivo gerado/enviado/recebido).
+É `src/common/clients/execucao_job.py`, sobre as tabelas da `database/erp_004`. O
+finalizador é o primeiro; os outros migram do CSV um a um (pagamento primeiro).
+
+```python
+from src.common.clients import execucao_job
+ex = execucao_job.abrir_execucao("remessa_pagamento", "gerar_remessa_pagamento_cnab_240",
+                                 flag_ensaio=cfg.DRY_RUN, obrigatoria=not cfg.DRY_RUN,
+                                 apelido_credencial=os.environ.get("PAGAMENTO_SENHA"))
+aid = execucao_job.registrar_arquivo(ex, "remessa_pagamento_cnab_240", "gerado",
+                                     nome_arquivo=nome, conteudo=dados, titulos=[...])
+execucao_job.registrar_evento_arquivo(ex, aid, "enviado")
+execucao_job.fechar_execucao(ex, "sucesso", codigo_saida=0, qtd_itens=1)
+```
+
+Regras: em DRY o banco pode faltar (a execução degrada e avisa uma vez); em modo real é
+obrigatório — `obrigatoria=True` faz `abrir` levantar e `registrar` recusar antes da ação.
+Evento nunca muda: corrigir é gravar outro. O apelido da credencial se registra; a senha,
+nunca (`apelido_seguro` recusa o que não tiver forma de apelido).
