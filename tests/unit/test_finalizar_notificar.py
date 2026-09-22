@@ -48,7 +48,7 @@ def n(monkeypatch, tmp_path):
     monkeypatch.setattr(mod.cfg, "WHATSAPP_ATIVO", True)
     monkeypatch.setattr(mod.cfg, "AVISO_PENDENCIA_CANAIS", ["email"])
     monkeypatch.setattr(mod.cfg, "EMAIL_DESTINO", ["operacional@exemplo.test"])
-    monkeypatch.setattr(mod.cfg, "WHATSAPP_DESTINO_PENDENCIA", ["5500000000000"])
+    monkeypatch.setattr(mod.cfg, "WHATSAPP_DESTINO_OPERACIONAL", ["5500000000000"])
     mod._wpp_enviados = []
     mod._wpp_falhar = False
 

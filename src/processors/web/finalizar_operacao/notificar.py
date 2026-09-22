@@ -453,7 +453,7 @@ def _avisar(op, pendencias, assunto, corpo, destinatarios, texto_whatsapp=None, 
     reforco = f" (cobranca #{n_anterior + 1})" if n_anterior else ""
     r["tentou"] = True
     if "whatsapp" in canais:
-        n_ok, res = notificar_whatsapp.enviar(texto_whatsapp, cfg.WHATSAPP_DESTINO_PENDENCIA)
+        n_ok, res = notificar_whatsapp.enviar(texto_whatsapp, cfg.WHATSAPP_DESTINO_OPERACIONAL)
         r["canais"]["whatsapp"] = {"ok": bool(n_ok), "detalhe": "; ".join(
             f"{num}: {'OK' if ok else 'FALHOU'} - {str(d)[:80]}" for num, ok, d in res)}
     if "email" in canais:

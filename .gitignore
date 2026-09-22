@@ -111,3 +111,6 @@ logs/
 src/processors/web/finalizar_operacao/finalizadas.csv
 src/processors/web/finalizar_operacao/avisos_enviados.csv
 src/processors/web/finalizar_operacao/whatsapp_enviados.txt
+src/processors/web/finalizar_operacao/finalizadas_pix.jsonl
+src/processors/web/finalizar_operacao/rotina_avisos.json
+src/processors/web/finalizar_operacao/rotina_avisos.json.tmp

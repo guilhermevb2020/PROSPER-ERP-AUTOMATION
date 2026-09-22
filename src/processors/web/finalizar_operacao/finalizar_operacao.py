@@ -48,6 +48,7 @@ import finalizar as fin              # noqa: E402
 import listar_fila                   # noqa: E402
 import notificar                     # noqa: E402
 import notificar_whatsapp            # noqa: E402
+import rotina_avisos                 # noqa: E402
 import r7_config as cfg              # noqa: E402
 from src.common.clients import execucao_job  # noqa: E402  (PYTHONPATH=/app, como o smart_sessao)
 
@@ -270,6 +271,7 @@ def processar(ctx, op, executar=False, mandar_email=False, execucao=None):
         if not dentro:
             laudo["acao"] = "finalizaria (fora da janela de horario)"
             print(f"     [janela] NAO clicou em Finalizar: {motivo_janela}")
+            _avisar_corte(op, cedente, valor, laudo, mandar_email, execucao)
             return laudo
 
         # FINALIZA na MESMA pagina (sem re-navegar) e liga o aceite de dialogos
@@ -292,6 +294,7 @@ def processar(ctx, op, executar=False, mandar_email=False, execucao=None):
         elif r_fin["situacao"] == "fora_da_janela":
             # o relogio cruzou o limite entre a checagem acima e o clique: nao e falha
             laudo["acao"] = "finalizaria (fora da janela de horario)"
+            _avisar_corte(op, cedente, valor, laudo, mandar_email, execucao)
         elif r_fin["situacao"] == "finalizada_por_outro":
             # nao e falha: o operador chegou primeiro. Nao avisamos por WhatsApp
             # porque nao fomos nos que finalizamos.
@@ -311,6 +314,12 @@ def processar(ctx, op, executar=False, mandar_email=False, execucao=None):
             print(f"        [dialogo] {d}")
         if r_fin["ok"]:
             _registrar_finalizada(op, cedente)
+            try:
+                # CPF/CNPJ + valor de cada linha: e o que casa com o retorno do banco
+                rotina_avisos.registrar_finalizada(
+                    op, cedente, valor, (laudo.get("detalhes") or {}).get("linhas_pagamento"))
+            except Exception as e:  # noqa: BLE001
+                print(f"     registro do PIX a conferir FALHOU: {str(e)[:120]}")
             _avisar_finalizacao(op, cedente, valor, laudo.get("detalhes"), r_fin["detalhe"],
                                 execucao=execucao)
         return laudo
@@ -352,6 +361,62 @@ def _avisar_pagamento(op, cedente, valor, r_pag, laudo, mandar_email, execucao):
         except Exception as e:  # noqa: BLE001
             print(f"     registro do aviso FALHOU: {str(e)[:120]}")
     return "avisado" if r["enviado"] else "avisar"
+
+
+def _registrador(execucao):
+    """Grava um aviso da rotina como evento aviso_enviado. None sem execucao."""
+    if execucao is None:
+        return None
+
+    def _registrar(op, motivo, ok, detalhe, cedente=None, valor=None):
+        try:
+            execucao_job.registrar_evento_operacao(
+                execucao, op, "aviso_enviado", resultado="ok" if ok else "falhou",
+                cedente=cedente, valor_liquido=valor,
+                detalhe={"motivo_aviso": motivo, "canal": "whatsapp", "detalhe": detalhe})
+        except Exception as e:  # noqa: BLE001
+            print(f"     registro do aviso FALHOU: {str(e)[:120]}")
+    return _registrar
+
+
+def _valor_da_grade(laudo, valor):
+    """O valor da op; sem o do banco (op de hoje ainda nao esta no espelho), a soma da grade."""
+    if valor is not None:
+        return valor
+    linhas = (laudo.get("detalhes") or {}).get("linhas_pagamento") or []
+    soma = sum(v for v in (rotina_avisos.valor_br(l.get("valor")) for l in linhas) if v)
+    return soma or None
+
+
+def _avisar_corte(op, cedente, valor, laudo, mandar_email, execucao):
+    """Pronta depois do limite de hora: o operacional ainda pode finalizar a mao ate 18:50."""
+    if not mandar_email:
+        return
+    try:
+        rotina_avisos.avisar_corte(op, cedente, _valor_da_grade(laudo, valor),
+                                   registrar=_registrador(execucao))
+    except Exception as e:  # noqa: BLE001
+        print(f"     aviso de corte FALHOU: {str(e)[:120]}")
+
+
+def _rotina_de_avisos(ctx, laudos, execucao):
+    """PIX das ops finalizadas pelo robo, assinaturas paradas e resumo do dia (ver
+    rotina_avisos.py). Nunca derruba a rodada."""
+    nuvem = None
+    try:
+        from src.common.clients.nextcloud_webdav import NextcloudWebDAV
+        nuvem = NextcloudWebDAV(dest_base=cfg.NC_RETORNOS, cred_env=cfg.NC_ENV)
+    except Exception as e:  # noqa: BLE001
+        print(f"  [rotina] sem Nextcloud para conferir o PIX: {str(e)[:100]}")
+    try:
+        rotina_avisos.depois_do_ciclo(
+            laudos, nuvem, etapa_de=lambda op: _etapa_da_operacao(ctx, op),
+            registrar=_registrador(execucao),
+            anotar=((lambda chave, v: execucao_job.anotar(execucao, chave, v))
+                    if execucao is not None else None))
+    except Exception as e:  # noqa: BLE001
+        print(f"  [rotina] avisos da rodada FALHARAM: {str(e)[:160]}")
+        traceback.print_exc()
 
 
 def _avisar_finalizacao(op, cedente, valor, detalhes, confirmacao, execucao=None):
@@ -512,6 +577,9 @@ def main():
                         laudos = ciclo(ctx, ops, executar, args.email, execucao=execucao)
                         total += len(laudos)
                         _resumo(laudos, executar)
+                        if args.email and ops is None:
+                            # so na fila inteira: --ops de teste nao vira resumo nem aviso
+                            _rotina_de_avisos(ctx, laudos, execucao)
                         if not args.loop:
                             break
                         print(f"\n  ... proximo ciclo em {cfg.INTERVALO_CICLO_S}s\n")

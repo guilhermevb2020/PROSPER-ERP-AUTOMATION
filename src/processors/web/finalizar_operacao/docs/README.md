@@ -99,11 +99,31 @@ repo — candidatos a `src/common/` quando um segundo job precisar deles.
 
 ## Avisos — quem fica sabendo do quê
 
-| situação da operação | aviso | para quem | chave |
+Dois públicos. **Gestão** acompanha: `R7_WHATSAPP_DESTINO`. **Operacional** age:
+`R7_WHATSAPP_DESTINO_OPERACIONAL` (número ou id de grupo; padrão: o mesmo da gestão).
+Tudo, menos o aviso de finalização, exige `--avisar` no comando da task.
+
+| o que aconteceu | aviso | para quem | quando |
 |---|---|---|---|
-| finalizada pelo robô | WhatsApp | `R7_WHATSAPP_DESTINO` | `R7_WHATSAPP_ATIVO` |
-| documentos assinados, mas o **pagamento** impede a finalização | WhatsApp e/ou e-mail | `R7_WHATSAPP_DESTINO_PENDENCIA` (padrão: o mesmo) e `R7_EMAIL_DESTINO` (operacional@) | `--avisar` no comando **e** `R7_AVISO_PENDENCIA_CANAIS` (+ a chave de cada canal) |
-| esperando assinatura | **nenhum** | — | — |
+| op finalizada pelo robô | WhatsApp | gestão | na hora |
+| **PIX confirmado pelo banco** | WhatsApp, uma lista por rodada | gestão | quando o retorno chega (uns 7 min depois) |
+| **PIX recusado** pelo banco | WhatsApp, por op, com o código | operacional | na rodada em que o retorno chega |
+| **PIX que não saiu** | WhatsApp, por op | operacional | `R7_PIX_ATRASO_MIN` (30 min) sem retorno; última chamada na rodada do resumo do dia |
+| documentos assinados, mas o **pagamento** trava | WhatsApp (e-mail pronto, desligado) | operacional | na hora; repete 2 h, 4 h… se continuar |
+| **pronta depois do corte** (18:30) | WhatsApp, por op | operacional | na hora: dá para finalizar à mão até 18:50 |
+| **assinaturas paradas** | WhatsApp, uma lista | operacional | `R7_RESUMO_ASSINATURAS_HORAS` (11:00 e 15:00) |
+| **resumo do dia** | WhatsApp | gestão | primeira rodada depois de `R7_RESUMO_DIA_HORA` (18:40) |
+| esperando assinatura, por op | **nenhum** | — | — |
+
+**Como o robô sabe que o PIX saiu.** Quando ele finaliza, guarda o CPF/CNPJ e o valor de cada
+linha de pagamento em `finalizadas_pix.jsonl`. A cada rodada lê os retornos CNAB-240 do dia no
+Nextcloud (`_RETORNOS` e `_PROCESSADOS`, os mesmos que o `retorno_pagamento` importa) e casa por
+documento e valor exato; ocorrência `00` é crédito efetivado. Medido em 22/09/2026 sobre 412
+retornos: só `00` e recusas (`55` chave PIX errada, `AL`, `AN`, `AP`), nenhum código
+intermediário. Estado dos avisos em `rotina_avisos.json`. Os dois arquivos ficam no bind de
+`src/` e são gitignorados; os testes os desviam para uma pasta temporária (`tests/conftest.py`)
+desde que, em 22/09, gravaram ops de mentira no arquivo real. Código: `rotina_avisos.py` e
+`pix_retorno.py`; testes: `test_finalizar_rotina_avisos`.
 
 O aviso de pagamento é o que importa: só o operador corrige a grade PIX, e enquanto ele não
 corrige o dinheiro não sai. Esperar assinatura é o estado normal da etapa (horas ou dias);

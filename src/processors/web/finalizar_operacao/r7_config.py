@@ -220,9 +220,33 @@ WHATSAPP_PROVIDER = _s("R7_WHATSAPP_PROVIDER", "evolution").strip().lower()
 WHATSAPP_ATIVO = _b("R7_WHATSAPP_ATIVO", "1")
 WHATSAPP_DESTINO = [n.strip() for n in _s(
     "R7_WHATSAPP_DESTINO", "5511963226389").split(",") if n.strip()]
-# Quem recebe o aviso de PAGAMENTO pendente no WhatsApp (padrao: o mesmo das finalizacoes).
-WHATSAPP_DESTINO_PENDENCIA = [n.strip() for n in _s(
-    "R7_WHATSAPP_DESTINO_PENDENCIA", ",".join(WHATSAPP_DESTINO)).split(",") if n.strip()]
+# Dois publicos (22/09/2026). GESTAO acompanha: finalizacao, PIX confirmado, resumo do
+# dia -> WHATSAPP_DESTINO. OPERACIONAL age: pagamento travado, pronta depois do corte,
+# assinaturas paradas, PIX recusado ou que nao saiu -> WHATSAPP_DESTINO_OPERACIONAL.
+# Numero ou id de grupo do WhatsApp; os dois comecam no mesmo numero.
+WHATSAPP_DESTINO_OPERACIONAL = [n.strip() for n in _s(
+    "R7_WHATSAPP_DESTINO_OPERACIONAL",
+    _s("R7_WHATSAPP_DESTINO_PENDENCIA", ",".join(WHATSAPP_DESTINO))).split(",") if n.strip()]
+WHATSAPP_DESTINO_PENDENCIA = WHATSAPP_DESTINO_OPERACIONAL   # nome antigo, mesmo destino
+
+# Rotina de avisos (rotina_avisos.py), toda sob --avisar:
+# resumo de assinaturas paradas nestes horarios, cada um valendo por JANELA_MIN
+RESUMO_ASSINATURAS_HORAS = [h.strip() for h in _s(
+    "R7_RESUMO_ASSINATURAS_HORAS", "11:00,15:00").split(",") if h.strip()]
+RESUMO_ASSINATURAS_JANELA_MIN = int(_s("R7_RESUMO_ASSINATURAS_JANELA_MIN", "120"))
+# resumo do dia na primeira rodada a partir desta hora (o cron roda ate 18:45); e tambem a
+# hora da "ultima chamada" do PIX que nao saiu
+RESUMO_DIA_HORA = _s("R7_RESUMO_DIA_HORA", "18:40").strip()
+# PIX de op finalizada pelo robo sem retorno do banco depois de N min -> aviso ao operacional
+PIX_ATRASO_MIN = int(_s("R7_PIX_ATRASO_MIN", "30"))
+# retornos CNAB-240 de pagamento no Nextcloud (os mesmos que o retorno_pagamento importa)
+NC_RETORNOS = _s("R7_NC_RETORNOS", "FINANCEIRO/Pagamentos-MoneyPlus/_RETORNOS")
+NC_ENV = _s("R7_NC_ENV", "/app/config/nextcloud.env")
+# estado local da rotina (bind de src/, gitignorado)
+# (env sobrescreve: o tests/conftest.py desvia todos para uma pasta temporaria - em 22/09
+# os testes gravaram ops de mentira no arquivo real, que o container le)
+ARQ_ROTINA = _s("R7_ARQ_ROTINA", os.path.join(_AQUI, "rotina_avisos.json"))
+ARQ_FINALIZADAS_PIX = _s("R7_ARQ_FINALIZADAS_PIX", os.path.join(_AQUI, "finalizadas_pix.jsonl"))
 # Instancia da Evolution. O nome real e resolvido pelo modulo comum via
 # EVOLUTION_INST_<TAG>_NAME, a mesma convencao do healthcheck dos boletos.
 WHATSAPP_INSTANCIA = _s("R7_WHATSAPP_INSTANCIA", "Prosperito")
@@ -280,9 +304,9 @@ INTERVALO_CICLO_S = int(_s("R7_INTERVALO_CICLO_S", "600"))
 # ZERA e o aviso sai na hora.
 AVISO_INTERVALO_BASE_MIN = int(_s("R7_AVISO_INTERVALO_BASE_MIN", "120"))  # 2h
 AVISO_INTERVALO_TETO_H = int(_s("R7_AVISO_INTERVALO_TETO_H", "24"))       # 1x/dia no limite
-ARQ_AVISOS = os.path.join(_AQUI, "avisos_enviados.csv")
+ARQ_AVISOS = _s("R7_ARQ_AVISOS", os.path.join(_AQUI, "avisos_enviados.csv"))
 # Ops finalizadas pelo robo (trilha de auditoria).
-ARQ_FINALIZADAS = os.path.join(_AQUI, "finalizadas.csv")
+ARQ_FINALIZADAS = _s("R7_ARQ_FINALIZADAS", os.path.join(_AQUI, "finalizadas.csv"))
 DEBUG_DIR = _s("DEBUG_DIR_R7", "debug_r7")
 
 
