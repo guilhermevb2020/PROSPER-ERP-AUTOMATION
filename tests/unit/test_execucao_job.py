@@ -300,3 +300,46 @@ def test_apelido_seguro_aceita_apelido_do_guardian_e_recusa_o_resto():
     assert ej.apelido_seguro("GSMARTPWD2") == "GSMARTPWD2"
     assert ej.apelido_seguro("__GUARDIAN_SANDBOX_CAPSOLVER_API_KEY__") == "__GUARDIAN_SANDBOX_CAPSOLVER_API_KEY__"
     assert ej.apelido_seguro("senha-de-verdade") is None and ej.apelido_seguro(None) is None
+
+
+# --------------------------------------------------------------------------- #
+# Achado da revisao de 22/09/2026: registro de FATO CONSUMADO nunca derruba o job
+# --------------------------------------------------------------------------- #
+def _estrita_com_falha_em(trecho_sql):
+    """Uma execucao aberta em modo ESTRITO (o dos jobs de arquivo pra valer), cujo
+    banco vai falhar em qualquer comando que contenha `trecho_sql`."""
+    conn = _Conn()
+    conn.falhar_em = trecho_sql
+    return ej.Execucao(id=1, automacao="retorno_cobranca",
+                                 job="processar_retorno_bb", flag_ensaio=False,
+                                 estrito=True, _conn=conn)
+
+
+def test_falha_ao_registrar_arquivo_avisa_e_nao_derruba_mesmo_em_modo_estrito():
+    """O arquivo ja foi processado quando o registro roda: levantar aqui nao desfaz a
+    baixa, so mata o job com traceback e deixa a fila pela metade. Tem de virar aviso."""
+    ex = _estrita_com_falha_em("erp_automation.arquivo")
+    avisos = []
+    arq_id = ej.registrar_arquivo(
+        ex, "retorno_bb", "recebido", nome_arquivo="X.RET", conteudo=b"x",
+        log=avisos.append)
+    assert arq_id is None
+    assert any("fato ja consumado" in a for a in avisos), avisos
+    # e o evento sobre um arquivo que nao registrou tambem nao derruba
+    assert ej.registrar_evento_arquivo(ex, None, "processado", log=avisos.append) is None
+
+
+def test_falha_ao_registrar_evento_de_arquivo_avisa_e_nao_derruba_em_modo_estrito():
+    ex = _estrita_com_falha_em("arquivo_evento")
+    avisos = []
+    assert ej.registrar_evento_arquivo(ex, 7, "gerado", log=avisos.append) is None
+    assert any("fato ja consumado" in a for a in avisos), avisos
+
+
+def test_registrar_intencao_continua_estrito():
+    """O contraste que da sentido a regra: `finalizar_clicado` e registro de INTENCAO,
+    antes do clique. Ali, sem banco, o finalizador NAO clica — e para isso o modo
+    estrito tem de continuar levantando."""
+    ex = _estrita_com_falha_em("operacao_evento")
+    with pytest.raises(ej.ErroDeRegistro):
+        ej.registrar_evento_operacao(ex, 65071, "finalizar_clicado", log=lambda *_: None)

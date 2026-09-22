@@ -1075,7 +1075,15 @@ def main():
 
     # A execucao no banco: em DRY pode faltar (degrada e avisa); PRA VALER e obrigatoria —
     # gerar ou cancelar remessa mexe na cobranca do sacado, entao sem registro nao se age.
-    _dry = (cfg.DRY_RUN or args.simular) and not args.pra_valer
+    # O dry da EXECUCAO tem de ser o mesmo dry que o modo usa de verdade, senao a linha
+    # no banco mente (rotula como REAL uma rodada seca) e exige banco de quem nao vai agir:
+    #   - cancelamento e BB API NAO herdam o DRY_RUN do ambiente: so --pra-valer os liga
+    #   - a geracao (--gerar) honra DRY_RUN_REM e --simular
+    # Achado da revisao de 22/09/2026.
+    if args.cancelar or args.bb_api_convenio:
+        _dry = not args.pra_valer
+    else:
+        _dry = (cfg.DRY_RUN or args.simular) and not args.pra_valer
     try:
         execucao = execucao_job.abrir_execucao(
             "remessa_cobranca",

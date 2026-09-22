@@ -335,6 +335,22 @@ def registrar_evento_operacao(ex: Execucao, id_operacao, tipo_evento: str, *,
     return evento_id
 
 
+def _fato_consumado(ex: Execucao, log, descricao: str, fn):
+    """Registro de algo que JA aconteceu (arquivo gerado, baixa dada, evento ocorrido).
+
+    O modo estrito existe para o gate de ABERTURA — sem banco, o job nao age — e para
+    registrar INTENCAO antes de agir (o `finalizar_clicado` do finalizador). Depois que a
+    acao irreversivel aconteceu, levantar nao desfaz nada: so derruba o job com traceback
+    e deixa os itens seguintes da fila sem processar. Aqui a falha vira aviso, sempre. O
+    CSV de controle continua sendo escrito ao lado, entao a prova nao se perde.
+    Achado da revisao de 22/09/2026, nos quatro jobs de arquivo."""
+    try:
+        return fn()
+    except ErroDeRegistro as e:
+        ex._avisar(log, f"{descricao}: {e} (fato ja consumado; o job segue)")
+        return None
+
+
 def registrar_arquivo(ex: Execucao, tipo_arquivo: str, sentido: str, *, nome_arquivo: str,
                       conteudo: bytes | None = None, caminho: str | None = None,
                       qtd_registros: int | None = None, valor_total=None,
@@ -343,9 +359,24 @@ def registrar_arquivo(ex: Execucao, tipo_arquivo: str, sentido: str, *, nome_arq
                       detalhe: dict | None = None, titulos: list | None = None,
                       log=print) -> int | None:
     """Registra um arquivo pelo conteudo (sha256). O mesmo conteudo nao entra duas vezes:
-    devolve o id ja existente. titulos: [{numero_linha, id_titulo, id_operacao, ...}]."""
+    devolve o id ja existente. titulos: [{numero_linha, id_titulo, id_operacao, ...}].
+    Fato consumado: falha de banco vira aviso, nunca derruba o job."""
     if ex is None:
         return None
+    return _fato_consumado(ex, log, f"arquivo {nome_arquivo}", lambda: _registrar_arquivo(
+        ex, tipo_arquivo, sentido, nome_arquivo=nome_arquivo, conteudo=conteudo,
+        caminho=caminho, qtd_registros=qtd_registros, valor_total=valor_total,
+        conta_id=conta_id, conta_label=conta_label, origem_caminho=origem_caminho,
+        destino_caminho=destino_caminho, detalhe=detalhe, titulos=titulos, log=log))
+
+
+def _registrar_arquivo(ex: Execucao, tipo_arquivo: str, sentido: str, *, nome_arquivo: str,
+                       conteudo: bytes | None = None, caminho: str | None = None,
+                       qtd_registros: int | None = None, valor_total=None,
+                       conta_id: str | None = None, conta_label: str | None = None,
+                       origem_caminho: str | None = None, destino_caminho: str | None = None,
+                       detalhe: dict | None = None, titulos: list | None = None,
+                       log=print) -> int | None:
     if tipo_arquivo not in TIPOS_ARQUIVO:
         raise ValueError(f"tipo_arquivo desconhecido: {tipo_arquivo!r}")
     if sentido not in ("gerado", "recebido"):
@@ -391,8 +422,18 @@ def registrar_arquivo(ex: Execucao, tipo_arquivo: str, sentido: str, *, nome_arq
 def registrar_evento_arquivo(ex: Execucao, fk_arquivo: int | None, tipo_evento: str, *,
                              resultado: str | None = None, detalhe: dict | None = None,
                              log=print) -> int | None:
+    """Evento de arquivo e sempre fato consumado: falha de banco vira aviso."""
     if ex is None:
         return None
+    return _fato_consumado(
+        ex, log, f"evento {tipo_evento} do arquivo #{fk_arquivo}",
+        lambda: _registrar_evento_arquivo(ex, fk_arquivo, tipo_evento, resultado=resultado,
+                                          detalhe=detalhe, log=log))
+
+
+def _registrar_evento_arquivo(ex: Execucao, fk_arquivo: int | None, tipo_evento: str, *,
+                              resultado: str | None = None, detalhe: dict | None = None,
+                              log=print) -> int | None:
     if tipo_evento not in TIPOS_EVENTO_ARQUIVO:
         raise ValueError(f"tipo_evento desconhecido: {tipo_evento!r}")
     if fk_arquivo is None:
