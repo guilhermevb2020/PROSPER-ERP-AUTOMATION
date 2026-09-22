@@ -623,7 +623,10 @@ def manter_sessao_viva(intervalo_keepalive_s: int = 120) -> None:
     apenas avisa que precisa de intervencao manual via VNC. Isso evita loops
     indesejados de reCAPTCHA.
     """
-    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    # line_buffering: o log do mantenedor e redirecionado para arquivo (boot_vnc, religar do
+    # healthcheck, docker exec -d). Sem isso a saida fica em buffer de bloco e o keepalive so
+    # aparece horas depois — um travamento passa despercebido (22/09/2026, log vazio por minutos).
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace", line_buffering=True)
     print(f"[{_now()}] subindo Chrome | display={cfg.DISPLAY} headless={cfg.HEADLESS}")
     print(f"[{_now()}] perfil persistente: {cfg.USER_DATA_DIR}")
     print(f"[{_now()}] CDP exposto em {cfg.CDP_URL}")
