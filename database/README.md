@@ -121,3 +121,41 @@ Sem a bancada no ar, esses testes são **pulados**, não falham.
 — é assim que a bancada o aponta para o Postgres descartável sem risco de o `.env` o
 devolver para produção. O runner imprime o alvo antes de qualquer coisa, e
 `BANCADA_PULAR` é recusado na porta 5432.
+## Aplicada em produção em 21/09/2026
+
+A `erp_004` está no `prosperedb`: 6 tabelas e 4 views da `app_erp_automation_evento`,
+`vw_operacao_placar` da `app_erp_automation`, 10 gatilhos, os 4 índices únicos de regra.
+Provado logo após aplicar, como `app_erp_automation` e dentro de transação desfeita:
+abre execução e grava evento (permitido), fecha uma vez (a segunda o gatilho recusa),
+`UPDATE`/`DELETE` em `operacao_evento` negados por privilégio, `DISABLE TRIGGER` negado
+por não ser dona. A primeira execução real registrada é a #2, do finalizador pelo hub.
+
+O modelo `erp-automation-ddl` **existe** no `roles.yaml` do Guardian desde 21/09/2026
+(`herda: [access_admin, app_erp_automation]`, 2 h, sem permanente). Para aplicar:
+
+```bash
+bin/guardian conceder-banco NOME --modelo erp-automation-ddl --horas 2 --para ~/NOME.pgpass
+DB_ADMIN_HOST=127.0.0.1 DB_ADMIN_USER=tmp_NOME \
+  DB_ADMIN_PASSWORD="$(cut -d: -f5 ~/NOME.pgpass)" ./database/aplicar.sh --dry-run
+# sem --dry-run para aplicar; ao terminar:
+bin/guardian revogar-banco NOME && shred -u ~/NOME.pgpass
+```
+
+⚠️ `DB_PORT` é o nome da variável de porta, não `DB_ADMIN_PORT`. Errar isso aponta o
+aplicador para a 5432, que é produção.
+
+### Quando o ledger diz que o conteúdo mudou
+
+Migration aplicada é imutável e a guarda barra — é isso que se quer. Só existe uma saída,
+e ela não executa SQL nenhum: `RECONCILIAR="<arquivo>" RECONCILIAR_MOTIVO="<por quê>"`
+atualiza o hash no ledger e grava o motivo em `aplicada_por`. Serve para o caso em que a
+migration foi editada **antes de o `database/` ser versionado** e o original não existe
+mais para comparar — nunca para fazer passar uma alteração que você quer ver aplicada,
+que vai em arquivo novo.
+
+Foi usada uma vez, na `erp_002`: editada depois de aplicada em 12/08/2026, sem original.
+Antes de reconciliar, o estado foi conferido no banco (herança de `dev_user` revogada,
+`USAGE` nos 5 schemas, leituras diretas concedidas). Reaplicar era impossível: ela cita
+`api.erp_operacoes_ocultas_dia_anterior` e `dwh.fct_titulos_quitados`, que não existem
+mais — outros projetos renomearam esses objetos depois.
+

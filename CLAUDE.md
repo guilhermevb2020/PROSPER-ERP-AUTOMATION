@@ -139,9 +139,11 @@ túnel ssh ao IP do container (ver `docs/COMO_SUBIR_UM_JOB.md`).
 - **Dry-run é do ambiente, no ponto da ação.** `DRY_RUN_*` no `config/robo_*.env`
   barra a ação irreversível dentro da função que a executa, não só no `main()`.
 - **Toda execução de job se registra no banco** por `src/common/clients/execucao_job.py`
-  (`database/erp_004`): abre `job_execucao`, grava `operacao_evento`/`arquivo*`, fecha uma
-  vez. Em DRY o banco pode faltar (degrada e avisa); em modo real é obrigatório — sem
-  registro não há ação irreversível. Tabela de evento nunca muda: corrigir é outro evento.
+  (`database/erp_004`, **aplicada em produção em 21/09/2026**): abre `job_execucao`, grava
+  `operacao_evento`/`arquivo*`, fecha uma vez. Em DRY o banco pode faltar (degrada e avisa);
+  em modo real é obrigatório — sem registro não há ação irreversível. Hoje só o finalizador
+  registra; os outros jobs ainda controlam por CSV (`data/*/controle_*.csv`), e a conversão
+  é frente própria. Tabela de evento nunca muda: corrigir é outro evento.
 - **`config/*.env` são carregados com `sh`**: valor com espaço exige aspas, senão
   a variável fica vazia sem erro.
 

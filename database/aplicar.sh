@@ -37,6 +37,21 @@ echo "alvo: ${PGUSER}@${PGHOST}:${PGPORT}/${PGDATABASE}"
 # BANCADA_PULAR: migrations que so fazem sentido em producao (movem tabelas que a
 # bancada nao tem) entram no ledger como puladas, sem rodar. NUNCA na porta de
 # producao: pular migration la e corromper o ledger.
+# RECONCILIAR + RECONCILIAR_MOTIVO: o ledger diz que um arquivo foi aplicado com um
+# conteudo, e o arquivo no disco tem outro. Acontece com migration aplicada ANTES de o
+# projeto versionar o database/ — o original nao existe mais para comparar. Isto NAO roda
+# SQL nenhum: so admite, no proprio ledger e com motivo obrigatorio, que o conteudo de hoje
+# foi conferido contra o estado real do banco. Reaplicar nao e opcao quando a migration
+# referencia objeto que outro projeto ja renomeou.
+# ⛔ Nunca use para "fazer passar" uma migration que voce editou e quer ver aplicada: essa
+#    vai em arquivo novo. Aqui o conteudo novo nao e executado — ele so para de alarmar.
+RECONCILIAR="${RECONCILIAR:-}"
+RECONCILIAR_MOTIVO="${RECONCILIAR_MOTIVO:-}"
+RECONCILIAR_MOTIVO="${RECONCILIAR_MOTIVO//\'/}"   # sem aspa simples: o motivo entra num literal SQL
+if [[ -n "$RECONCILIAR" && -z "$RECONCILIAR_MOTIVO" ]]; then
+  echo "ERRO: RECONCILIAR exige RECONCILIAR_MOTIVO (fica gravado no ledger)." >&2; exit 1
+fi
+
 BANCADA_PULAR="${BANCADA_PULAR:-}"
 if [[ -n "$BANCADA_PULAR" && "$PGPORT" == "5432" ]]; then
   echo "ERRO: BANCADA_PULAR so vale na bancada (porta != 5432)." >&2; exit 1
@@ -77,8 +92,22 @@ for caminho in "$DIR_MIGRATIONS"/erp_*.sql; do
 
   if [[ -n "$hash_gravado" ]]; then
     if [[ "$hash_gravado" != "$hash_atual" ]]; then
+      if [[ " $RECONCILIAR " == *" $arquivo "* ]]; then
+        if (( DRY_RUN )); then
+          echo "  RECONCILIARIA: $arquivo (ledger ${hash_gravado:0:12}... -> conteudo de hoje; nada e executado)"
+        else
+          psql_q "UPDATE erp_automation.migration_aplicada
+                     SET sha256 = '$hash_atual',
+                         aplicada_por = current_user || ' (reconciliada: $RECONCILIAR_MOTIVO)'
+                   WHERE arquivo = '$arquivo'" >/dev/null
+          echo "  reconciliada: $arquivo — conteudo de hoje aceito no ledger, SQL nao reexecutado"
+        fi
+        continue
+      fi
       echo "ERRO: $arquivo ja foi aplicada e o conteudo MUDOU." >&2
       echo "      Migration aplicada e imutavel — corrija em arquivo novo." >&2
+      echo "      Se a mudanca e anterior ao versionamento e o banco ja confere, use" >&2
+      echo "      RECONCILIAR=\"$arquivo\" RECONCILIAR_MOTIVO=\"...\" (nao reexecuta SQL)." >&2
       exit 1
     fi
     echo "  ja aplicada: $arquivo"
