@@ -13,7 +13,7 @@ host, mapeou a arvore inteira (`financeiro/pagtobmp/`), os campos do form e o
 Continua util depois disso: tela de ERP muda, e reconferir o contrato e mais
 barato (e mais honesto) do que descobrir pelo robo quebrando em producao.
 
-DIVISAO DE TRABALHO (a mesma do robo_retorno)
+DIVISAO DE TRABALHO (a mesma do retorno_cobranca)
 ---------------------------------------------
     analise.py     PURO (so stdlib) -> tem os testes, roda no host
     descobrir.py   rede e sessao    -> nao tem logica para testar

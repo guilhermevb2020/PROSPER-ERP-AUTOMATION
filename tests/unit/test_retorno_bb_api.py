@@ -6,7 +6,7 @@ from unittest.mock import Mock
 import pytest
 
 RAIZ = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(RAIZ / "src" / "processors" / "web" / "robo_retorno"))
+sys.path.insert(0, str(RAIZ / "src" / "processors" / "web" / "retorno_cobranca"))
 
 import bb_api  # noqa: E402
 import retorno  # noqa: E402

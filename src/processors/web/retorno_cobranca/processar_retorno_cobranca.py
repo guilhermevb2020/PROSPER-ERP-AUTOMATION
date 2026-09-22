@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-robo_retorno.py - processa os arquivos de RETORNO (CNAB) no Smart.
+processar_retorno_cobranca.py - processa os arquivos de RETORNO (CNAB) no Smart.
 
 Robo do ERP AUTOMATION. Roda DESATENDIDO: sobe o proprio Chrome no display :95,
 loga via CapSolver, le os .RET da pasta de entrada e roda, para cada um, a mesma
@@ -31,12 +31,12 @@ SEGURANCA
 
 Uso:
     # producao (o wrapper do hub chama isto)
-    sh /app/src/processors/web/robo_retorno/run_agendado.sh
+    sh /app/src/processors/web/retorno_cobranca/run_agendado.sh
 
     # manual, dentro do container
     docker exec -e PYTHONPATH=/app erp-automation \\
-      python /app/src/processors/web/robo_retorno/robo_retorno.py --limite 3 --detalhes
-    ... robo_retorno.py --pra-valer --csv-titulos /app/data/robo_retorno/titulos.csv
+      python /app/src/processors/web/retorno_cobranca/processar_retorno_cobranca.py --limite 3 --detalhes
+    ... processar_retorno_cobranca.py --pra-valer --csv-titulos /app/data/robo_retorno/titulos.csv
 """
 import argparse
 import csv

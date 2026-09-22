@@ -8,7 +8,7 @@ POR QUE ESTES TESTES EXISTEM
 O robo de pagamento ainda nao existe: o que existe e a descoberta da tela, e o
 `analise.py` e quem decide, lendo o HTML, **que robo sera escrito**. Se ele
 classificar errado, o robo inteiro nasce no molde errado — e os dois moldes
-(`robo_remessa`, que posta formulario, e `robo_retorno`, que conversa por
+(`robo_remessa`, que posta formulario, e `retorno_cobranca`, que conversa por
 `Acao`) nao se parecem em nada.
 
 O QUE ELES TRAVAM
@@ -29,7 +29,7 @@ RESTRICOES DE AMBIENTE
 - So `analise.py` pode ser importado: `descobrir.py` puxa `playwright` e
   `src.common.clients`, que nao resolvem no host. E exatamente por isso que a
   leitura de tela foi escrita como modulo puro, so com stdlib — mesma decisao
-  (e mesma razao) do `robo_retorno/portao.py`.
+  (e mesma razao) do `retorno_cobranca/portao.py`.
 """
 import re
 import sys
@@ -197,7 +197,7 @@ def test_tela_com_acao_vira_molde_ajax():
     assert info["acoes"] == ["CONSULTAR_LOTE", "GERAR_REMESSA_PAGAMENTO",
                              "VALIDAR_CONTA"]
     molde, motivo = classificar(info)
-    assert molde == MOLDE_AJAX and "robo_retorno" in motivo
+    assert molde == MOLDE_AJAX and "retorno_cobranca" in motivo
 
 
 def test_acao_ganha_de_form():

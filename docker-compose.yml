@@ -34,7 +34,7 @@ services:
       # ESCREVE aqui — nunca le nem apaga o que ja esta na pasta.
       - /home/prospere/docker/automation/process-automation/tmp/remessas a enviar:/app/data/remessas_a_enviar
       # A arvore CNAB do Nextcloud (groupfolder 4 = FINANCEIRO), de onde o
-      # `robo_retorno` passa a ler os .RET. Decisao do dono em 17/08/2026:
+      # `retorno_cobranca` passa a ler os .RET. Decisao do dono em 17/08/2026:
       # centralizar as pastas no Nextcloud, uma casa so para o arquivo.
       #
       # ⛔ SOMENTE LEITURA. Quem escreve nesta arvore e o Nextcloud (pelo WebDAV,

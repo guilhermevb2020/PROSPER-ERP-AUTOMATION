@@ -15,9 +15,9 @@ mkdir -p "$LOG"
 
 # 1) credenciais + flags (arquivo montado, gitignored). SOBRESCREVE o SMART_EMAIL
 #    do container (que e felipe_p, de outra automacao).
-if [ -f /app/config/robo_retorno.env ]; then
+if [ -f /app/config/retorno_cobranca.env ]; then
     set -a
-    . /app/config/robo_retorno.env
+    . /app/config/retorno_cobranca.env
     set +a
 fi
 
@@ -59,7 +59,7 @@ mkdir -p "$PERFIL"
 # DRY_RUN_RET=True e o default do config: em dry-run o robo vai ate o UPLOAD
 # (valida banco/conta e conta os titulos) e PARA antes do PROCESSAR_ARQUIVO, que
 # e quem DA A BAIXA nos titulos. Para valer, ponha DRY_RUN_RET=false no
-# robo_retorno.env — e confira o valor efetivo depois de editar o arquivo.
+# retorno_cobranca.env — e confira o valor efetivo depois de editar o arquivo.
 export DRY_RUN_RET="${DRY_RUN_RET:-True}"
 
 # 7b) ⭐ ONDE ESTA O RETORNO BANCARIO DE VERDADE
@@ -135,10 +135,10 @@ rodar() {   # $1 = pasta ou vazio; demais argumentos vao depois
     # ⚠️ `--pasta` vai ANTES de "$@": se o chamador tambem passou um, o dele
     # vence no argparse, que fica com o ultimo.
     if [ -n "$_p" ]; then
-        { python /app/src/processors/web/robo_retorno/robo_retorno.py \
+        { python /app/src/processors/web/retorno_cobranca/processar_retorno_cobranca.py \
               --pasta "$_p" "$@"; echo $? > "$RC"; } 2>&1 | tee -a "$LOGROBO"
     else
-        { python /app/src/processors/web/robo_retorno/robo_retorno.py \
+        { python /app/src/processors/web/retorno_cobranca/processar_retorno_cobranca.py \
               "$@"; echo $? > "$RC"; } 2>&1 | tee -a "$LOGROBO"
     fi
     _c=$(cat "$RC" 2>/dev/null || echo 1)

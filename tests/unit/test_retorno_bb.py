@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 
 RAIZ = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(RAIZ / "src" / "processors" / "web" / "robo_retorno"))
+sys.path.insert(0, str(RAIZ / "src" / "processors" / "web" / "retorno_cobranca"))
 
 import retorno  # noqa: E402
 

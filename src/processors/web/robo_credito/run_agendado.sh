@@ -67,7 +67,7 @@ export DRY_RUN="${DRY_RUN:-False}"
 LOGROBO="/app/logs/robo_credito_$(date +%Y-%m-%d).log"
 echo "===== inicio $(date '+%F %T %Z') =====" >> "$LOGROBO"
 # BEGIN EXECUCAO_CREDITO
-# sh nao possui PIPESTATUS: preservar o retorno do Python, como no robo_retorno.
+# sh nao possui PIPESTATUS: preservar o retorno do Python, como no retorno_cobranca.
 RC_CREDITO=$(mktemp "${TMPDIR:-/tmp}/robo_credito_rc.XXXXXX") || exit 1
 trap 'rm -f "$RC_CREDITO"' EXIT
 { python /app/src/processors/web/robo_credito/robo_analise_credito_v4.py "$@";

@@ -3,7 +3,7 @@
 > ## ⚠️ CORREÇÃO 26/08/2026 — leia antes do resto
 >
 > **A maior parte deste documento descreve uma integração que NÃO EXISTE no
-> código hoje.** Verificado lendo `retorno.py` e `robo_retorno.py` INTEIROS em
+> código hoje.** Verificado lendo `retorno.py` e `processar_retorno_cobranca.py` INTEIROS em
 > 26/08/2026: não há `--portao`, `--sem-portao`, `--portao-status-ok`, nem
 > leitura de `PORTAO`/`PORTAO_STATUS_OK` em lugar nenhum dos dois arquivos.
 > `MOTIVOS_BENIGNOS` (citado abaixo) também não existe. As chaves
@@ -12,7 +12,7 @@
 >
 > **O que aconteceu:** o commit `3f72b99` (21/08/2026) escreveu `portao.py` +
 > este documento + os 45 testes — e escreveu TAMBÉM a integração em
-> `retorno.py`/`robo_retorno.py` que este documento descreve, mas **deixou os
+> `retorno.py`/`processar_retorno_cobranca.py` que este documento descreve, mas **deixou os
 > dois de fora do commit de propósito** (mensagem do commit: *"os dois já
 > carregavam trabalho não commitado de outra pessoa antes desta sessão, e
 > commitá-los varreria esse trabalho para dentro deste commit"*). Ficou como
@@ -28,7 +28,7 @@
 > **O resto deste documento continua valendo como REFERÊNCIA DE DESENHO** — o
 > raciocínio do BUG-548, os números medidos (0 recusa falsa em 1.238 títulos),
 > o que o portão garante e não garante. Só não confie nos comandos `--portao`/
-> `--sem-portao`/`PORTAO_RET` contra `robo_retorno.py`: eles não fazem nada
+> `--sem-portao`/`PORTAO_RET` contra `processar_retorno_cobranca.py`: eles não fazem nada
 > até alguém reescrever a integração — do zero, seguindo este documento como
 > especificação.
 
@@ -56,10 +56,10 @@ o argparse não reconhecia, exit 2 determinístico, 100% das vezes).
 | `exigir_status_ok` | sempre `False` (não exposto) | `--portao-status-ok` opcional |
 | Ponto de entrada | `retorno.py::processar()`, param `usar_portao`, entre o corte do `dry_run` e `processar_arquivo` | mesmo lugar, mesma ideia |
 | Motivo gravado | `"RECUSADO PELO PORTAO: {sumario}"` | `"PORTAO recusou: ..."` (texto diferente) |
-| Log por título recusado | `robo_retorno.py::relatar()`, bloco `PORTAO RECUSOU O ARQUIVO` | formato "três vezes" descrito abaixo (não existe) |
+| Log por título recusado | `processar_retorno_cobranca.py::relatar()`, bloco `PORTAO RECUSOU O ARQUIVO` | formato "três vezes" descrito abaixo (não existe) |
 
 Reusa o **mesmo** `portao.py`/`avaliar_grade()` — o módulo puro é o mesmo para
-os dois jobs, só a chamada (`retorno.py`) e a exposição (`robo_retorno.py`)
+os dois jobs, só a chamada (`retorno.py`) e a exposição (`processar_retorno_cobranca.py`)
 divergem. Commit: `2be6786`. Verificado com import real dentro do container e
 a suíte de 45 testes de `portao.py` (inalterada, ainda passa).
 
@@ -67,7 +67,7 @@ a suíte de 45 testes de `portao.py` (inalterada, ainda passa).
 job que este documento originalmente descreve — hourly, `50 8-18 * * 1-5`,
 retorno bancário real), a integração completa (`--sem-portao`,
 `PORTAO_STATUS_OK`, o formato de log "três vezes", `MOTIVOS_BENIGNOS`) precisa
-ser **escrita de novo** em `retorno.py`/`robo_retorno.py` — nada disso
+ser **escrita de novo** em `retorno.py`/`processar_retorno_cobranca.py` — nada disso
 sobrevive hoje. É trabalho novo, não é ligar uma chave.
 
 ---
@@ -75,7 +75,7 @@ sobrevive hoje. É trabalho novo, não é ligar uma chave.
 > ⛔ **Descrição original (21/08/2026) — não reflete o código atual, ver
 > correção acima.** Hoje o portão está DESLIGADO para o job abaixo porque a
 > integração nunca chegou a ser commitada. Não há chave
-> `PORTAO_RET` em `config/robo_retorno.env`, e `retorno_config` dentro do
+> `PORTAO_RET` em `config/retorno_cobranca.env`, e `retorno_config` dentro do
 > container devolve `PORTAO = False` / `PORTAO_STATUS_OK = False` — mas isso é
 > irrelevante hoje: mesmo `True`, nada leria essas chaves.
 
@@ -111,7 +111,7 @@ entra no ar com `deploy_process_automation.sh`. Aqui, editar `portao.py` muda o
 comportamento da próxima rodada — que sai **daqui a menos de uma hora**.
 
 ⭐ **Consequência prática, quando a integração existir:** editar `retorno.py`/
-`robo_retorno.py` muda o comportamento da próxima rodada — que sai em menos de
+`processar_retorno_cobranca.py` muda o comportamento da próxima rodada — que sai em menos de
 uma hora. Não exige publicar nada. ⛔ **Hoje (26/08/2026) só o módulo
 (`portao.py`) está lá — as flags dos dois arquivos não** (ver correção no
 topo).
@@ -121,11 +121,11 @@ E o job que ele guarda não é ensaio:
 | | |
 |---|---|
 | Task no hub | `processar_retornos_cnab` (container `erp-automation`) |
-| Comando | `sh /app/src/processors/web/robo_retorno/run_agendado.sh --pular-processados` |
+| Comando | `sh /app/src/processors/web/retorno_cobranca/run_agendado.sh --pular-processados` |
 | Cron | `50 8-18 * * 1-5` — **de hora em hora, dias úteis**, das 08:50 às 18:50 |
 | Duração medida | mediana **5,9 min**, média **7,4 min**, máxima **27,0 min** (34 execuções em 14 dias) |
 | Timeout / retries | 1800 s · `max_retries=2`, 60 s de intervalo |
-| `DRY_RUN_RET` | **`false`** (`config/robo_retorno.env`, linha 12) |
+| `DRY_RUN_RET` | **`false`** (`config/retorno_cobranca.env`, linha 12) |
 
 ⛔ **`DRY_RUN_RET=false` quer dizer que ele DÁ BAIXA DE VERDADE, 11 vezes por dia
 útil.** É por isso que o portão nasceu desligado: ligá-lo muda o comportamento de
@@ -213,7 +213,7 @@ que ele reportou.
 
 ## As duas chaves
 
-| Chave (`config/robo_retorno.env`) | Flag | Padrão | O que faz |
+| Chave (`config/retorno_cobranca.env`) | Flag | Padrão | O que faz |
 |---|---|---|---|
 | `PORTAO_RET` | `--portao` / `--sem-portao` | `False` | liga o portão: recusa por **valor divergente** e por **título não resolvido** |
 | `PORTAO_STATUS_OK_RET` | `--portao-status-ok` | `False` | **além** do acima, recusa quem tem `status != OK` |
@@ -249,14 +249,14 @@ questão de descomentar:
 
 ```bash
 # host
-echo 'PORTAO_RET=true' >> /home/prospere/docker/automation/erp-automation/config/robo_retorno.env
+echo 'PORTAO_RET=true' >> /home/prospere/docker/automation/erp-automation/config/retorno_cobranca.env
 ```
 
 Confira o valor efetivo **dentro do container**, que é onde ele conta:
 
 ```bash
 docker exec -e PYTHONPATH=/app erp-automation python -c "
-import sys; sys.path.insert(0,'/app/src/processors/web/robo_retorno')
+import sys; sys.path.insert(0,'/app/src/processors/web/retorno_cobranca')
 import retorno_config as c; print('PORTAO =', c.PORTAO, '| STATUS_OK =', c.PORTAO_STATUS_OK)"
 ```
 
@@ -270,7 +270,7 @@ mesmo). Qualquer outra coisa é falso.
 
 ```bash
 docker exec -e PYTHONPATH=/app erp-automation \
-  python /app/src/processors/web/robo_retorno/robo_retorno.py \
+  python /app/src/processors/web/retorno_cobranca/processar_retorno_cobranca.py \
     --pasta /app/data/cnab_nextcloud/Retornos/2026/08-Agosto/21/MoneyPlus \
     --portao
 ```
@@ -333,7 +333,7 @@ portão recusa — a grade vem do upload, que já aconteceu:
 
 ```bash
 docker exec -e PYTHONPATH=/app erp-automation \
-  python /app/src/processors/web/robo_retorno/robo_retorno.py \
+  python /app/src/processors/web/retorno_cobranca/processar_retorno_cobranca.py \
     --pasta /app/data/cnab_nextcloud/Retornos/2026/08-Agosto/21/MoneyPlus \
     --arquivo CP2108000797.RET --portao \
     --csv-titulos /app/data/robo_retorno/recusa_$(date +%F).csv
@@ -352,7 +352,7 @@ propósito, com o arquivo nomeado:
 
 ```bash
 docker exec -e PYTHONPATH=/app erp-automation \
-  python /app/src/processors/web/robo_retorno/robo_retorno.py \
+  python /app/src/processors/web/retorno_cobranca/processar_retorno_cobranca.py \
     --pasta <a pasta do dia> --arquivo <o arquivo> --sem-portao
 ```
 
@@ -380,7 +380,7 @@ alguém resolveu.
 Recusa de portão **não é motivo benigno**. Confirmado lendo o código:
 
 - o `motivo` gravado é `"PORTAO recusou: ..."`;
-- `MOTIVOS_BENIGNOS` ([`robo_retorno.py:165`](../robo_retorno.py)) só contém
+- `MOTIVOS_BENIGNOS` ([`processar_retorno_cobranca.py:165`](../processar_retorno_cobranca.py)) só contém
   `DRY_RUN`, `conteudo identico ja processado` e
   `ja esta em processamento no Smart`;
 - logo `_e_pendencia()` devolve **`True`**, o arquivo entra em `com_erro`, e a
@@ -435,12 +435,12 @@ seguinte. E, se falhar, uma tentativa 2 sobe 60 s depois.
 **Sempre confirme antes de começar:**
 
 ```bash
-docker exec erp-automation pgrep -af 'robo_retorno.py'   # vazio = nada rodando
+docker exec erp-automation pgrep -af 'processar_retorno_cobranca.py'   # vazio = nada rodando
 ```
 
 Fora do horário da task (antes das 08:50, depois das ~19:20 — a última rodada
 começa 18:50 e pode levar 27 min —, fins de semana) a pista está livre. **Mas** o
-`config/robo_retorno.example.env` registra que a janela do usuário do Smart é
+`config/retorno_cobranca.example.env` registra que a janela do usuário do Smart é
 **06:30–21:00, seg-sex**. Fora dela o login não passa.
 
 ### ⛔⛔ A armadilha do dry-run
@@ -454,15 +454,15 @@ chamando o Python direto**:
 
 | Como você chama | `-e DRY_RUN_RET=true` funciona? |
 |---|---|
-| `python .../robo_retorno.py` | ✅ **sim** — `load_dotenv` não sobrescreve o ambiente |
-| `sh .../run_agendado.sh` | ⛔ **NÃO** — o wrapper faz `set -a; . robo_retorno.env` e o arquivo (`DRY_RUN_RET=false`) **sobrescreve o seu `-e`**, em silêncio |
+| `python .../processar_retorno_cobranca.py` | ✅ **sim** — `load_dotenv` não sobrescreve o ambiente |
+| `sh .../run_agendado.sh` | ⛔ **NÃO** — o wrapper faz `set -a; . retorno_cobranca.env` e o arquivo (`DRY_RUN_RET=false`) **sobrescreve o seu `-e`**, em silêncio |
 
 Verificado nos dois caminhos em 21/08/2026.
 
 ```bash
 # ENSAIO de verdade — Python direto, nunca o wrapper
 docker exec -e PYTHONPATH=/app -e DRY_RUN_RET=true erp-automation \
-  python /app/src/processors/web/robo_retorno/robo_retorno.py \
+  python /app/src/processors/web/retorno_cobranca/processar_retorno_cobranca.py \
     --pasta /app/data/cnab_nextcloud/Retornos/2026/08-Agosto/21/MoneyPlus \
     --limite 3 --detalhes
 ```
@@ -477,14 +477,14 @@ linha antes de sair de perto.**
 
 | Quero… | Comando |
 |---|---|
-| saber se o portão está ligado | `docker exec -e PYTHONPATH=/app erp-automation python -c "import sys;sys.path.insert(0,'/app/src/processors/web/robo_retorno');import retorno_config as c;print(c.PORTAO, c.PORTAO_STATUS_OK)"` |
-| ligar em definitivo | `echo 'PORTAO_RET=true' >> .../config/robo_retorno.env` |
+| saber se o portão está ligado | `docker exec -e PYTHONPATH=/app erp-automation python -c "import sys;sys.path.insert(0,'/app/src/processors/web/retorno_cobranca');import retorno_config as c;print(c.PORTAO, c.PORTAO_STATUS_OK)"` |
+| ligar em definitivo | `echo 'PORTAO_RET=true' >> .../config/retorno_cobranca.env` |
 | ligar só nesta rodada | `--portao` |
 | desligar só nesta rodada | `--sem-portao` |
 | ver recusas de hoje | `grep -i PORTAO .../logs/robo_retorno_$(date +%F).log` |
 | ver recusas antigas | `grep PORTAO .../data/robo_retorno/controle_processados.csv` |
 | a grade inteira de um arquivo | `--arquivo X.RET --csv-titulos /app/data/robo_retorno/x.csv` |
-| ver se há rodada em voo | `docker exec erp-automation pgrep -af robo_retorno.py` |
+| ver se há rodada em voo | `docker exec erp-automation pgrep -af processar_retorno_cobranca.py` |
 | rodar um ensaio de verdade | `-e DRY_RUN_RET=true` **+ Python direto** (nunca o wrapper) |
 
 ### Arquivos
@@ -493,7 +493,7 @@ linha antes de sair de perto.**
 |---|---|
 | Módulo | [`../portao.py`](../portao.py) — puro, só stdlib |
 | Ponto de entrada | [`../retorno.py:376`](../retorno.py) (dentro de `processar()`) |
-| Flags | [`../robo_retorno.py:500-509`](../robo_retorno.py) |
+| Flags | [`../processar_retorno_cobranca.py:500-509`](../processar_retorno_cobranca.py) |
 | Chaves | [`../retorno_config.py:86-87`](../retorno_config.py) |
 | Testes | `tests/unit/test_portao_retorno.py` — **45 testes, rodam no HOST** (o container não tem pytest): `cd /home/prospere/docker/automation/erp-automation && python3 -m pytest -q tests/unit/test_portao_retorno.py` |
 | Visão geral da automação de retorno | [`README.md`](README.md) |

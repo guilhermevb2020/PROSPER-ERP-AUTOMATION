@@ -21,7 +21,7 @@ DESENHO
 -------
 - **Stdlib pura.** Nenhum import do projeto, nenhuma dependencia externa. E o
   que permite testar no HOST (`tests/unit/test_emissao_evidencia.py`), onde
-  playwright/psycopg2 nao existem. Mesmo motivo do `robo_retorno/portao.py`.
+  playwright/psycopg2 nao existem. Mesmo motivo do `retorno_cobranca/portao.py`.
 - **Best-effort, sempre.** Nada aqui pode derrubar uma emissao: quem chama
   envolve em try/except e o `salvar()` ja engole o proprio erro devolvendo
   None. Perder a evidencia e ruim; perder a emissao e pior.

@@ -13,9 +13,9 @@ case "$MODO" in
     --simular|--pra-valer) ;;
     *) echo 'uso: run_bb.sh [--simular|--pra-valer]' >&2; exit 2 ;;
 esac
-if [ -f "$RAIZ/config/robo_retorno.env" ]; then
+if [ -f "$RAIZ/config/retorno_cobranca.env" ]; then
     set -a
-    . "$RAIZ/config/robo_retorno.env"
+    . "$RAIZ/config/retorno_cobranca.env"
     set +a
 fi
 export PYTHONPATH="$RAIZ"
@@ -29,4 +29,4 @@ set -- --pasta "$PASTA" --conta-bb-api 395 --portao --pular-processados \
 if [ "$MODO" = '--pra-valer' ]; then
     set -- "$@" --pra-valer
 fi
-exec python "$RAIZ/src/processors/web/robo_retorno/robo_retorno.py" "$@"
+exec python "$RAIZ/src/processors/web/retorno_cobranca/processar_retorno_cobranca.py" "$@"

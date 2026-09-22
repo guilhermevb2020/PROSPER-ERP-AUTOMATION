@@ -1,7 +1,7 @@
 #!/bin/sh
 # Wrapper do robo que INSERE o retorno de PAGAMENTO no Smart (hub-orchestration chama isto).
 # Garante o display :93 ISOLADO (Xvfb + x11vnc 5906 + noVNC 6086) — separado do
-# :94 (robo_pagamento), :95 (robo_retorno), :96 (credito), :97 (remessa), :98
+# :94 (robo_pagamento), :95 (retorno_cobranca), :96 (credito), :97 (remessa), :98
 # (doc2you) e :99 (boletos) — carrega credenciais e roda o robo UMA vez.
 #
 # O robo sobe o proprio Chrome, loga via CapSolver, insere cada .RET pendente

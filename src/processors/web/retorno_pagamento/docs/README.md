@@ -7,7 +7,7 @@ confirmar).
 Tela: **Financeiro › Sistemas de pagamento › Pagamento BMP Money Plus ›
 Processar Retorno** (`financeiro/pagtobmp/retornopagtobmp.php`).
 
-> ⛔ **Não confundir com o `robo_retorno`.** Aquele é o retorno de **cobrança**
+> ⛔ **Não confundir com o `retorno_cobranca`.** Aquele é o retorno de **cobrança**
 > (`financeiro/retornoocorrencia.php`, CNAB-400, via AJAX). Este é pagamento
 > (`financeiro/pagtobmp/retornopagtobmp.php`, CNAB-240, upload de arquivo
 > clássico em 2 etapas). Cobrança recebe dinheiro; pagamento manda.

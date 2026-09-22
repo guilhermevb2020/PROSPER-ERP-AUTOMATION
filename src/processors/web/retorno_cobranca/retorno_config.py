@@ -10,7 +10,7 @@ trava no lock do Chrome.
 Slot deste robo (ver docs/COMO_SUBIR_UM_ROBO.md):
     display :95 | VNC 5904 | noVNC 6084 | CDP 9225 | perfil data/robo_retorno
 
-Credenciais: `config/robo_retorno.env` (montado, fora do git). NUNCA no fonte —
+Credenciais: `config/retorno_cobranca.env` (montado, fora do git). NUNCA no fonte —
 este repo tem remote publico.
 """
 import os
@@ -18,7 +18,7 @@ import os
 try:
     from dotenv import load_dotenv
 
-    load_dotenv(os.environ.get("RETORNO_ENV_FILE", "/app/config/robo_retorno.env"))
+    load_dotenv(os.environ.get("RETORNO_ENV_FILE", "/app/config/retorno_cobranca.env"))
 except ImportError:
     pass
 

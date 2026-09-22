@@ -94,7 +94,7 @@ def ler_controle():
 def gravar_controle(registro):
     """Anexa uma linha. Cabecalho antigo e arquivado em vez de desalinhar.
 
-    (O robo_retorno pegou esse bug uma vez: CSV criado por versao com menos
+    (O retorno_cobranca pegou esse bug uma vez: CSV criado por versao com menos
     colunas + linhas novas com mais campos = arquivo inteiro fora de posicao.)
     """
     os.makedirs(os.path.dirname(cfg.ARQ_CONTROLE) or ".", exist_ok=True)

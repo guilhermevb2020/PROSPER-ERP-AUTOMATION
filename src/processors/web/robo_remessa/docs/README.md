@@ -164,7 +164,7 @@ conta, convênio, carteira, data, hashes e bytes; traduz o lote inteiro antes de
 o gerador foram ensaiados juntos em processos separados, com HTTP simulado.
 Os jobs consumidores de envio/confirmação foram preparados e testados no PA.
 Ainda faltam publicação/agendamento e uma geração real nova. A entrega de retorno
-com recibos está descrita em [BB_API.md](../../robo_retorno/docs/BB_API.md).
+com recibos está descrita em [BB_API.md](../../retorno_cobranca/docs/BB_API.md).
 
 Verificação desta alteração: 41 testes de geração e origem BB passaram em
 container efêmero; incluem timeout, resposta sem IDs, falha de persistência,

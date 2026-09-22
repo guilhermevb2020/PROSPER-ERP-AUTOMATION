@@ -9,12 +9,12 @@ from unittest.mock import MagicMock, Mock
 import pytest
 
 RAIZ = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(RAIZ / "src/processors/web/robo_retorno"))
+sys.path.insert(0, str(RAIZ / "src/processors/web/retorno_cobranca"))
 
 import artefatos  # noqa: E402
 import bb_entrega  # noqa: E402
 import retorno  # noqa: E402
-import robo_retorno as robo  # noqa: E402
+import processar_retorno_cobranca as robo  # noqa: E402
 from test_retorno_bb_api import arquivo, grade, preparar  # noqa: E402
 
 
@@ -154,7 +154,7 @@ def test_cli_bb_exige_flag_real_mesmo_com_env_legado_e_grava_recibos(tmp_path, m
     monkeypatch.setattr(robo, "sync_playwright", MagicMock())
     monkeypatch.setattr(robo.smart_sessao, "sessao", MagicMock())
     monkeypatch.setattr(robo.smart_sessao, "sessao_viva", Mock(return_value=True))
-    args = ["robo_retorno.py", "--pasta", str(tmp_path), "--conta-bb-api", "395",
+    args = ["processar_retorno_cobranca.py", "--pasta", str(tmp_path), "--conta-bb-api", "395",
             "--recibos-dir", str(recibos), "--pausa", "0"]
     monkeypatch.setattr(sys, "argv", args + (["--pra-valer"] if pra_valer else []))
     assert robo.main() == 0
@@ -167,7 +167,7 @@ def test_cli_bb_exige_flag_real_mesmo_com_env_legado_e_grava_recibos(tmp_path, m
 def test_cli_bb_configuracao_invalida_nao_abre_browser(tmp_path, monkeypatch, extras):
     browser = Mock(side_effect=AssertionError("browser não deveria abrir"))
     monkeypatch.setattr(robo, "sync_playwright", browser)
-    args = ["robo_retorno.py", "--pasta", str(tmp_path), "--conta-bb-api", "395", *extras]
+    args = ["processar_retorno_cobranca.py", "--pasta", str(tmp_path), "--conta-bb-api", "395", *extras]
     if extras:
         args += ["--recibos-dir", str(tmp_path / "recibos")]
     monkeypatch.setattr(sys, "argv", args)

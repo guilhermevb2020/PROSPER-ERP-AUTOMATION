@@ -135,7 +135,7 @@ def robo_smart_ativo() -> str | None:
         ("emissao de boletos", r"src[.]processors[.]web[.]boletos[.]emitir_lote"),
         ("Doc2You", r"src[.]processors[.]web[.]doc2you[.]baixar_dia"),
         ("remessa de cobranca", r"/robo_remessa/robo_remessa[.]py"),
-        ("retorno de cobranca/deposito", r"/robo_retorno/robo_retorno[.]py"),
+        ("retorno de cobranca/deposito", r"/retorno_cobranca/processar_retorno_cobranca[.]py"),
     ):
         resultado = subprocess.run(["pgrep", "-f", padrao], capture_output=True, timeout=3)
         if resultado.returncode == 0:

@@ -28,9 +28,9 @@ cd /app || exit 1
 LOG=/app/logs/vnc
 mkdir -p "$LOG"
 
-if [ -f /app/config/robo_retorno.env ]; then
+if [ -f /app/config/retorno_cobranca.env ]; then
     set -a
-    . /app/config/robo_retorno.env
+    . /app/config/retorno_cobranca.env
     set +a
 fi
 
@@ -78,7 +78,7 @@ RC="/tmp/robo_deposito_rc.$$"
 # do Nextcloud) e sem a flag a automação de retorno NAO consulta o hash do controle. O Smart aceitou de
 # novo — contou em `refinan` em vez de `liquidacao` e por sorte nao criou segunda
 # quitacao. ⚠️ Sorte nao e desenho: a flag e a trava.
-{ python /app/src/processors/web/robo_retorno/robo_retorno.py \
+{ python /app/src/processors/web/retorno_cobranca/processar_retorno_cobranca.py \
       --pasta "$PASTA" --deposito --portao --detalhes --pra-valer \
       --pular-processados --recibos-dir "$PASTA/_RESULTADOS" "$@"; \
   echo $? > "$RC"; } 2>&1 | tee -a "$LOGROBO"

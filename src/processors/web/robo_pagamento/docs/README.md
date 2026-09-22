@@ -135,7 +135,7 @@ As vírgulas no fim de cada lista (`"143,"`) são fiéis ao `+=` do JS.
 | `run_agendado.sh` | wrapper agendado (host **ou** container), com **trava de sobreposição** |
 | `descobrir.py` + `run_descoberta.sh` | Fase 0 — reconferir a tela quando o Smart mudar |
 
-`analise.py` é puro pelo mesmo motivo do `robo_retorno/portao.py`: o container
+`analise.py` é puro pelo mesmo motivo do `retorno_cobranca/portao.py`: o container
 não tem pytest, o host tem.
 
 ---

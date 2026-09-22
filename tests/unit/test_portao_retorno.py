@@ -23,13 +23,13 @@ RESTRICOES DE AMBIENTE (conferidas em 21/08/2026)
 -------------------------------------------------
 - Rodam no HOST (`pytest 9.1.1` / `python 3.12.3`); o container
   `erp-automation` NAO tem pytest.
-- So `portao.py` pode ser importado aqui. O `retorno.py` e o `robo_retorno.py`
+- So `portao.py` pode ser importado aqui. O `retorno.py` e o `processar_retorno_cobranca.py`
   puxam `playwright` e `src.common.clients`, que nao resolvem no host - e por
   isso que o portao foi escrito como modulo puro, so com stdlib.
 - Os CSV de `data/robo_retorno/` sao capturas DATADAS e entram aqui SO PARA
   LEITURA. Nenhum caminho agendado da automação de retorno os reescreve: o `_gravar_titulos`
   so roda quando alguem passa `--csv-titulos <caminho>` a mao
-  (`robo_retorno.py:410`), e os tres nomes abaixo nao sao default de nada.
+  (`processar_retorno_cobranca.py:410`), e os tres nomes abaixo nao sao default de nada.
 """
 import csv
 import sys
@@ -39,7 +39,7 @@ from pathlib import Path
 import pytest
 
 RAIZ = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(RAIZ / "src" / "processors" / "web" / "robo_retorno"))
+sys.path.insert(0, str(RAIZ / "src" / "processors" / "web" / "retorno_cobranca"))
 
 from portao import (  # noqa: E402  (o sys.path tem de vir antes)
     APROVADO,

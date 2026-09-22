@@ -45,7 +45,7 @@ URL_AJAX = cfg.SMART_BASE + "/financeiro/ajax/ajaxretornocnab.php"
 LIMITE_LINHAS = 5000          # mesmo valor do campo #limiteLinhas da tela
 
 #: Motivo do skip por --pular-processados (mesmo conteudo ja processado com
-#: SUCESSO antes). `robo_retorno.py` usa esta constante pra NAO contar o skip
+#: SUCESSO antes). `processar_retorno_cobranca.py` usa esta constante pra NAO contar o skip
 #: como erro no exit code - e a prova de um sucesso anterior, nao uma pendencia.
 MOTIVO_JA_PROCESSADO = "conteudo identico ja processado (--pular-processados)"
 

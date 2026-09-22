@@ -10,7 +10,7 @@ subida real, e três delas produzem *falha que parece sucesso*, que é a pior
 espécie.
 
 > **Antes de começar, leia o robô que mais se parece com o seu.**
-> `src/processors/web/robo_retorno/` é o mais recente e o molde deste guia — é o
+> `src/processors/web/retorno_cobranca/` é o mais recente e o molde deste guia — é o
 > primeiro a consumir a sessão compartilhada (`src/common/clients/smart_sessao.py`),
 > e por isso tem só 4 arquivos. `robo_remessa/` é anterior a esse módulo: copie
 > dele a **lógica de tela** (`gerar.py`), não a sessão. `doc2you/` é o modelo de
@@ -45,7 +45,7 @@ dois no mesmo `user-data-dir` disputam o lock — um simplesmente não sobe.
 | `doc2you` | `:98` | 5901 | 6081 | 9223 | `data/doc2you/perfil_chrome` |
 | `robo_remessa` | `:97` | 5903 | 6083 | 9224 | `data/robo_remessa/perfil_chrome` |
 | `robo_credito` | `:96` | 5902 | 6082 | *(pipe)* | `data/robo_credito/perfil_chrome` |
-| `robo_retorno` | `:95` | 5904 | 6084 | 9225 | `data/robo_retorno/perfil_chrome` |
+| `retorno_cobranca` | `:95` | 5904 | 6084 | 9225 | `data/robo_retorno/perfil_chrome` |
 | `robo_pagamento` | `:94` | 5905 | 6085 | 9226 | `data/robo_pagamento/perfil_chrome` |
 | `retorno_pagamento` | `:93` | 5906 | 6086 | 9227 | `data/robo_retorno_pagamento/perfil_chrome` |
 | **próximo livre** | **`:92`** | **5907** | **6087** | **9228** | `data/<robo>/perfil_chrome` |
@@ -83,7 +83,7 @@ Prefixo `_` = privado ao robô. Sem prefixo = alguém de fora pode importar.
 
 **Sem `_sessao.py` e sem `login.py` próprios.** Subir o Chrome, detectar sessão
 morta e logar já são de `src/common/clients/smart_sessao.py` (§4 e §5). O
-`robo_remessa` ainda tem os dois porque é anterior a esse módulo; o `robo_retorno`
+`robo_remessa` ainda tem os dois porque é anterior a esse módulo; o `retorno_cobranca`
 é o primeiro a consumi-lo e por isso é **o molde a copiar**.
 
 ---
@@ -180,7 +180,7 @@ já existe (boletos), porque alguém precisa da sessão o dia inteiro.
 
 ## 6. `run_agendado.sh`
 
-Copie de `robo_retorno/run_agendado.sh` e troque display/portas/nome. Os pontos
+Copie de `retorno_cobranca/run_agendado.sh` e troque display/portas/nome. Os pontos
 que **não** podem ser simplificados:
 
 ```sh

@@ -8,7 +8,7 @@ Retorno. MESMA area do `robo_pagamento` (que so GERA a remessa) — por isso usa
 MESMA credencial (`PAGAMENTO_EMAIL`/`PAGAMENTO_SENHA`, carregada pelo
 `run_agendado.sh` de `config/robo_pagamento.env`), mas com display, perfil e
 sessao PROPRIOS: dois robos no mesmo perfil de Chrome travam o login um do
-outro (mesmo motivo do `robo_retorno` ter sessao propria, so que aqui a conta
+outro (mesmo motivo do `retorno_cobranca` ter sessao propria, so que aqui a conta
 Smart e a MESMA e so o navegador e isolado).
 
 Slot deste robo (ver docs/COMO_SUBIR_UM_ROBO.md §1):
@@ -110,7 +110,7 @@ DRY_RUN = _b("DRY_RUN_RETPAG", "True")
 NC_DEST_BASE = _s("RETPAG_NC_DEST", "FINANCEIRO/Pagamentos-MoneyPlus/_RETORNOS")
 NC_ENV = _s("RETPAG_NC_ENV", "/app/config/nextcloud.env")
 
-# Subpasta DENTRO de NC_DEST_BASE — mesmo desenho do robo_retorno
+# Subpasta DENTRO de NC_DEST_BASE — mesmo desenho do retorno_cobranca
 # (PASTA_PROCESSADOS = subpasta de PASTA_ENTRADA). Só duas situações existem:
 #   ""            entrada — .RET ainda não submetido
 #   PROCESSADOS   o POST chegou ao servidor e teve resposta — não se reenvia

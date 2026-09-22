@@ -38,7 +38,7 @@ Até o passo 5 nada é efetivado — por isso o `DRY_RUN` para exatamente ali.
 | **Entrada dos `.RET`** | `/app/data/retornos_a_processar` — host: `erp-automation/data/retornos_a_processar` |
 | Arquivo processado | `_PROCESSADOS/<AAAA-MM>/` dentro da entrada |
 | Controle | `/app/data/robo_retorno/controle_processados.csv` |
-| Credenciais | `/app/config/robo_retorno.env` (fora do git) |
+| Credenciais | `/app/config/retorno_cobranca.env` (fora do git) |
 | Task no hub | `processar_retorno_cobranca_cnab_400` ⏪ renomeada 2× em 26/08/2026, era `processar_retornos_cnab` → `processar_retornos_cnab400` → nome atual. Cron real: `50 8-18 * * 1-5` (hora em hora, não `30 8`) |
 
 Os arquivos vão **soltos** na raiz da entrada — o robô não desce um nível. É por
@@ -46,7 +46,7 @@ isso que `_PROCESSADOS/` pode morar lá dentro sem atrapalhar.
 
 ⭐ **Este script tem um SEGUNDO consumidor desde 26/08/2026:** `baixar_deposito_no_erp`
 (`run_deposito.sh`, pasta `_deposito`, `--deposito` e `--portao` sempre ligados)
-chama o mesmo `robo_retorno.py`/`retorno.py`. O modo depósito é estrito e não
+chama o mesmo `processar_retorno_cobranca.py`/`retorno.py`. O modo depósito é estrito e não
 altera o retorno bancário: exige CNAB-400 com identificador de 25 dígitos,
 quantidade idêntica no arquivo/upload/grade, valor legível e igual, ação
 `Liquidado`, status `OK` e, depois do passo irreversível, `message=OK`,
@@ -98,12 +98,12 @@ aberto e apareceu em quitado.
 
 ```bash
 # produção (o hub chama isto)
-sh /app/src/processors/web/robo_retorno/run_agendado.sh --pular-processados
+sh /app/src/processors/web/retorno_cobranca/run_agendado.sh --pular-processados
 
 # manual
 docker exec -e PYTHONPATH=/app erp-automation \
-  python /app/src/processors/web/robo_retorno/robo_retorno.py --limite 5 --detalhes
-docker exec erp-automation sh /app/src/processors/web/robo_retorno/run_agendado.sh \
+  python /app/src/processors/web/retorno_cobranca/processar_retorno_cobranca.py --limite 5 --detalhes
+docker exec erp-automation sh /app/src/processors/web/retorno_cobranca/run_agendado.sh \
   --pra-valer --csv-titulos /app/data/robo_retorno/titulos.csv
 ```
 

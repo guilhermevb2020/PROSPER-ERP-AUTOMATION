@@ -16,7 +16,7 @@
 # e a remessa ficaria orfa no Smart: gerada, nao baixada, e invisivel na proxima
 # rodada porque os itens ja sairam da fila.
 #
-# O mesmo modo de falha ja e conhecido aqui: o `robo_retorno` tem dois wrappers
+# O mesmo modo de falha ja e conhecido aqui: o `retorno_cobranca` tem dois wrappers
 # no mesmo perfil e se defende com FOLGA DE HORARIO (`run_deposito.sh`, 10 min
 # antes do agendado). Folga nao resolve para quem roda a cada 30 min: precisa de
 # trava de verdade.

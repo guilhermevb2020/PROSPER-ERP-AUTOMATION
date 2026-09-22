@@ -3,7 +3,7 @@
 
 Tela: Financeiro > Sistemas de pagamento > Pagamento BMP Money Plus > Processar
 Retorno (`financeiro/pagtobmp/retornopagtobmp.php`). NAO e a mesma coisa que o
-`robo_retorno`, que trata do retorno de COBRANCA (`financeiro/retornoocorrencia.php`)
+`retorno_cobranca`, que trata do retorno de COBRANCA (`financeiro/retornoocorrencia.php`)
 — outra arvore de menu, outro form, outro risco.
 
 Le o `.RET` que o `baixar_retorno_pagamento.py` (process-automation) ja baixou do

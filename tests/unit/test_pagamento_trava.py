@@ -12,7 +12,7 @@ de 30 min seria MORTA PELA SEGUINTE, possivelmente entre o "gerar" e o "baixar":
 a remessa ficaria orfa no Smart — gerada, nao baixada, e invisivel na proxima
 rodada porque os itens ja sairam da fila.
 
-O modo de falha nao e hipotese: o `robo_retorno` tem dois wrappers no mesmo
+O modo de falha nao e hipotese: o `retorno_cobranca` tem dois wrappers no mesmo
 perfil e se defende com FOLGA DE HORARIO (`run_deposito.sh`, 10 min antes do
 agendado, com o porque escrito la). Folga nao resolve para quem roda a cada
 30 min.
@@ -22,7 +22,7 @@ O QUE ELES TRAVAM
 1. Sobreposicao NORMAL sai com 0. Com cron de 30 min, marcar falha a cada
    sobreposicao encheria o hub de alarme falso — e alarme falso diario ensina a
    ignorar o alerta (a mesma licao ja aprendida no `MOTIVOS_BENIGNOS` do
-   `robo_retorno`).
+   `retorno_cobranca`).
 2. Rodada PRESA sai com 6. E o caso que precisa de gente, e nao pode se
    esconder atras da regra 1.
 3. Trava orfa (o processo dono morreu) e removida — senao um `docker kill` no

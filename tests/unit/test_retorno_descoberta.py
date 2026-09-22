@@ -15,7 +15,7 @@ import pytest
 
 
 ROOT = Path(__file__).resolve().parents[2]
-WRAPPER = ROOT / "src/processors/web/robo_retorno/run_agendado.sh"
+WRAPPER = ROOT / "src/processors/web/retorno_cobranca/run_agendado.sh"
 SHELLS = [shell for shell in ("sh", "dash", "bash") if shutil.which(shell)]
 
 

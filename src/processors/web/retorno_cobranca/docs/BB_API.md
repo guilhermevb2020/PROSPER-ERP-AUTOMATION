@@ -14,10 +14,10 @@ ser um nome dentro da pasta. Ausência de um arquivo explicitamente solicitado
 
 ```bash
 # Prévia: upload e conferência, sem PROCESSAR_ARQUIVO.
-sh /app/src/processors/web/robo_retorno/run_bb.sh --simular
+sh /app/src/processors/web/retorno_cobranca/run_bb.sh --simular
 
 # Processamento: somente depois de o produtor publicar o arquivo íntegro.
-sh /app/src/processors/web/robo_retorno/run_bb.sh --pra-valer
+sh /app/src/processors/web/retorno_cobranca/run_bb.sh --pra-valer
 ```
 
 O wrapper usa conta 395 e a pasta

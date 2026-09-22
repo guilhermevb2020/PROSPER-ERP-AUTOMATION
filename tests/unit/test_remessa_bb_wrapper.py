@@ -22,7 +22,7 @@ def ambiente(tmp_path):
     config = raiz / "config"
     config.mkdir()
     (config / "robo_remessa.env").write_text("DRY_RUN_REM=false\nHEADLESS_REM=false\n")
-    (config / "robo_retorno.env").write_text("DRY_RUN_RET=false\nHEADLESS_RET=false\n")
+    (config / "retorno_cobranca.env").write_text("DRY_RUN_RET=false\nHEADLESS_RET=false\n")
     binario = tmp_path / "bin"
     binario.mkdir()
     python = binario / "python"
@@ -34,7 +34,7 @@ with open(os.environ["TRAVA_SMART_FINANCEIRO"], "a") as lock:
         pass
     else:
         raise RuntimeError("wrapper executou sem exclusividade financeira")
-sufixo = "RET" if sys.argv[1].endswith("robo_retorno.py") else "REM"
+sufixo = "RET" if sys.argv[1].endswith("processar_retorno_cobranca.py") else "REM"
 print(json.dumps({"argv": sys.argv[1:], "dry": os.environ["DRY_RUN_" + sufixo],
                   "headless": os.environ["HEADLESS_" + sufixo]}))
 sys.exit(int(os.environ.get("TESTE_EXIT", "0")))
@@ -77,8 +77,8 @@ def test_status_do_processador_chega_ao_agendador(ambiente):
     assert resultado.returncode == 6
 
 
-@pytest.mark.parametrize("caminho", ["robo_remessa/run_agendado.sh", "robo_retorno/run_agendado.sh",
-                                    "robo_retorno/run_deposito.sh"])
+@pytest.mark.parametrize("caminho", ["robo_remessa/run_agendado.sh", "retorno_cobranca/run_agendado.sh",
+                                    "retorno_cobranca/run_deposito.sh"])
 def test_wrapper_money_compartilha_trava_antes_do_chrome(caminho):
     wrapper = ROOT / "src/processors/web" / caminho
     texto = wrapper.read_text()
@@ -89,13 +89,13 @@ def test_wrapper_money_compartilha_trava_antes_do_chrome(caminho):
 @pytest.mark.parametrize("shell", ["sh", "dash", "bash"])
 @pytest.mark.parametrize("args", [[], ["--simular"], ["--pra-valer"]])
 def test_retorno_bb_usa_pasta_conta_e_recibos_exatos(ambiente, shell, args):
-    wrapper = ROOT / "src/processors/web/robo_retorno/run_bb.sh"
+    wrapper = ROOT / "src/processors/web/retorno_cobranca/run_bb.sh"
     resultado = subprocess.run([shell, str(wrapper), *args], env=ambiente,
                                capture_output=True, text=True, timeout=5, check=True)
     dados = json.loads(resultado.stdout.splitlines()[-1])
     raiz = ambiente["RAIZ_BB_RETORNO"]
     pasta = f"{raiz}/data/retornos_a_processar/bb_api/retornos/producao/3770013/395"
-    assert dados == {"argv": [f"{raiz}/src/processors/web/robo_retorno/robo_retorno.py",
+    assert dados == {"argv": [f"{raiz}/src/processors/web/retorno_cobranca/processar_retorno_cobranca.py",
                               "--pasta", pasta, "--conta-bb-api", "395", "--portao",
                               "--pular-processados", "--recibos-dir", f"{pasta}/_RESULTADOS",
                               *(["--pra-valer"] if args == ["--pra-valer"] else [])],

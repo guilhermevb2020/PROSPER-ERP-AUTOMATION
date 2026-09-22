@@ -4,7 +4,7 @@ analise.py - le uma tela do Smart e diz o que o robo precisa saber sobre ela.
 
 Modulo PURO de proposito: so stdlib, sem playwright e sem `src.common`. E o que
 permite testa-lo no HOST, onde o pytest existe — o container `erp-automation`
-nao o tem. Mesmo desenho (e mesma razao) do `robo_retorno/portao.py`.
+nao o tem. Mesmo desenho (e mesma razao) do `retorno_cobranca/portao.py`.
 
 Quem faz rede e o `descobrir.py`; aqui so entra HTML que ja chegou.
 
@@ -17,7 +17,7 @@ Duas coisas, e a segunda e a que define o robo inteiro:
    AJAX? As duas telas de CNAB ja mapeadas neste repo sao uma de cada tipo:
 
        remessa de cobranca  -> <form> com action    -> robo_remessa
-       processar retorno    -> ajax + parametro Acao -> robo_retorno
+       processar retorno    -> ajax + parametro Acao -> retorno_cobranca
 
    e os dois robos ficaram bem diferentes por causa disso. So o HTML diz qual e
    o caso da tela de Pagamento BMP.
@@ -170,7 +170,7 @@ def classificar(info):
     """
     if info.get("acoes"):
         return MOLDE_AJAX, (f"{len(info['acoes'])} valor(es) de `Acao` no JS — "
-                            "a tela conversa por ajax, como o robo_retorno")
+                            "a tela conversa por ajax, como o retorno_cobranca")
     if info.get("ajax"):
         return MOLDE_AJAX, ("ha endpoint de ajax, mas nenhum `Acao` legivel — "
                             "confira o HTML salvo antes de decidir")
