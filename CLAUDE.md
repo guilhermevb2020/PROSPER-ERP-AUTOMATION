@@ -141,9 +141,17 @@ túnel ssh ao IP do container (ver `docs/COMO_SUBIR_UM_JOB.md`).
 - **Toda execução de job se registra no banco** por `src/common/clients/execucao_job.py`
   (`database/erp_004`, **aplicada em produção em 21/09/2026**): abre `job_execucao`, grava
   `operacao_evento`/`arquivo*`, fecha uma vez. Em DRY o banco pode faltar (degrada e avisa);
-  em modo real é obrigatório — sem registro não há ação irreversível. Hoje só o finalizador
-  registra; os outros jobs ainda controlam por CSV (`data/*/controle_*.csv`), e a conversão
-  é frente própria. Tabela de evento nunca muda: corrigir é outro evento.
+  em modo real é **obrigatório** — sem registro o job recusa antes de abrir o navegador,
+  porque ação irreversível sem rastro é pior do que ação nenhuma.
+- **Dupla escrita, desde 22/09/2026.** Os quatro jobs de arquivo (retorno e remessa, de
+  cobrança e de pagamento) gravam o CSV de controle **e** as tabelas, no mesmo ponto do
+  código. Nada foi retirado do CSV: o corte vem depois de semanas comparando as duas
+  fontes. Job novo já nasce registrando; quem mexer nesses quatro mantém os dois lados.
+  O `arquivo` é identificado pelo **conteúdo** (sha256), então reprocessar o mesmo arquivo
+  devolve a linha existente em vez de duplicar — a mesma regra do `hash` no CSV.
+- **O nome do job na execução tem de casar com a task do hub.** `run_bb.sh` é
+  `gerar_remessa_bb`/`processar_retorno_bb`, `run_deposito.sh` é `baixar_deposito_no_erp`.
+  Errar isso faz a execução apontar para o job errado, e ninguém percebe até procurar. Tabela de evento nunca muda: corrigir é outro evento.
 - **`config/*.env` são carregados com `sh`**: valor com espaço exige aspas, senão
   a variável fica vazia sem erro.
 
